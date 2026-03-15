@@ -1,0 +1,136 @@
+openapi: "3.0.3"
+info:
+  title: DEVTrails Mock API
+  description: |
+    Minimal runnable scaffold for the DEVTrails parametric income-protection platform.
+    This API exposes three read-only demonstration endpoints that return data already
+    documented in the repository. It is not a production backend.
+  version: 0.1.0-scaffold
+  contact:
+    name: DEVTrails Team
+
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      description: Returns service status and version.
+      operationId: healthCheck
+      tags: [System]
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  service:
+                    type: string
+                    example: devtrails-mock-api
+                  version:
+                    type: string
+                    example: 0.1.0-scaffold
+                  phase:
+                    type: string
+                    example: "documentation-first — this is a demo scaffold, not a production backend"
+
+  /triggers/library:
+    get:
+      summary: Trigger library
+      description: Returns the full 15-trigger library as documented in the root README.
+      operationId: getTriggerLibrary
+      tags: [Triggers]
+      responses:
+        "200":
+          description: Trigger library returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                    example: 15
+                  triggers:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          example: T2
+                        name:
+                          type: string
+                          example: Heavy Rain Claim
+                        threshold:
+                          type: string
+                          example: "24h rain >= 64.5 mm"
+                        tier:
+                          type: string
+                          enum: [Early Warning, Claim Trigger, Severe Escalation]
+                        anchoring:
+                          type: string
+                          enum: [public, operational]
+                        source:
+                          type: string
+                          example: IMD
+                  note:
+                    type: string
+
+  /claims/sample:
+    get:
+      summary: Sample claim
+      description: Returns the sample claim JSON from claim-engine/examples/sample_claim.json.
+      operationId: getSampleClaim
+      tags: [Claims]
+      responses:
+        "200":
+          description: Sample claim returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SampleClaim"
+
+components:
+  schemas:
+    SampleClaim:
+      type: object
+      description: A complete claim object showing the 8-stage pipeline trace.
+      properties:
+        claim_id:
+          type: string
+        worker_id:
+          type: string
+        trigger_id:
+          type: string
+        city:
+          type: string
+        zone_id:
+          type: string
+        event_type:
+          type: string
+        pipeline_stage:
+          type: string
+        decision:
+          type: object
+          properties:
+            status:
+              type: string
+              enum: [auto_approved, held_for_review, escalated, rejected]
+            fraud_band:
+              type: string
+              enum: [low, medium, high]
+        payout_calculation:
+          type: object
+          properties:
+            final_payout:
+              type: number
+            currency:
+              type: string

@@ -1,0 +1,67 @@
+%% DEVTrails — Unified System Architecture
+%% Status: Target architecture (no code implementation exists yet)
+%% Source: root README.md
+
+graph TB
+    subgraph "External Signals"
+        WX["☁️ Weather / Rain<br/>(IMD / OGD)"]
+        AQ["🌫️ AQI<br/>(CPCB)"]
+        HT["🌡️ Heat / Temp<br/>(IMD / NDMA)"]
+        TR["🚦 Traffic<br/>(Proxy / Mock)"]
+        PL["📱 Platform Signals<br/>(Mock)"]
+        CV["🚧 Closures<br/>(Mock)"]
+    end
+
+    subgraph "Worker App"
+        WO["Onboarding"]
+        WD["Worker Dashboard"]
+        WP["Weekly Policy View"]
+        WC["Claim Status"]
+    end
+
+    subgraph "Core Platform"
+        SI["Signal Ingestion<br/>& Normalization"]
+        TE["Trigger Engine<br/>(15 Triggers, T1–T15)"]
+        CE["Claim Engine<br/>(8-Stage Pipeline)"]
+        FE["Fraud Engine<br/>(Ghost Shift Detector)"]
+        PE["Premium Engine<br/>(Income Twin)"]
+        PO["Payout Orchestration<br/>(Zero-Touch Payout)"]
+    end
+
+    subgraph "Data & Intelligence"
+        DL["Data Layer<br/>(worker_data + trigger_data)"]
+        ML["ML Layer<br/>(Random Forest Baseline)"]
+        AN["Analytics Engine"]
+    end
+
+    subgraph "Insurer Operations"
+        ID["Insurer Dashboard"]
+        AD["Claim Analytics<br/>Dashboard"]
+        FR["Fraud Review Panel"]
+    end
+
+    WX & AQ & HT & TR & PL & CV --> SI
+    SI --> TE
+    TE --> CE
+    CE --> FE
+    FE --> PO
+    WO --> PE
+    PE --> WP
+    DL --> ML
+    ML --> PE
+    ML --> TE
+    CE --> AN
+    AN --> AD
+    PO --> WC
+    PO --> ID
+    FE --> FR
+    TE --> DL
+    CE --> DL
+
+    style WO fill:#4a9eff,color:#fff
+    style WD fill:#4a9eff,color:#fff
+    style WP fill:#4a9eff,color:#fff
+    style WC fill:#4a9eff,color:#fff
+    style ID fill:#ff8c42,color:#fff
+    style AD fill:#ff8c42,color:#fff
+    style FR fill:#ff8c42,color:#fff

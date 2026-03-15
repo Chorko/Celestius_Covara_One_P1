@@ -1,0 +1,143 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DEVTrails Claim Object",
+  "description": "Machine-readable schema for a DEVTrails claim, matching the structure in sample_claim.json. All values are synthetic.",
+  "type": "object",
+  "required": ["claim_id", "worker_id", "trigger_id", "city", "zone_id", "event_type", "pipeline_stage", "pipeline_trace", "worker_context", "trigger_context", "computed_scores", "payout_calculation", "decision", "audit_trace"],
+  "properties": {
+    "claim_id": {
+      "type": "string",
+      "pattern": "^CLM-\\d{4}-\\d{4}$",
+      "description": "Unique claim identifier (format: CLM-YYYY-NNNN)"
+    },
+    "worker_id": {
+      "type": "string",
+      "description": "Reference to the worker profile"
+    },
+    "trigger_id": {
+      "type": "string",
+      "description": "Reference to the trigger event that initiated the claim"
+    },
+    "city": {
+      "type": "string",
+      "description": "City where the disruption occurred"
+    },
+    "zone_id": {
+      "type": "string",
+      "description": "Zone identifier for exposure matching"
+    },
+    "event_type": {
+      "type": "string",
+      "description": "Category of disruption (e.g. rain, heat, rain_heat, aqi, composite)"
+    },
+    "trigger_ids_fired": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "List of trigger IDs (T1-T15) that fired for this event"
+    },
+    "trigger_summary": {
+      "type": "string",
+      "description": "Human-readable summary of what triggered the claim"
+    },
+    "pipeline_stage": {
+      "type": "string",
+      "enum": ["trigger_event", "claim_candidate_created", "exposure_check", "severity_scoring", "fraud_check", "payout_calculation", "decision", "audit_recorded", "payout_completed"],
+      "description": "Current stage of the 8-stage pipeline"
+    },
+    "pipeline_trace": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["stage", "name", "timestamp", "result"],
+        "properties": {
+          "stage": { "type": "integer", "minimum": 1, "maximum": 8 },
+          "name": { "type": "string" },
+          "timestamp": { "type": "string", "format": "date-time" },
+          "result": { "type": "string" }
+        }
+      },
+      "minItems": 1,
+      "maxItems": 8,
+      "description": "Ordered trace of each pipeline stage with timestamps"
+    },
+    "worker_context": {
+      "type": "object",
+      "required": ["hourly_income", "shift_hours", "active_days", "trust_score", "gps_consistency", "bank_verified", "prior_claim_rate", "covered_weekly_income_B"],
+      "properties": {
+        "hourly_income": { "type": "number", "minimum": 0 },
+        "shift_hours": { "type": "integer", "minimum": 1, "maximum": 24 },
+        "active_days": { "type": "integer", "minimum": 1, "maximum": 7 },
+        "trust_score": { "type": "number", "minimum": 0, "maximum": 1 },
+        "gps_consistency": { "type": "number", "minimum": 0, "maximum": 1 },
+        "bank_verified": { "type": "boolean" },
+        "prior_claim_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "covered_weekly_income_B": { "type": "number", "minimum": 0 }
+      }
+    },
+    "trigger_context": {
+      "type": "object",
+      "required": ["rain_mm", "aqi", "temp_c", "traffic_delay_pct", "outage_min", "closure_flag", "demand_drop_pct", "accessibility_score", "source_reliability"],
+      "properties": {
+        "rain_mm": { "type": "number", "minimum": 0 },
+        "aqi": { "type": "integer", "minimum": 0 },
+        "temp_c": { "type": "number" },
+        "traffic_delay_pct": { "type": "number", "minimum": 0, "maximum": 1 },
+        "outage_min": { "type": "integer", "minimum": 0 },
+        "closure_flag": { "type": "integer", "enum": [0, 1] },
+        "demand_drop_pct": { "type": "number", "minimum": 0, "maximum": 1 },
+        "accessibility_score": { "type": "number", "minimum": 0, "maximum": 1 },
+        "source_reliability": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "computed_scores": {
+      "type": "object",
+      "required": ["severity_score", "exposure_score", "confidence_score", "fraud_penalty", "fraud_holdback_factor", "claim_probability"],
+      "properties": {
+        "severity_score": { "type": "number", "minimum": 0, "maximum": 1 },
+        "exposure_score": { "type": "number", "minimum": 0, "maximum": 1 },
+        "confidence_score": { "type": "number", "minimum": 0, "maximum": 1 },
+        "fraud_penalty": { "type": "number", "minimum": 0, "maximum": 1 },
+        "fraud_holdback_factor": { "type": "number", "minimum": 0, "maximum": 1 },
+        "claim_probability": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "payout_calculation": {
+      "type": "object",
+      "required": ["formula", "covered_income_B", "severity_S", "exposure_E", "confidence_C", "fraud_holdback_FH", "raw_payout", "payout_cap", "final_payout", "currency"],
+      "properties": {
+        "formula": { "type": "string" },
+        "covered_income_B": { "type": "number", "minimum": 0 },
+        "severity_S": { "type": "number", "minimum": 0, "maximum": 1 },
+        "exposure_E": { "type": "number", "minimum": 0, "maximum": 1 },
+        "confidence_C": { "type": "number", "minimum": 0, "maximum": 1 },
+        "fraud_holdback_FH": { "type": "number", "minimum": 0, "maximum": 1 },
+        "raw_payout": { "type": "number", "minimum": 0 },
+        "payout_cap": { "type": "number", "minimum": 0 },
+        "final_payout": { "type": "number", "minimum": 0 },
+        "currency": { "type": "string", "enum": ["INR"] }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "required": ["status", "fraud_band", "review_required"],
+      "properties": {
+        "status": { "type": "string", "enum": ["auto_approved", "held_for_review", "escalated", "rejected"] },
+        "fraud_band": { "type": "string", "enum": ["low", "medium", "high"] },
+        "review_required": { "type": "boolean" },
+        "payout_method": { "type": "string" },
+        "payout_timestamp": { "type": "string", "format": "date-time" }
+      }
+    },
+    "audit_trace": {
+      "type": "object",
+      "required": ["created_at", "decided_at", "decision_engine_version"],
+      "properties": {
+        "created_at": { "type": "string", "format": "date-time" },
+        "decided_at": { "type": "string", "format": "date-time" },
+        "paid_at": { "type": "string", "format": "date-time" },
+        "decision_engine_version": { "type": "string" },
+        "notes": { "type": "string" }
+      }
+    }
+  }
+}

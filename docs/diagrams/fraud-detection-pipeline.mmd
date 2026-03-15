@@ -1,0 +1,36 @@
+%% DEVTrails — Fraud Detection Pipeline (Ghost Shift Detector)
+%% Status: Target architecture (no code implementation exists yet)
+%% Source: fraud/README.md
+
+flowchart TD
+    subgraph "Layer 1: Event Truth"
+        L1["Signal Validation<br/>Cross-check weather, AQI, closure sources"]
+    end
+
+    subgraph "Layer 2: Worker Truth"
+        L2["Exposure Verification<br/>GPS consistency, shift overlap, zone match"]
+    end
+
+    subgraph "Layer 3: Behavioral Anomaly"
+        L3["Pattern Detection<br/>Claim frequency, impossible travel, device flags"]
+    end
+
+    subgraph "Layer 4: Cluster Intelligence"
+        L4["Group Analysis<br/>Synchronized claims, shared devices, payout overlap"]
+    end
+
+    L1 --> L2
+    L2 --> L3
+    L3 --> L4
+    L4 --> SCORE["Fraud Risk Score<br/>(weighted composite)"]
+    SCORE --> BANDS{"Decision Band"}
+    BANDS -->|"0.00 – 0.25"| LOW["✅ Low Risk<br/>Auto-approve"]
+    BANDS -->|"0.25 – 0.50"| MED["⏸️ Medium Risk<br/>Soft review"]
+    BANDS -->|"0.50+"| HIGH["🚫 High Risk<br/>Hard hold"]
+
+    style L1 fill:#f39c12,color:#fff
+    style L2 fill:#4a9eff,color:#fff
+    style L3 fill:#9b59b6,color:#fff
+    style L4 fill:#e74c3c,color:#fff
+    style LOW fill:#2ecc71,color:#fff
+    style HIGH fill:#e74c3c,color:#fff

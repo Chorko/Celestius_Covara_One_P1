@@ -1,0 +1,24 @@
+%% DEVTrails — Trigger to Claim to Approval Flow
+%% Status: Target architecture (no code implementation exists yet)
+%% Source: claim-engine/README.md
+
+flowchart TD
+    A["⚡ Trigger Event<br/>T1–T15 threshold crossed"] --> B["📋 Claim Candidate<br/>Created"]
+    B --> C["🔍 Exposure Check<br/>Zone + shift overlap"]
+    C --> D{"Overlap<br/>confirmed?"}
+    D -->|Yes| E["📊 Severity Scoring<br/>Disruption DNA"]
+    D -->|No| X["❌ No Claim<br/>Event logged"]
+    E --> F["🛡️ Fraud Check<br/>Ghost Shift Detector"]
+    F --> G{"Fraud<br/>band?"}
+    G -->|Low| H["✅ Auto-Approve<br/>Payout initiated"]
+    G -->|Medium| I["⏸️ Hold for Review<br/>Insurer dashboard"]
+    G -->|High| J["🚫 Escalate<br/>Manual investigation"]
+    H --> K["💸 Payout<br/>Recorded"]
+    I --> K
+    K --> L["📝 Audit Event<br/>Logged"]
+
+    style A fill:#f39c12,color:#fff
+    style E fill:#4a9eff,color:#fff
+    style F fill:#9b59b6,color:#fff
+    style H fill:#2ecc71,color:#fff
+    style J fill:#e74c3c,color:#fff

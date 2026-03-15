@@ -71,21 +71,27 @@ Platform-specific APIs (delivery order volume, outage heartbeats, GPS traces) ar
 
 ### Weather / Rainfall (Real — Public)
 - **Source:** IMD operational data via OGD portal
+- **Official reference:** [IMD Rainfall FAQ](https://rsmcnewdelhi.imd.gov.in/images/pdf/faq.pdf) | [IMD Heavy Rainfall Warning](https://mausam.imd.gov.in/imd_latest/contents/pdf/pubbrochures/Heavy%20Rainfall%20Warning%20Services.pdf)
 - **Data:** 24-hour rainfall in mm by city/zone
 - **Thresholds used:** 48mm (watch), 64.5mm (heavy), 115.6mm (very heavy+)
 - **Triggers fed:** T1, T2, T3
+- **Demo-stage note:** Public data is accessible via OGD APIs or downloadable datasets. For demo, seed CSVs simulate realistic rainfall readings within IMD bands.
 
 ### AQI (Real — Public)
 - **Source:** CPCB National AQI monitoring via OGD repository
+- **Official reference:** [CPCB National AQI](https://www.cpcb.nic.in/national-air-quality-index/) | [OGD AQI Dataset](https://www.data.gov.in/resource/real-time-air-quality-index-various-locations)
 - **Data:** AQI value by city/station
 - **Thresholds used:** 201+ (caution), 301+ (severe), 401+ (extreme)
 - **Triggers fed:** T5, T6
+- **Demo-stage note:** CPCB publishes real-time AQI through its dashboard and OGD. For demo, seed CSVs simulate AQI values matching CPCB category definitions.
 
 ### Heat / Temperature (Real — Public)
 - **Source:** IMD temperature readings, NDMA heat-wave guidance
+- **Official reference:** [IMD Heat Wave Warning](https://mausam.imd.gov.in/imd_latest/contents/pdf/pubbrochures/Heat%20Wave%20Warning%20Services.pdf) | [NDMA Heat Wave](https://ndma.gov.in/Natural-Hazards/Heat-Wave)
 - **Data:** Temperature in °C, heat-wave condition flags
 - **Thresholds used:** 45°C (heat-wave), 47°C (severe heat)
 - **Triggers fed:** T7, T8, T9
+- **Demo-stage note:** IMD/NDMA publish heat-wave criteria and alerts publicly. Seed CSVs include realistic temp values within IMD classification ranges.
 
 ### Traffic (Mock)
 - **Simulated data:** Travel delay percentage (0–100%)

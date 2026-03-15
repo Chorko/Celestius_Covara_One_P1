@@ -1,0 +1,9 @@
+trigger_id,city,zone_id,timestamp_start,timestamp_end,trigger_type,rain_mm,aqi,temp_c,traffic_delay_pct,outage_min,closure_flag,demand_drop_pct,accessibility_score,severity_bucket,source_reliability
+TR001,Mumbai,A,2025-07-14T06:00:00,2025-07-14T14:00:00,rain,72,185,38,0.35,5,0,0.15,0.55,medium,0.88
+TR002,Mumbai,B,2025-07-14T10:00:00,2025-07-14T18:00:00,rain_aqi,130,210,39,0.55,12,0,0.28,0.40,high,0.82
+TR003,Delhi,C,2025-06-01T12:00:00,2025-06-01T15:00:00,heat,20,95,43,0.20,0,0,0.10,0.80,low,0.91
+TR004,Delhi,D,2025-11-05T08:00:00,2025-11-05T20:00:00,aqi,10,320,41,0.60,8,0,0.32,0.35,high,0.85
+TR005,Bangalore,E,2025-07-20T07:00:00,2025-07-20T16:00:00,rain_heat,68,145,46,0.48,25,1,0.40,0.30,extreme,0.79
+TR006,Bangalore,F,2025-08-10T09:00:00,2025-08-10T12:00:00,outage,0,75,36,0.18,45,0,0.45,0.75,medium,0.70
+TR007,Hyderabad,G,2025-09-15T06:00:00,2025-09-15T15:00:00,composite,118,355,44,0.72,40,1,0.55,0.20,extreme,0.86
+TR008,Hyderabad,H,2025-07-22T08:00:00,2025-07-22T14:00:00,rain_aqi,66,260,40,0.44,0,0,0.20,0.48,medium,0.84

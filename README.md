@@ -30,6 +30,26 @@ DEVTrails is an AI-assisted **parametric insurance platform** that protects deli
 
 ---
 
+## Current Repository State
+
+> [!NOTE]
+> This repository is primarily **documentation-first**, with a minimal runnable backend scaffold. It contains the complete product specification — architecture diagrams, formulas, data schemas, module interfaces, seed data, and machine-readable contracts — plus a thin API demo slice.
+>
+> **What you will find:**
+> - 10 module-level READMEs with inputs, outputs, and downstream flows
+> - 7 architecture and data-science visuals (PNGs)
+> - 5 standalone Mermaid diagram source files
+> - 3 seed CSV files (8-row sample dataset)
+> - 1 sample claim JSON with full pipeline trace + JSON Schema
+> - 1 runnable FastAPI mock API (`backend/mock_api.py`) with 3 demo endpoints
+> - 1 OpenAPI 3.0 contract (`backend/openapi.yaml`)
+> - Python dependency baseline (`requirements.txt`)
+> - Clean review zip script (`scripts/zip_review_repo.ps1`)
+>
+> **What does not yet exist:** frontend dashboards, ML notebooks, full backend services, database layer, or live integrations. Most module folders document their intended responsibilities and interfaces for the implementation phase ahead. The mock API is a thin demonstrator, not a production backend.
+
+---
+
 ## Challenge Alignment
 
 The DEVTrails 2026 challenge requires:
@@ -72,13 +92,14 @@ The DEVTrails 2026 challenge requires:
 | Product framing & scope boundaries | ✅ Current | Consistent across all documentation |
 | 15-trigger library (thresholds & logic) | 📝 Documented | Thresholds defined, formulas documented; implementation pending |
 | Premium & payout formulas | 📝 Documented | Full formula book with derivation examples; implementation pending |
-| Data schemas & seed dataset | 📝 Documented | 8-row seed + schema definitions; CSV generation pending |
+| Data schemas & seed dataset | ✅ Present | 3 seed CSVs (8-row dataset) + JSON Schema for claim objects |
+| Backend API — mock scaffold | ✅ Present | 3-endpoint FastAPI demo slice (`mock_api.py`) + OpenAPI contract |
+| Backend API — full services | 📋 Planned | 10 endpoints specified; full implementation pending |
 | Worker dashboard | 📋 Planned | Pages and components specified; implementation pending |
 | Insurer dashboard | 📋 Planned | Pages and components specified; implementation pending |
 | Claim analytics dashboard | 📋 Planned | Metrics and views specified; implementation pending |
 | Claim pipeline | 📋 Planned | 8-stage flow defined; implementation pending |
 | Fraud detection engine | 📋 Planned | 4-layer framework defined; implementation pending |
-| Backend API layer | 📋 Planned | 10 endpoints specified; implementation pending |
 | Synthetic data generator | 📋 Planned | Endpoint and workflow defined; implementation pending |
 | Integrations (weather, AQI, traffic) | 📋 Planned | Categories and mock strategy defined; connectors pending |
 | Caching layer | 📋 Planned | Strategy and TTL policy defined; implementation pending |
@@ -157,7 +178,7 @@ graph TB
     style FR fill:#ff8c42,color:#fff
 ```
 
-> **📋 Status:** This diagram represents the **target architecture**. The repository currently contains the documentation layer; module implementations are in progress.
+> **📋 Status:** This diagram represents the **target architecture**. The repository currently contains the documentation and specification layer; module implementations are planned.
 
 ![Unified System Architecture](docs/assets/architecture/unified_system_architecture.png)
 
@@ -239,6 +260,19 @@ The platform uses a **3-tier trigger architecture**: early warning → claim tri
 
 ---
 
+## Threshold References and Why They Were Chosen
+
+| Parameter | Source | What the source gives us | How we infer our product threshold | Anchoring |
+|-----------|--------|--------------------------|-------------------------------------|-----------|
+| **Rain** | [IMD Rainfall Categories (FAQ)](https://rsmcnewdelhi.imd.gov.in/images/pdf/faq.pdf), [IMD Heavy Rainfall Warning](https://mausam.imd.gov.in/imd_latest/contents/pdf/pubbrochures/Heavy%20Rainfall%20Warning%20Services.pdf) | Heavy rainfall = 64.5–115.5 mm/24h; Very heavy = 115.6–204.4 mm/24h | 48 mm = early-watch product threshold (pre-claim risk monitoring). 64.5 mm = claim-trigger anchor (official heavy-rain band). 115.6 mm = escalation (very-heavy-rain category). | ✅ Public-source anchored |
+| **AQI** | [CPCB National Air Quality Index](https://www.cpcb.nic.in/national-air-quality-index/), [OGD AQI Dataset](https://www.data.gov.in/resource/real-time-air-quality-index-various-locations) | AQI 201–300 = Poor; 301–400 = Very Poor; 401+ = Severe | 201+ = caution threshold (poorer air likely to impair outdoor delivery). 301+ = claim threshold (very poor, significant health/work disruption). | ✅ Public-source anchored |
+| **Heat** | [IMD Heat Wave Warning Services](https://mausam.imd.gov.in/imd_latest/contents/pdf/pubbrochures/Heat%20Wave%20Warning%20Services.pdf), [NDMA Heat Wave Guidance](https://ndma.gov.in/Natural-Hazards/Heat-Wave) | Heat-wave = departure ≥ 4.5°C above normal, or absolute ≥ 45°C for plains | 45°C = heat-wave claim threshold (IMD/NDMA criteria). 47°C = severe-heat escalation. | ✅ Public-source anchored |
+| **Traffic** | Internal product threshold | No single public standard for delivery-impairment delay | ≥ 40% travel-time delay = route stress threshold. Based on operational assumption that 40%+ delay significantly reduces deliverable orders per shift. | ⚙️ Internal operational |
+| **Platform Outage** | Internal product threshold | Platform outage data is not publicly available | ≥ 30 min outage = claim threshold for verified active workers. Based on the assumption that 30+ minutes of downtime causes material earning loss during a shift. | ⚙️ Internal operational |
+| **Demand Collapse** | Internal product threshold | Platform order volume is not publicly available | ≥ 35% order drop vs baseline = loss-of-income indicator. Based on the assumption that 35%+ drop pushes earning opportunity below viable thresholds. | ⚙️ Internal operational |
+
+Environmental thresholds (rain, AQI, heat) are anchored to official Indian government sources that define hazard categories independently of this project. Operational thresholds (traffic, outage, demand) are product-engineering decisions based on estimated earning-disruption impact — they are not sourced from external standards and may be refined as real operating data becomes available.
+
 ## Data Split
 
 The dataset is split into two major entities and joined only after exposure matching.
@@ -257,9 +291,19 @@ Used for EDA, ML experiments, and premium/payout calculations.
 
 ---
 
+## Pricing, Thresholds, and References
+
+Environmental thresholds (rain, AQI, heat) are anchored to official Indian government classifications — IMD, CPCB, and NDMA. Pricing and payout derivation follow expected-loss premium principles grounded in actuarial literature. The repo separates hazard classification from pricing methodology by design.
+
+- **Central reference register** with all 9 sources, threshold inference logic, and formula summary → [docs/README.md](docs/README.md#reference-register)
+- **Threshold basis per trigger family** with source links → [data/README.md](data/README.md#trigger-threshold-reference-table)
+- **ML baseline and feature normalization provenance** → [ml/README.md](ml/README.md#pricing-baseline-and-reference-notes)
+
+---
+
 ## Premium and Payout Logic Summary
 
-> Full formula derivations and worked examples are documented in [docs/README.md](docs/README.md) and the insurance formula reference.
+> Full formula derivations and worked examples are documented in [docs/README.md](docs/README.md) and the insurance formula reference. For central documentation references, including threshold sources and premium/pricing reference notes, see [docs/README.md](docs/README.md#reference-register).
 
 ### Key Formulas
 
@@ -295,19 +339,42 @@ Where: `p` = claim probability (Random Forest), `FH` = fraud holdback, `U` = out
 
 ```
 Celestius_DEVTrails_P1/
-├── README.md               ← You are here
-├── backend/README.md        ← API layer, services, endpoints
-├── caching/README.md        ← Cache strategy and TTL policies
-├── claim-engine/README.md   ← Trigger-to-claim-to-approval pipeline
-├── data/README.md           ← Synthetic data, schemas, seed dataset
-├── docs/README.md           ← Documentation index, diagrams, formulas
-│   ├── diagrams/            ← Mermaid source files (planned)
-│   ├── assets/architecture/ ← Architecture visuals (planned)
-│   └── assets/insurance/    ← Formula charts, EDA plots (planned)
-├── fraud/README.md          ← Ghost Shift Detector, 4-layer fraud engine
-├── frontend/README.md       ← Worker + insurer + analytics dashboards
-├── integrations/README.md   ← External connectors & mock integrations
-└── ml/README.md             ← Data science pipeline, models, experiments
+├── .gitignore
+├── README.md                        ← You are here
+├── requirements.txt                 ← Python dependency baseline
+├── backend/
+│   ├── README.md                    ← API layer, services, endpoints
+│   ├── mock_api.py                  ← Runnable 3-endpoint FastAPI scaffold
+│   └── openapi.yaml                 ← OpenAPI 3.0 contract
+├── caching/README.md                ← Cache strategy and TTL policies
+├── claim-engine/
+│   ├── README.md                    ← Trigger-to-claim pipeline
+│   └── examples/
+│       ├── sample_claim.json        ← Sample claim with full pipeline trace
+│       └── sample_claim.schema.json ← JSON Schema for claim objects
+├── data/
+│   ├── README.md                    ← Schemas, seed dataset, generation plan
+│   └── samples/                     ← Seed CSV files (8-row dataset)
+│       ├── worker_data_seed.csv
+│       ├── trigger_data_seed.csv
+│       └── joined_training_data_seed.csv
+├── docs/
+│   ├── README.md                    ← Documentation index + reference register
+│   ├── diagrams/                    ← Mermaid source files (.mmd)
+│   │   ├── overall-system-architecture.mmd
+│   │   ├── worker-journey.mmd
+│   │   ├── insurer-operations.mmd
+│   │   ├── trigger-to-claim-flow.mmd
+│   │   └── fraud-detection-pipeline.mmd
+│   └── assets/
+│       ├── architecture/            ← 5 architecture diagram PNGs
+│       └── insurance/               ← 2 data-science chart PNGs
+├── fraud/README.md                  ← Ghost Shift Detector, 4-layer fraud engine
+├── frontend/README.md               ← Worker + insurer + analytics dashboards
+├── integrations/README.md           ← External connectors & mock integrations
+├── ml/README.md                     ← Data science pipeline, models, experiments
+└── scripts/
+    └── zip_review_repo.ps1          ← Clean review zip exporter
 ```
 
 Each folder README follows a consistent structure:
@@ -330,14 +397,14 @@ Each folder README follows a consistent structure:
 | **Storage** | PostgreSQL | Relational storage for policies, claims, audit events, payout logs |
 | **Visualization** | Recharts | React-native charting for analytics dashboards, trigger mix, severity distribution |
 
-> **📋 Status:** Tech stack represents target technology choices. Implementations are in progress.
+> **📋 Status:** Tech stack represents target technology choices. See `requirements.txt` for the Python dependency baseline. A minimal mock API scaffold exists in `backend/mock_api.py`; full services are pending.
 
 ---
 
 ## Evaluator Quick-Start
 
 > [!NOTE]
-> The repository is currently in its **documentation-first phase**. The README system provides complete product logic, formulas, and architecture so evaluators can understand the platform without reading code. Runnable modules are being implemented in parallel.
+> The repository is primarily **documentation-first** with a minimal runnable backend scaffold. The README system provides complete product logic, formulas, and architecture. A 3-endpoint mock API is available for immediate demonstration. Full service implementation is the next phase.
 
 **To understand the platform:**
 1. Read this README for the full product overview
@@ -347,13 +414,34 @@ Each folder README follows a consistent structure:
 5. Review the premium/payout formula summary for insurance math
 6. Check the architecture diagrams for system flow
 
-**When runnable modules are available:**
-1. Clone the repo
-2. Run the mock data generator to produce `worker_data.csv`, `trigger_data.csv`, and `joined_training_data.csv`
-3. Open the worker dashboard and insurer dashboard
-4. Trigger one sample scenario
-5. Verify the claim decision, fraud score, and payout output
-6. Check the dashboards for analytics updates
+**To run the mock API scaffold:**
+1. `pip install fastapi uvicorn`
+2. `uvicorn backend.mock_api:app --reload --port 8000`
+3. Open http://localhost:8000/docs for Swagger UI
+4. Try `/health`, `/triggers/library`, and `/claims/sample`
+
+---
+
+## Supabase & Authentication Setup (Phase 2.9)
+
+To run the full stack locally with functional Google OAuth and strict Role-Based Routing:
+
+1. **Google OAuth Config:** 
+   - Inside your Supabase Dashboard → Authentication → Providers → Google:
+   - Enable Google, enter your `Client ID` and `Client Secret`.
+2. **Redirect URIs:**
+   - Supabase Dashboard → Authentication → URL Configuration:
+   - Make sure your Site URL is `http://localhost:3000`.
+   - Add `http://localhost:3000/auth/callback` to your **Redirect URIs** list.
+3. **Database Security (RLS) & Triggers:**
+   - Run `backend/sql/auth_triggers.sql` to automatically assign new Google logins to the safe `worker` role.
+   - Run `backend/sql/rls_policies.sql` to secure the platform API boundaries.
+4. **Storage Security:**
+   - Run `backend/sql/storage_policies.sql` to secure the `claim-evidence` image bucket.
+5. **Frontend .env:**
+   - Need `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `NEXT_PUBLIC_API_URL=http://localhost:8000`.
+
+*Note: The frontend architecture strictly isolates worker versus admin pages. New Google users securely default to `worker`. An administrator role (`insurer_admin`) can only be assigned by manually updating the `profiles.role` column directly in the Supabase database.*
 
 ---
 
@@ -362,11 +450,11 @@ Each folder README follows a consistent structure:
 | Folder | Responsibility | Status |
 |--------|---------------|--------|
 | `frontend/` | UI flows, dashboards, user experience | 📋 Planned |
-| `backend/` | API orchestration, services, business logic | 📋 Planned |
-| `claim-engine/` | Claim decision rules, 8-stage pipeline | 📋 Planned |
+| `backend/` | API orchestration, services, business logic | ✅ Scaffold (mock API + OpenAPI) |
+| `claim-engine/` | Claim decision rules, 8-stage pipeline | 📝 Documented (sample claim + schema) |
 | `fraud/` | Ghost Shift Detector, anomaly logic, verification | 📋 Planned |
 | `ml/` | Severity modeling, pricing experiments, EDA | 📋 Planned |
-| `data/` | Synthetic data generation, CSV assets, schemas | 📋 Planned |
+| `data/` | Synthetic data generation, CSV assets, schemas | ✅ Seed present (3 CSVs, 8 rows) |
 | `caching/` | Cache rules, TTL behavior, invalidation | 📋 Planned |
 | `integrations/` | External signal connectors, payment mocks | 📋 Planned |
 | `docs/` | Diagrams, formula docs, pitch assets, references | 📝 Documented |
@@ -397,3 +485,15 @@ Key business metrics the system tracks:
 - Payout-to-premium ratio
 - Trust-weight distribution
 - Fraud leakage rate
+
+---
+
+## Creating a Clean Review Package
+
+When sharing this repo for review or evaluation, exclude `.git/` and other development artifacts:
+
+```powershell
+.\scripts\zip_review_repo.ps1
+```
+
+This creates `Celestius_DEVTrails_P1_review.zip` at the repo root, containing only the files a reviewer needs — no `.git/`, `node_modules/`, `__pycache__/`, or virtual environments.

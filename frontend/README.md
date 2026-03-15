@@ -11,7 +11,7 @@
 | Dashboard specifications | 📝 Documented |
 | Page inventory | 📝 Documented |
 | Component list | 📝 Documented |
-| Tech stack committed | 📝 Documented |
+| Tech stack selected | 📝 Documented |
 | Worker dashboard implementation | 📋 Planned |
 | Insurer dashboard implementation | 📋 Planned |
 | Claim analytics dashboard implementation | 📋 Planned |
@@ -28,7 +28,7 @@
 | State | Zustand | Minimal state management with no boilerplate |
 | API client | Axios | HTTP client for REST API consumption from backend |
 
-> **📋 Status:** Tech stack committed. Implementation in progress.
+> **📋 Status:** Tech stack selected. No frontend code exists yet.
 
 ---
 

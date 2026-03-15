@@ -9,13 +9,9 @@
 | Asset | Status | Notes |
 |-------|--------|-------|
 | Folder structure & README index | ✅ Current | You are reading it |
-| Architecture diagrams (Mermaid) | ✅ Current | Embedded in root and module READMEs |
-| Premium/payout formula reference | 📝 Documented | Full formula book exists in planning docs |
-| Trigger threshold references | 📝 Documented | Public thresholds cited in root README |
-| Pitch script | 📝 Documented | 5-minute judge-facing pitch exists |
-| Sample scenario walkthrough | 📝 Documented | Worked example with numbers in root README |
-| Architecture PNGs | 📋 Planned | To be placed in `docs/assets/architecture/` |
-| EDA / insurance formula charts | 📋 Planned | To be placed in `docs/assets/insurance/` |
+| Architecture diagrams (Mermaid) | ✅ Present | Inline in READMEs + standalone `.mmd` files in `docs/diagrams/` |
+| Architecture diagram PNGs | ✅ Present | 5 PNGs in `docs/assets/architecture/` |
+| Data-science chart PNGs | ✅ Present | 2 PNGs in `docs/assets/insurance/` |
 
 ---
 
@@ -24,13 +20,18 @@
 ```
 docs/
 ├── README.md                     ← You are here
-├── diagrams/                     ← Mermaid source files for architecture views
+├── diagrams/                     ← Standalone Mermaid source files (.mmd)
+│   ├── overall-system-architecture.mmd
+│   ├── worker-journey.mmd
+│   ├── insurer-operations.mmd
+│   ├── trigger-to-claim-flow.mmd
+│   └── fraud-detection-pipeline.mmd
 ├── assets/
-│   ├── architecture/             ← Architecture diagram PNGs (if Mermaid is insufficient)
-│   └── insurance/                ← Formula charts, boxplots, feature importance visuals
+│   ├── architecture/             ← 5 architecture diagram PNGs
+│   └── insurance/                ← 2 formula/EDA chart PNGs
 ```
 
-> **📋 Note:** The `diagrams/`, `assets/architecture/`, and `assets/insurance/` subdirectories will be created as visual assets are finalized. Primary architecture views are already embedded as Mermaid diagrams in the module READMEs.
+> All diagram and asset directories are populated. Mermaid diagrams are also embedded inline in the module READMEs.
 
 ---
 
@@ -76,7 +77,7 @@ flowchart LR
 ### Formula & Data-Science Documentation
 
 | Document | Content | Where referenced |
-|----------|---------|-----------------|
+|----------|---------|-----------------| 
 | Premium formula book | Covered income (B), severity (S), exposure (E), confidence (C), expected payout, gross premium, payout cap | [Root README](../README.md), [ml/README.md](../ml/README.md) |
 | Trigger threshold reference | IMD rain bands, CPCB AQI categories, IMD/NDMA heat-wave guidance, operational thresholds | [Root README](../README.md), [claim-engine/README.md](../claim-engine/README.md) |
 | Derivation example | Worked scenario: ₹84/hr worker, 72mm rain, AQI 240 → premium and payout outputs | [Root README](../README.md) |
@@ -115,14 +116,83 @@ For a reviewer encountering the project for the first time:
 
 When visual assets are added to the repository, use these locations:
 
-| Asset type | Destination | Example |
-|-----------|-------------|---------|
-| Architecture diagrams (PNG/SVG) | `docs/assets/architecture/` | `unified_system.png`, `worker_journey.png` |
-| Insurance/formula charts | `docs/assets/insurance/` | `feature_importance.png`, `premium_boxplot.png` |
-| Mermaid source files | `docs/diagrams/` | `claim_flow.mmd`, `fraud_pipeline.mmd` |
-| Pitch deck | `docs/` | `pitch_deck.pdf` |
+| Asset type | Destination | Actual files present |
+|-----------|-------------|---------------------|
+| Architecture diagrams (PNG/SVG) | `docs/assets/architecture/` | `unified_system_architecture.png`, `gig_worker_journey.png`, `insurance_company_operations.png`, `trigger_claim_approval_flow.png`, `fraud_detection_pipeline.png` |
+| Insurance/formula charts | `docs/assets/insurance/` | `feature_importance.png`, `premium_payout_boxplot.png` |
+| Mermaid source files | `docs/diagrams/` | `overall-system-architecture.mmd`, `worker-journey.mmd`, `insurer-operations.mmd`, `trigger-to-claim-flow.mmd`, `fraud-detection-pipeline.mmd` |
+| Pitch deck | `docs/` | *(not yet added)* |
 
 > **Preference:** Use Mermaid diagrams (GitHub-renderable) inline in READMEs. Use static images only when Mermaid cannot adequately represent the content (e.g., boxplots, scatter plots, feature importance charts).
+
+---
+
+## Reference Register
+
+### Public Threshold References
+
+| # | Source | Supports | Justification | Link |
+|---|--------|----------|---------------|------|
+| 1 | CPCB National Air Quality Index | AQI category bands for T5, T6 triggers | Official Indian AQI framework defines Poor (201–300), Very Poor (301–400), and Severe (401+). We use these directly as caution and claim thresholds. | [cpcb.nic.in](https://www.cpcb.nic.in/national-air-quality-index/) |
+| 2 | OGD Real-Time AQI Dataset | AQI data ingestion | Provides downloadable real-time AQI readings by city/station from CPCB monitoring network. | [data.gov.in](https://www.data.gov.in/resource/real-time-air-quality-index-various-locations) |
+| 3 | IMD Rainfall FAQ | Rain threshold categories for T1–T3 triggers | Defines heavy rainfall (64.5–115.5 mm/24h) and very heavy rainfall (115.6–204.4 mm/24h). We anchor claim and escalation thresholds to these bands. | [IMD FAQ PDF](https://rsmcnewdelhi.imd.gov.in/images/pdf/faq.pdf) |
+| 4 | IMD Heavy Rainfall Warning Services | Rain warning methodology | Documents operational heavy-rain warning services and category definitions used by IMD field offices. | [IMD Brochure PDF](https://mausam.imd.gov.in/imd_latest/contents/pdf/pubbrochures/Heavy%20Rainfall%20Warning%20Services.pdf) |
+| 5 | IMD Heat Wave Warning Services | Heat threshold for T7–T9 triggers | Defines heat-wave conditions (≥ 45°C for plains, or departure ≥ 4.5°C from normal). We use 45°C as claim and 47°C as escalation. | [IMD Brochure PDF](https://mausam.imd.gov.in/imd_latest/contents/pdf/pubbrochures/Heat%20Wave%20Warning%20Services.pdf) |
+| 6 | NDMA Heat Wave Guidance | Heat-wave preparedness criteria | Government guidance on heat-wave classification and impact categories. Supports our heat-wave threshold mapping. | [ndma.gov.in](https://ndma.gov.in/Natural-Hazards/Heat-Wave) |
+
+### Model / Data Science References
+
+| # | Source | Supports | Justification | Link |
+|---|--------|----------|---------------|------|
+| 7 | Breiman (2001), *Random Forests* | Baseline severity classifier | Random Forest was selected for its interpretability through feature importance, robustness to small datasets, and resistance to overfitting — important for an 8-row seed with bootstrap expansion. | [stat.berkeley.edu PDF](https://www.stat.berkeley.edu/~breiman/randomforest2001.pdf) |
+| 8 | Chen & Guestrin (2016), *XGBoost* | Future benchmark model | XGBoost is retained as a potential benchmark if dataset complexity warrants gradient-boosted trees. Not yet used in current pipeline. | [arXiv:1603.02754](https://arxiv.org/abs/1603.02754) |
+
+### Premium / Pricing References
+
+Environmental trigger thresholds and premium/payout formulation are grounded in separate, independently verifiable sources. The repo intentionally separates hazard classification (public government references) from pricing methodology (actuarial and data-science references).
+
+| # | Source | What it supports | Why it is relevant | Link |
+|---|--------|------------------|--------------------|------|
+| 1 | CPCB AQI Report | AQI category bands for T5, T6 triggers | Official Indian AQI framework defines Poor (201–300), Very Poor (301–400), and Severe (401+). We use these directly as caution and claim thresholds. | [cpcb.nic.in](https://www.cpcb.nic.in/aqi_report.php) |
+| 2 | OGD Real-Time AQI | AQI data ingestion | Provides downloadable real-time AQI readings by city/station from the CPCB monitoring network. | [data.gov.in](https://www.data.gov.in/catalog/real-time-air-quality-index) |
+| 3 | IMD Heavy Rainfall Warning Services | Rain threshold categories for T1–T3 triggers | Documents operational heavy-rain warning services and defines heavy rainfall (64.5–115.5 mm/24h) and very heavy rainfall (115.6–204.4 mm/24h). | [IMD Brochure PDF](https://mausam.imd.gov.in/imd_latest/contents/pdf/pubbrochures/Heavy%20Rainfall%20Warning%20Services.pdf) |
+| 4 | IMD FAQ on Heat Wave | Heat threshold for T7–T9 triggers | Defines heat-wave conditions (≥ 45°C for plains, or departure ≥ 4.5°C from normal). We use 45°C as claim and 47°C as escalation. | [IMD Heat Wave FAQ PDF](https://internal.imd.gov.in/section/nhac/dynamic/FAQ_heat_wave.pdf) |
+| 5 | NDMA Heat Wave Guidance | Heat-wave preparedness criteria | Government guidance on heat-wave classification and impact categories. Supports our heat-wave threshold mapping. | [ndma.gov.in](https://ndma.gov.in/Natural-Hazards/Heat-Wave) |
+| 6 | Breiman (2001), *Random Forests* | Baseline severity classifier (claim probability `p`) | Random Forest was selected for interpretability through feature importance, robustness to small datasets, and resistance to overfitting — critical for an 8-row bootstrap seed. | [doi.org](https://doi.org/10.1023/A:1010933404324) |
+| 7 | Chen & Guestrin (2016), *XGBoost* | Future benchmark model | XGBoost is retained as a planned benchmark if dataset complexity warrants gradient-boosted trees. Not yet used in current pipeline. | [doi.org](https://doi.org/10.1145/2939672.2939785) |
+| 8 | *Loss Data Analytics*, Ch. 7: Premium Foundations | Expected-loss premium principle | Provides the actuarial grounding for the expected-value premium formula used in our gross premium calculation. | [openacttexts.github.io](https://openacttexts.github.io/Loss-Data-Analytics/ChapPremiumFoundations.html) |
+| 9 | Mikosch, *Non-Life Insurance Mathematics* | Premium loading and risk margin methodology | Supports the expense-loading (α) and risk-margin (β) assumptions in the gross premium formula. | [Springer PDF](https://unina2.on-line.it/sebina/repository/catalogazione/documenti/Mikosch%20-%20Non-life%20insurance%20mathematics.pdf) |
+
+### Threshold Inference Notes
+
+| Trigger family | Official / source threshold | Product threshold used | Why we inferred it this way | Anchoring |
+|---------------|----------------------------|------------------------|----------------------------|-----------|
+| **Rain** | IMD: heavy = 64.5 mm/24h, very heavy = 115.6 mm/24h | 48 mm watch, 64.5 mm claim, 115.6 mm escalation | 48 mm is a pre-claim watch level introduced for elevated monitoring. 64.5 mm and 115.6 mm map directly to IMD heavy-rain bands. | ✅ Public-source anchored |
+| **AQI** | CPCB: Poor = 201–300, Very Poor = 301–400, Severe = 401+ | 201+ caution, 301+ severe, 401+ extreme | Maps directly to CPCB category boundaries. 201+ impairs outdoor delivery; 301+ causes significant work disruption. | ✅ Public-source anchored |
+| **Heat** | IMD/NDMA: heat-wave ≥ 45°C for plains, or departure ≥ 4.5°C | 45°C claim trigger, 47°C severe escalation | 45°C uses IMD/NDMA criteria directly. 47°C adds a severe band for escalated payouts. | ✅ Public-source anchored |
+| **Traffic** | No public standard for delivery-impairment delay | ≥ 40% travel-time delay | Operational estimate: 40%+ delay significantly reduces deliverable orders per shift. | ⚙️ Internal operational |
+| **Platform outage** | Platform data not publicly available | ≥ 30 min outage | Operational estimate: 30+ minutes causes material earning loss during an active shift. | ⚙️ Internal operational |
+| **Demand collapse** | Order volume not publicly available | ≥ 35% order drop vs baseline | Operational estimate: 35%+ drop pushes earning opportunity below viable thresholds. | ⚙️ Internal operational |
+
+### Formula Summary
+
+| Symbol | Name | Formula |
+|--------|------|---------|
+| B | Covered weekly income | `0.70 × hourly_income × shift_hours × 6` |
+| S | Disruption severity | Weighted composite of 8 normalized components (rain 0.23, AQI 0.14, heat 0.14, traffic 0.10, outage 0.12, closure 0.10, demand 0.07, access 0.10) |
+| E | Exposure | `clip(0.45 + 0.30×(shift_hours/12) + 0.25×(1 − accessibility_score), 0.35, 1.00)` |
+| C | Effective confidence | `clip(0.50 + 0.30×trust + 0.10×gps + 0.10×bank, 0.45, 1.00) × (1 − 0.70×fraud_penalty)` |
+| p | Claim probability | Random Forest model output on the joined worker-trigger row |
+| FH | Fraud holdback | `clip(0.15 + 0.25×fraud_penalty, 0.15, 0.30)` |
+| U | Outlier uplift | `min(1.35, gross_premium / median_premium)` if outlier; else `1.00` |
+| Cap | Payout cap | `0.75 × B × U` |
+
+**Key formulas:**
+- **Expected Payout** = `p × B × S × E × C × (1 − FH)`
+- **Gross Premium** = `[Expected Payout / (1 − α − β)] × U` where α = 0.12 (expense load), β = 0.10 (risk margin)
+- **Payout** = `min(Cap, B × S × E × C × (1 − FH))`
+
+Public thresholds anchor hazard normalization (the S component). Worker-specific variables drive exposure (E) and confidence (C). ML is used as an explainable baseline for claim probability (p), not as a hidden actuarial black-box — feature importance is transparent and the model's role is narrow and auditable.
 
 ---
 

@@ -101,4 +101,4 @@ The cached response is returned to **backend services** and then surfaced to the
 
 ## Why This Folder Exists
 
-This folder exists so we do not repeatedly fetch or recompute the same environmental signal logic during demos. When a judge refreshes the dashboard or re-runs a scenario, the response should be fast and consistent. The caching layer makes the system feel production-ready even during a hackathon demonstration.
+This folder exists so we do not repeatedly fetch or recompute the same environmental signal logic during demos. When a judge refreshes the dashboard or re-runs a scenario, the response should be fast and consistent. The caching layer makes the demo flow faster and more realistic during hackathon evaluation.

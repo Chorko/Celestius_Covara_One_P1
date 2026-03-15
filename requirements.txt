@@ -1,0 +1,31 @@
+# DEVTrails — Python Dependencies
+# fastapi, uvicorn, supabase are actively used by the backend scaffold.
+# Remaining dependencies declare the target stack for future services.
+
+# Backend API
+fastapi>=0.104.0
+uvicorn>=0.24.0
+pydantic[email]>=2.5.0
+
+# Supabase
+supabase>=2.0.0
+
+# Environment
+python-dotenv>=1.0.0
+
+# Database (retained for future direct DB access if needed)
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.0
+redis>=5.0.0
+
+# Data Science & ML
+pandas>=2.1.0
+numpy>=1.26.0
+scikit-learn>=1.3.0
+matplotlib>=3.8.0
+
+# Image / Evidence processing
+Pillow>=10.0.0
+
+# HTTP client (for external API calls)
+httpx>=0.25.0

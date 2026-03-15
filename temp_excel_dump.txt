@@ -1,0 +1,120 @@
+Sheets: ['auth_users_template', 'reference_sources', 'profiles', 'worker_profiles', 'insurer_profiles', 'zones', 'worker_shifts', 'daily_stats', 'order_events', 'trigger_events', 'manual_claims', 'claim_evidence', 'claim_reviews', 'payout_recommendations', 'notes']
+
+--- auth_users_template ---
+  seed_user_key                       email       password    role      full_name       phone
+0     worker_01   asha.verma@devtrails.demo  DevTrails@123  worker     Asha Verma  9876501001
+1     worker_02  karthik.raj@devtrails.demo  DevTrails@123  worker    Karthik Raj  9876501002
+2     worker_03    meena.das@devtrails.demo  DevTrails@123  worker      Meena Das  9876501003
+3     worker_04    praveen.k@devtrails.demo  DevTrails@123  worker  Praveen Kumar  9876501004
+4     worker_05    nivetha.s@devtrails.demo  DevTrails@123  worker      Nivetha S  9876501005
+
+--- reference_sources ---
+  ref_id                              source_name source_type                               what_it_provides                                     use_in_project                                                                                                      link
+0     R1          CPCB National Air Quality Index    official          AQI category bands and interpretation  AQI trigger thresholds and README reference layer                                                       https://www.cpcb.nic.in/national-air-quality-index/
+1     R2  OGD Real-Time Air Quality Index dataset    official  Machine-readable AQI observations by location                AQI ingestion / trigger feed design                                               https://www.data.gov.in/catalog/real-time-air-quality-index
+2     R3      IMD Heavy Rainfall Warning Services    official         Heavy / very heavy rainfall categories          Rain trigger anchors and escalation logic  https://mausam.imd.gov.in/imd_latest/contents/pdf/pubbrochures/Heavy%20Rainfall%20Warning%20Services.pdf
+3     R4           IMD Heat Wave Warning Services    official             Heat-wave and severe heat guidance          Heat trigger anchors and escalation logic       https://mausam.imd.gov.in/imd_latest/contents/pdf/pubbrochures/Heat%20Wave%20Warning%20Services.pdf
+4     R5                  NDMA Heat Wave guidance    official        National heat-wave preparedness framing              Secondary support for heat thresholds                                                             https://ndma.gov.in/Natural-Hazards/Heat-Wave
+
+--- profiles ---
+                                     id    role      full_name                       email       phone            created_at
+0  9510d10f-a49e-57d3-a6e7-9d41e0dd09a5  worker     Asha Verma   asha.verma@devtrails.demo  9876501001  2026-03-01T09:00:00Z
+1  e2b88671-7e03-5ebf-9806-d61637816822  worker    Karthik Raj  karthik.raj@devtrails.demo  9876501002  2026-03-01T09:00:00Z
+2  0e695794-f2b6-5bfb-ab4d-71690aeddcbc  worker      Meena Das    meena.das@devtrails.demo  9876501003  2026-03-01T09:00:00Z
+3  c805ac6f-c230-5d3c-b77a-bd67314f236e  worker  Praveen Kumar    praveen.k@devtrails.demo  9876501004  2026-03-01T09:00:00Z
+4  3e466c53-bbe2-5203-9a7a-87b3e760fe5f  worker      Nivetha S    nivetha.s@devtrails.demo  9876501005  2026-03-01T09:00:00Z
+
+--- worker_profiles ---
+                             profile_id platform_name     city                     preferred_zone_id vehicle_type  avg_hourly_income_inr  bank_verified  trust_score  gps_consent
+0  9510d10f-a49e-57d3-a6e7-9d41e0dd09a5        Zomato  Chennai  9d39d5c4-39e5-564a-a01f-e124486afe60         bike                    118           True         0.88         True
+1  e2b88671-7e03-5ebf-9806-d61637816822        Swiggy  Chennai  714b9372-14f5-5c8d-84a2-2b92d8d9ffcf         bike                    112           True         0.82         True
+2  0e695794-f2b6-5bfb-ab4d-71690aeddcbc        Zomato  Chennai  a59f37b3-76d6-5faa-ac90-becc1f2d1b1c      scooter                    125           True         0.90         True
+3  c805ac6f-c230-5d3c-b77a-bd67314f236e        Swiggy  Chennai  068e4bcf-0839-5ea3-b27f-4127bc4e5322         bike                    109          False         0.71         True
+4  3e466c53-bbe2-5203-9a7a-87b3e760fe5f        Zomato  Chennai  9d39d5c4-39e5-564a-a01f-e124486afe60      scooter                    121           True         0.86         True
+
+--- insurer_profiles ---
+                             profile_id         company_name        job_title
+0  4cc0923a-5637-54ad-afd8-f87d21668bd1  Celestius Assurance  Operations Lead
+1  fe01c381-d129-5619-a99e-2b16c70ea997  Celestius Assurance    Fraud Analyst
+2  4cc77033-9bd5-50f6-bb84-4b5300252750  Celestius Assurance   Claims Manager
+
+--- zones ---
+                                     id       city      zone_name  center_lat  center_lng  polygon_geojson
+0  9d39d5c4-39e5-564a-a01f-e124486afe60    Chennai     Anna Nagar     13.0850     80.2101              NaN
+1  714b9372-14f5-5c8d-84a2-2b92d8d9ffcf    Chennai      Velachery     12.9791     80.2209              NaN
+2  a59f37b3-76d6-5faa-ac90-becc1f2d1b1c    Chennai        T Nagar     13.0418     80.2337              NaN
+3  068e4bcf-0839-5ea3-b27f-4127bc4e5322    Chennai  OMR-Perungudi     12.9617     80.2410              NaN
+4  49803e72-d361-5f93-8544-ebe47cf6664b  Bengaluru    Indiranagar     12.9784     77.6408              NaN
+
+--- worker_shifts ---
+                                     id                     worker_profile_id  shift_date           shift_start             shift_end                               zone_id            created_at
+0  29b8bca7-b0d5-5de8-9f4e-4c73cc241729  9510d10f-a49e-57d3-a6e7-9d41e0dd09a5  2026-03-10  2026-03-10T10:00:00Z  2026-03-10T18:00:00Z  9d39d5c4-39e5-564a-a01f-e124486afe60  2026-03-01T09:00:00Z
+1  2930b95a-0dc9-5919-83e8-200569c80771  9510d10f-a49e-57d3-a6e7-9d41e0dd09a5  2026-03-11  2026-03-11T11:00:00Z  2026-03-11T19:00:00Z  9d39d5c4-39e5-564a-a01f-e124486afe60  2026-03-01T09:00:00Z
+2  31dee919-5d0e-52a8-9cca-34429fd26c29  9510d10f-a49e-57d3-a6e7-9d41e0dd09a5  2026-03-12  2026-03-12T10:00:00Z  2026-03-12T18:00:00Z  9d39d5c4-39e5-564a-a01f-e124486afe60  2026-03-01T09:00:00Z
+3  6a6dba84-4f33-5e51-9a26-001b5628beeb  9510d10f-a49e-57d3-a6e7-9d41e0dd09a5  2026-03-13  2026-03-13T11:00:00Z  2026-03-13T19:00:00Z  9d39d5c4-39e5-564a-a01f-e124486afe60  2026-03-01T09:00:00Z
+4  b09866af-2bf6-5c1d-96ec-8d87f8472800  9510d10f-a49e-57d3-a6e7-9d41e0dd09a5  2026-03-14  2026-03-14T10:00:00Z  2026-03-14T18:00:00Z  9d39d5c4-39e5-564a-a01f-e124486afe60  2026-03-01T09:00:00Z
+
+--- daily_stats ---
+                                     id                     worker_profile_id   stat_date  active_hours  completed_orders  accepted_orders  cancelled_orders  gross_earnings_inr  platform_login_minutes  gps_consistency_score
+0  3421f4f4-1eba-555e-91fe-48c53832a559  9510d10f-a49e-57d3-a6e7-9d41e0dd09a5  2026-03-10          6.75                19               22                 3              834.45                     414                   0.76
+1  1fe3aa5f-a9a2-5760-8edd-d1957d896add  9510d10f-a49e-57d3-a6e7-9d41e0dd09a5  2026-03-11          6.75                23               26                 3              762.60                     424                   0.87
+2  20430c2b-ac6d-5607-bd09-15d595a9f002  9510d10f-a49e-57d3-a6e7-9d41e0dd09a5  2026-03-12          7.49                23               26                 3              942.67                     483                   0.79
+3  8ef42853-6504-54ed-b736-088d6a0f0dbe  9510d10f-a49e-57d3-a6e7-9d41e0dd09a5  2026-03-13          7.54                20               22                 2              865.52                     488                   0.82
+4  f4c5a755-719c-50b6-aff6-9301211e3ca4  9510d10f-a49e-57d3-a6e7-9d41e0dd09a5  2026-03-14          6.97                14               16                 2              861.17                     451                   0.84
+
+--- order_events ---
+                                     id                     worker_profile_id platform_order_id                     assigned_at                    picked_up_at                    delivered_at order_status                        pickup_zone_id                          drop_zone_id  distance_km  payout_inr            created_at
+0  4d826202-8a67-51e6-bd55-fea365ef3ee5  9510d10f-a49e-57d3-a6e7-9d41e0dd09a5      ZO-0310-0001  2026-03-10T11:03:53.208905897Z  2026-03-10T11:20:53.208905897Z  2026-03-10T11:39:53.208905897Z    delivered  9d39d5c4-39e5-564a-a01f-e124486afe60  9d39d5c4-39e5-564a-a01f-e124486afe60         3.32       31.97  2026-03-01T09:00:00Z
+1  83c6f86e-f824-5827-95b9-a7a06bab91ee  9510d10f-a49e-57d3-a6e7-9d41e0dd09a5      ZO-0310-0002  2026-03-10T11:00:56.460247686Z  2026-03-10T11:14:56.460247686Z  2026-03-10T11:34:56.460247686Z    delivered  9d39d5c4-39e5-564a-a01f-e124486afe60  9d39d5c4-39e5-564a-a01f-e124486afe60         5.24       24.08  2026-03-01T09:00:00Z
+2  b0c9dde3-49f0-5b7b-bf35-f46ae6efc7fe  9510d10f-a49e-57d3-a6e7-9d41e0dd09a5      ZO-0310-0003  2026-03-10T10:51:16.786931306Z  2026-03-10T11:08:16.786931306Z  2026-03-10T11:29:16.786931306Z    delivered  9d39d5c4-39e5-564a-a01f-e124486afe60  9d39d5c4-39e5-564a-a01f-e124486afe60         5.69       32.42  2026-03-01T09:00:00Z
+3  cd7021f1-ab5d-59a4-8c7f-eb001cfc3350  9510d10f-a49e-57d3-a6e7-9d41e0dd09a5      ZO-0311-0004  2026-03-11T16:39:02.918715451Z  2026-03-11T16:51:02.918715451Z  2026-03-11T17:22:02.918715451Z    delivered  9d39d5c4-39e5-564a-a01f-e124486afe60  9d39d5c4-39e5-564a-a01f-e124486afe60         2.77       22.94  2026-03-01T09:00:00Z
+4  2d3b69b4-7821-5a2e-9f12-860eb183966c  9510d10f-a49e-57d3-a6e7-9d41e0dd09a5      ZO-0311-0005  2026-03-11T13:21:03.207400601Z  2026-03-11T13:39:03.207400601Z  2026-03-11T14:02:03.207400601Z    delivered  9d39d5c4-39e5-564a-a01f-e124486afe60  9d39d5c4-39e5-564a-a01f-e124486afe60         5.36       22.46  2026-03-01T09:00:00Z
+
+--- trigger_events ---
+                                     id     city                               zone_id trigger_family     trigger_code source_ref_id  observed_value       official_threshold_label product_threshold_value severity_band    source_type            started_at              ended_at            created_at
+0  384c8867-42f3-56f5-b3a3-d95358337b59  Chennai  714b9372-14f5-5c8d-84a2-2b92d8d9ffcf           rain       RAIN_WATCH            R3            48.0       IMD pre-heavy monitoring                   48 mm         watch  public_source  2026-03-11T11:00:00Z  2026-03-11T15:00:00Z  2026-03-01T09:00:00Z
+1  6f71562c-8de5-5770-98d4-03b63dd21bf4  Chennai  714b9372-14f5-5c8d-84a2-2b92d8d9ffcf           rain       RAIN_HEAVY            R3            72.0        Heavy rainfall 64.5 mm+                 64.5 mm         claim  public_source  2026-03-11T15:00:00Z  2026-03-11T19:30:00Z  2026-03-01T09:00:00Z
+2  005c018a-d7ae-5ef4-8a19-7fdb936db120  Chennai  068e4bcf-0839-5ea3-b27f-4127bc4e5322           rain  RAIN_VERY_HEAVY            R3           128.0  Very heavy rainfall 115.6 mm+                115.6 mm    escalation  public_source  2026-03-12T13:00:00Z  2026-03-12T20:00:00Z  2026-03-01T09:00:00Z
+3  13f4d8e2-8641-51ff-a6e3-1851821ddff4  Chennai  a59f37b3-76d6-5faa-ac90-becc1f2d1b1c            aqi         AQI_POOR            R1           228.0               Poor AQI 201-300                    201+         watch  public_source  2026-03-13T09:00:00Z  2026-03-13T23:00:00Z  2026-03-01T09:00:00Z
+4  8313682b-6da2-5ef6-822b-e26a496aa4d6  Chennai  a59f37b3-76d6-5faa-ac90-becc1f2d1b1c            aqi    AQI_VERY_POOR            R1           338.0          Very Poor AQI 301-400                    301+         claim  public_source  2026-03-14T09:00:00Z  2026-03-14T23:00:00Z  2026-03-01T09:00:00Z
+
+--- manual_claims ---
+                                     id                     worker_profile_id                      trigger_event_id    claim_mode                                                             claim_reason  stated_lat  stated_lng            claimed_at                              shift_id claim_status
+0  68180d9b-264d-56ef-aa06-767193fe56f4  e2b88671-7e03-5ebf-9806-d61637816822  6f71562c-8de5-5770-98d4-03b63dd21bf4        manual  Heavy rain stopped orders and caused local flooding near pickup cluster     12.9811     80.2229  2026-03-11T13:00:00Z  a5aa293c-ff14-535f-a3a8-2321cddb044b     approved
+1  1f236104-26c7-509c-99d7-43aeef0fed9e  c805ac6f-c230-5d3c-b77a-bd67314f236e  005c018a-d7ae-5ef4-8a19-7fdb936db120        manual                    Waterlogging blocked route access during dinner shift     12.9737     80.2330  2026-03-12T12:00:00Z  37bb24d5-a982-5659-8a96-b6b95ffa8517         held
+2  a65438ba-e7eb-5164-8811-86829ba940da  c5061f4d-9ec9-5ff1-bd70-11b709b03c46  8313682b-6da2-5ef6-822b-e26a496aa4d6  trigger_auto                                 AQI-triggered earnings disruption window     13.0438     80.2357  2026-03-14T12:00:00Z  6ebee635-985f-5691-aff9-8c164464828d     approved
+3  d71af73b-07f1-55f9-9462-3f44a3f3f763  74627d3c-7321-54cb-9d97-a0db9adc268f  3afdfa21-3f3d-5fc9-ab42-52726122d5c9        manual                   Extended road closure and traffic stall cut deliveries     13.1090     80.2281  2026-03-14T12:00:00Z  7f5e3cd7-31a4-55c4-b150-d1f1562ddc68     rejected
+4  1562c9b9-f96b-5d99-86ce-e6c1f16e6f40  3c39fe4b-1b35-56fd-ac0e-d37e43fd4e25  9377236e-a764-5fef-aa96-90dc1a958fa7        manual                            Traffic gridlock reduced completed deliveries     12.9804     77.6428  2026-03-13T13:00:00Z  e4d49e04-c9b5-53e9-ab63-aee0e68c0326     approved
+
+--- claim_evidence ---
+                                     id                              claim_id evidence_type                                                     storage_path           captured_at  exif_lat  exif_lng        exif_timestamp  integrity_score            created_at
+0  4549bb14-2d13-568d-8ae9-e6dc45efb74d  68180d9b-264d-56ef-aa06-767193fe56f4         photo  claim-evidence/68180d9b-264d-56ef-aa06-767193fe56f4/photo_1.jpg  2026-03-11T13:00:00Z   12.9817   80.2233  2026-03-11T13:00:00Z             0.88  2026-03-01T09:00:00Z
+1  33fa6e1f-6fc4-54de-86ea-e6b738f2d344  68180d9b-264d-56ef-aa06-767193fe56f4           geo                                                              NaN  2026-03-11T13:03:00Z   12.9817   80.2233  2026-03-11T13:02:00Z             0.91  2026-03-01T09:00:00Z
+2  298e7fc6-9869-5387-8ea4-4f682e2c8821  68180d9b-264d-56ef-aa06-767193fe56f4          text                                                              NaN  2026-03-11T13:06:00Z       NaN       NaN                   NaN             0.88  2026-03-01T09:00:00Z
+3  c8f4b204-d272-5019-abd0-4ae66d03d64c  1f236104-26c7-509c-99d7-43aeef0fed9e         photo  claim-evidence/1f236104-26c7-509c-99d7-43aeef0fed9e/photo_1.jpg  2026-03-12T12:00:00Z   12.9743   80.2334  2026-03-12T12:00:00Z             0.71  2026-03-01T09:00:00Z
+4  8a2d0ae9-8cb6-5668-96c9-eea2f07e4f26  1f236104-26c7-509c-99d7-43aeef0fed9e           geo                                                              NaN  2026-03-12T12:03:00Z   12.9743   80.2334  2026-03-12T12:02:00Z             0.74  2026-03-01T09:00:00Z
+
+--- claim_reviews ---
+                                     id                              claim_id                   reviewer_profile_id  fraud_score  geo_confidence_score  evidence_completeness_score decision                                                            decision_reason           reviewed_at
+0  70a25f37-ace0-564d-86a5-bf548b20f3e6  68180d9b-264d-56ef-aa06-767193fe56f4  fe01c381-d129-5619-a99e-2b16c70ea997        0.320                  0.91                         0.93  approve                          Geo/evidence aligned with zone and trigger window  2026-03-11T19:00:00Z
+1  62286fe1-e2d8-5a53-91ce-ef0b749774c6  1f236104-26c7-509c-99d7-43aeef0fed9e  4cc77033-9bd5-50f6-bb84-4b5300252750        0.424                  0.66                         0.74     hold  Manual claim requires more evidence due to weak geo/timestamp consistency  2026-03-12T18:00:00Z
+2  6ccda71a-ec95-5dd0-944c-01a714d249b4  a65438ba-e7eb-5164-8811-86829ba940da  4cc0923a-5637-54ad-afd8-f87d21668bd1        0.200                  0.91                         0.88  approve                          Geo/evidence aligned with zone and trigger window  2026-03-14T18:00:00Z
+3  867895f6-66cc-512c-aa19-b374b86539a6  d71af73b-07f1-55f9-9462-3f44a3f3f763  fe01c381-d129-5619-a99e-2b16c70ea997        0.672                  0.33                         0.51   reject                    Evidence and location mismatch exceeded fraud tolerance  2026-03-14T18:00:00Z
+4  dafa4d8f-27d4-5104-ad2a-c81117d44306  1562c9b9-f96b-5d99-86ce-e6c1f16e6f40  4cc77033-9bd5-50f6-bb84-4b5300252750        0.320                  0.91                         0.93  approve                          Geo/evidence aligned with zone and trigger window  2026-03-13T19:00:00Z
+
+--- payout_recommendations ---
+                                     id                              claim_id  covered_weekly_income_b  claim_probability_p  severity_score_s  exposure_score_e  confidence_score_c  fraud_holdback_fh  outlier_uplift_u  payout_cap  expected_payout  gross_premium  recommended_payout                                                                                                                                                                                                                                            explanation_json            created_at
+0  515795d6-b3eb-5bb1-8d55-bf195bb9f678  68180d9b-264d-56ef-aa06-767193fe56f4                   3763.2               0.3605              0.62              0.75               0.814             0.1216              1.05     2963.52           451.06         631.48             1251.20    {"basis": "Synthetic seed example aligned to DEVTrails formula documentation", "manual_claim_strictness": "high", "inputs": {"B": 3763.2, "p": 0.3605, "S": 0.62, "E": 0.75, "C": 0.814, "FH": 0.1216, "U": 1.05, "Cap": 2963.52}, "status": "approved"}  2026-03-11T19:00:00Z
+1  7ba3baa1-770a-59c1-914e-3ca55f3a410d  1f236104-26c7-509c-99d7-43aeef0fed9e                   3662.4               0.4240              0.84              0.78               0.792             0.1611              1.10     3021.48           675.99         991.45             1594.32          {"basis": "Synthetic seed example aligned to DEVTrails formula documentation", "manual_claim_strictness": "high", "inputs": {"B": 3662.4, "p": 0.424, "S": 0.84, "E": 0.78, "C": 0.792, "FH": 0.1611, "U": 1.1, "Cap": 3021.48}, "status": "held"}  2026-03-12T18:00:00Z
+2  ac861f81-9c82-5b71-ba8b-d0db45e32a41  a65438ba-e7eb-5164-8811-86829ba940da                   4300.8               0.3455              0.62              0.70               0.864             0.0760              1.05     3386.88           514.84         720.78             1490.13  {"basis": "Synthetic seed example aligned to DEVTrails formula documentation", "manual_claim_strictness": "standard", "inputs": {"B": 4300.8, "p": 0.3455, "S": 0.62, "E": 0.7, "C": 0.864, "FH": 0.076, "U": 1.05, "Cap": 3386.88}, "status": "approved"}  2026-03-14T18:00:00Z
+3  207905f7-a522-51a1-89fa-0c4d4ab00de0  d71af73b-07f1-55f9-9462-3f44a3f3f763                   3595.2               0.4120              0.84              0.78               0.626             0.2554              1.10     2966.04           452.37         663.47                0.00      {"basis": "Synthetic seed example aligned to DEVTrails formula documentation", "manual_claim_strictness": "high", "inputs": {"B": 3595.2, "p": 0.412, "S": 0.84, "E": 0.78, "C": 0.626, "FH": 0.2554, "U": 1.1, "Cap": 2966.04}, "status": "rejected"}  2026-03-14T18:00:00Z
+4  d082a242-4e27-5762-a6fb-8fdc05646fb8  1562c9b9-f96b-5d99-86ce-e6c1f16e6f40                   4502.4               0.3710              0.62              0.75               0.728             0.1216              1.05     3545.64           496.70         695.38             1338.82     {"basis": "Synthetic seed example aligned to DEVTrails formula documentation", "manual_claim_strictness": "high", "inputs": {"B": 4502.4, "p": 0.371, "S": 0.62, "E": 0.75, "C": 0.728, "FH": 0.1216, "U": 1.05, "Cap": 3545.64}, "status": "approved"}  2026-03-13T19:00:00Z
+
+--- notes ---
+                                                     DEVTrails Synthetic Seed Pack
+0  Synthetic/demo data aligned to the current schema, formulas, and persona split.
+1                                                                              NaN
+2                                                                     Import order
+3                                                             1. reference_sources
+4                                                                         2. zones
+

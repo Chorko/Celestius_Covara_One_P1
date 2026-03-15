@@ -1,0 +1,18 @@
+%% DEVTrails — Insurer Operations
+%% Status: Target architecture (no code implementation exists yet)
+%% Source: docs/README.md
+
+flowchart LR
+    A[External Signals / Trigger Feeds] --> B[Trigger Queue]
+    B --> C[Exposure Validation]
+    C --> D[Fraud Review]
+    D --> E[Payout Recommendation]
+    E --> F[Approve / Hold / Escalate]
+    F --> G[Bank / Disbursement Check]
+    G --> H[Claim Outcome Logged]
+    H --> I[Portfolio Analytics Dashboard]
+
+    J[Admin / Insurer User] --> B
+    J --> D
+    J --> F
+    J --> I

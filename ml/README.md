@@ -229,6 +229,22 @@ The ML model's predicted `p` is the key input that bridges data science and insu
 
 ---
 
+## Pricing Baseline and Reference Notes
+
+**Why Random Forest?** Random Forest ([Breiman, 2001](https://doi.org/10.1023/A:1010933404324)) was selected as the baseline severity classifier because it provides interpretable feature-importance rankings, handles mixed feature types without extensive preprocessing, and is robust against overfitting on small datasets — critical for an 8-row bootstrap seed.
+
+**Why XGBoost as future benchmark?** XGBoost ([Chen & Guestrin, 2016](https://doi.org/10.1145/2939672.2939785)) is retained as a planned benchmark if dataset scale and feature complexity warrant gradient-boosted tree performance. It is not yet used in the current pipeline.
+
+**Role of ML in the pricing pipeline:** The Random Forest model estimates claim probability `p` on the joined worker-trigger row. Premium and payout are **not predicted directly by ML alone** — they are derived from documented formulas (`B × S × E × C × (1 − FH)`) where ML contributes only the `p` factor. This keeps the pricing pipeline explainable and auditable.
+
+**Feature normalization provenance:** Environmental features (rain_mm, AQI, temp_c) are normalized against official public-source thresholds from [CPCB](https://www.cpcb.nic.in/aqi_report.php), [IMD](https://mausam.imd.gov.in/imd_latest/contents/pdf/pubbrochures/Heavy%20Rainfall%20Warning%20Services.pdf), and [NDMA](https://ndma.gov.in/Natural-Hazards/Heat-Wave). Operational features (traffic_delay_pct, outage_min, demand_drop_pct) use internal product thresholds documented in the [root README](../README.md#threshold-references-and-why-they-were-chosen).
+
+**Actuarial grounding:** The gross premium formula uses an expected-loss loading approach grounded in *Loss Data Analytics* ([Ch. 7: Premium Foundations](https://openacttexts.github.io/Loss-Data-Analytics/ChapPremiumFoundations.html)) and *Non-Life Insurance Mathematics* ([Mikosch, 2004](https://unina2.on-line.it/sebina/repository/catalogazione/documenti/Mikosch%20-%20Non-life%20insurance%20mathematics.pdf)). The expense load (α = 0.12) and risk margin (β = 0.10) are hackathon assumptions that must be tuned with real data.
+
+> For the full reference register with all 9 sources, see [docs/README.md](../docs/README.md#reference-register).
+
+---
+
 ## Rule
 
 > Keep everything explainable enough for judges to understand in one minute. If a model output cannot be traced back to input features and threshold logic, it fails the transparency test.

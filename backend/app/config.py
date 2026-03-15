@@ -1,0 +1,46 @@
+"""
+DEVTrails — Application Configuration
+Loads environment variables for Supabase, Gemini, and app settings.
+"""
+
+import os
+from dataclasses import dataclass
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
+@dataclass(frozen=True)
+class Settings:
+    """Immutable application settings loaded from environment."""
+
+    # Supabase
+    supabase_url: str = os.getenv("SUPABASE_URL", "")
+    supabase_anon_key: str = os.getenv("SUPABASE_ANON_KEY", "")
+    supabase_service_role_key: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+
+    # Gemini (backend-only)
+    gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
+
+    # App
+    app_env: str = os.getenv("APP_ENV", "development")
+    cors_origins: list[str] = None  # type: ignore[assignment]
+
+    def __post_init__(self):
+        origins = os.getenv("CORS_ORIGINS", "http://localhost:3000")
+        # frozen=True requires object.__setattr__ for post-init
+        object.__setattr__(self, "cors_origins", [o.strip() for o in origins.split(",")])
+
+    def validate(self) -> list[str]:
+        """Return list of missing critical config vars."""
+        missing = []
+        if not self.supabase_url:
+            missing.append("SUPABASE_URL")
+        if not self.supabase_anon_key:
+            missing.append("SUPABASE_ANON_KEY")
+        if not self.supabase_service_role_key:
+            missing.append("SUPABASE_SERVICE_ROLE_KEY")
+        return missing
+
+
+settings = Settings()

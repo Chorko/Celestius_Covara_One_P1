@@ -11,7 +11,9 @@
 | Service architecture definition | 📝 Documented |
 | Endpoint inventory | 📝 Documented |
 | Input/output specifications | 📝 Documented |
-| API implementation | 📋 Planned |
+| Mock API scaffold (3 endpoints) | ✅ Present | See [`mock_api.py`](mock_api.py) |
+| OpenAPI contract | ✅ Present | See [`openapi.yaml`](openapi.yaml) |
+| Full API implementation | 📋 Planned |
 | Database schema | 📋 Planned |
 | Authentication layer | 📋 Planned |
 
@@ -27,7 +29,37 @@
 | Cache | Redis | Fast key-value caching for trigger feeds and dashboard summaries (see [caching/README.md](../caching/README.md)) |
 | Auth | JWT tokens | Stateless authentication for worker and admin personas |
 
-> **📋 Status:** Tech stack represents committed technology choices. Implementation is in progress.
+> **📋 Status:** Tech stack represents the selected target technologies. See `requirements.txt` for the Python dependency baseline. A minimal mock API scaffold is available — see instructions below.
+
+---
+
+## Quick Start — Mock API
+
+A minimal runnable scaffold proves the documented architecture works. It exposes 3 read-only endpoints:
+
+| Endpoint | What it returns |
+|----------|----------------|
+| `GET /health` | Service status and version |
+| `GET /triggers/library` | Full 15-trigger library as JSON |
+| `GET /claims/sample` | The sample claim from `claim-engine/examples/sample_claim.json` |
+
+**To run:**
+
+```bash
+# From the repo root:
+pip install fastapi uvicorn
+uvicorn backend.mock_api:app --reload --port 8000
+```
+
+Then open:
+- http://localhost:8000/health
+- http://localhost:8000/triggers/library
+- http://localhost:8000/claims/sample
+- http://localhost:8000/docs (auto-generated Swagger UI)
+
+> This is a **demo scaffold**, not a production backend. It reuses data already documented in the repo and adds no new business logic. Premium and payout formulas are documented centrally in [docs/README.md](../docs/README.md#formula-summary). `/claims/sample` returns the documented claim structure from `claim-engine/examples/sample_claim.json`. `/triggers/library` returns the 15-trigger threshold library as documented in the [root README](../README.md#the-15-trigger-library).
+
+**OpenAPI contract:** [`openapi.yaml`](openapi.yaml) defines the formal API contract for these 3 endpoints.
 
 ---
 

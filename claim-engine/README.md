@@ -14,6 +14,24 @@
 | Payout formula integration | 📝 Documented |
 | Audit event emission | 📋 Planned |
 | Claim orchestration service | 📋 Planned |
+| Sample claim JSON | ✅ Present | See [`examples/sample_claim.json`](examples/sample_claim.json) |
+| Claim JSON Schema | ✅ Present | See [`examples/sample_claim.schema.json`](examples/sample_claim.schema.json) |
+
+---
+
+## Sample Claim
+
+A complete example claim is available at [`examples/sample_claim.json`](examples/sample_claim.json). It shows:
+
+- The 8-stage pipeline trace with timestamps
+- Worker and trigger context from the seed dataset (Worker W005, Trigger TR005)
+- All computed scores (severity, exposure, confidence, fraud penalty)
+- Full payout calculation breakdown with formula reference
+- Final decision, fraud band, and audit trail
+
+> This example uses synthetic data. All values align with the formulas documented above.
+
+A machine-readable JSON Schema for the claim object is available at [`examples/sample_claim.schema.json`](examples/sample_claim.schema.json). It documents all required vs. optional fields, value ranges, and enums — useful for contract testing and API validation.
 
 ---
 
@@ -86,6 +104,8 @@ S = 0.23·rain_sev + 0.14·aqi_sev + 0.14·heat_sev + 0.10·traffic_sev
 
 Each component is normalized to 0–1 using public thresholds (IMD, CPCB) or operational thresholds.
 
+> **Threshold provenance:** Environmental components (rain, AQI, heat) are normalized against official Indian government category bands — see [IMD rainfall FAQ](https://rsmcnewdelhi.imd.gov.in/images/pdf/faq.pdf), [CPCB AQI Index](https://www.cpcb.nic.in/national-air-quality-index/), and [NDMA heat-wave guidance](https://ndma.gov.in/Natural-Hazards/Heat-Wave). Operational components (traffic, outage, demand, closure, accessibility) use internal product thresholds documented in the [root README](../README.md#threshold-references-and-why-they-were-chosen).
+
 ### Stage 5 — Payout Estimate Created
 The system computes:
 
@@ -93,7 +113,7 @@ The system computes:
 Payout = min(Cap, B × S × E × C × (1 − FH))
 ```
 
-Where `B` = covered weekly income, `E` = exposure, `C` = effective confidence, `FH` = fraud holdback, `Cap` = 0.75 × B × U.
+Where B = covered weekly income, S = severity, E = exposure, C = effective confidence, FH = fraud holdback, Cap = `0.75 × B × U`. The outlier uplift factor U adjusts both premium and cap proportionally for validated high-risk cases. For the full variable dictionary and formula derivation, see the [Reference Register](../docs/README.md#formula-summary) in `docs/README.md`.
 
 ### Stage 6 — Fraud Score Applied
 The [Ghost Shift Detector](../fraud/README.md) evaluates:

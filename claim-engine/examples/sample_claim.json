@@ -1,0 +1,83 @@
+{
+  "claim_id": "CLM-2025-0042",
+  "worker_id": "W005",
+  "trigger_id": "TR005",
+  "city": "Bangalore",
+  "zone_id": "E",
+  "event_type": "rain_heat",
+  "trigger_ids_fired": ["T2", "T7", "T15"],
+  "trigger_summary": "Heavy rain (68mm) + heat wave (46°C) + composite disruption score 0.78",
+
+  "pipeline_stage": "payout_completed",
+  "pipeline_trace": [
+    {"stage": 1, "name": "trigger_event", "timestamp": "2025-07-20T07:12:00Z", "result": "T2 + T7 + T15 fired"},
+    {"stage": 2, "name": "claim_candidate_created", "timestamp": "2025-07-20T07:12:01Z", "result": "candidate CLM-2025-0042 opened"},
+    {"stage": 3, "name": "exposure_check", "timestamp": "2025-07-20T07:12:02Z", "result": "zone E confirmed, shift 07:00-16:00 overlaps event window"},
+    {"stage": 4, "name": "severity_scoring", "timestamp": "2025-07-20T07:12:03Z", "result": "severity_score = 0.78 (extreme band)"},
+    {"stage": 5, "name": "fraud_check", "timestamp": "2025-07-20T07:12:04Z", "result": "fraud_score = 0.18 (low risk, auto-approve)"},
+    {"stage": 6, "name": "payout_calculation", "timestamp": "2025-07-20T07:12:05Z", "result": "payout = 890.20 INR"},
+    {"stage": 7, "name": "decision", "timestamp": "2025-07-20T07:12:05Z", "result": "auto_approved"},
+    {"stage": 8, "name": "audit_recorded", "timestamp": "2025-07-20T07:12:06Z", "result": "full trace logged"}
+  ],
+
+  "worker_context": {
+    "hourly_income": 100,
+    "shift_hours": 9,
+    "active_days": 6,
+    "trust_score": 0.69,
+    "gps_consistency": 0.70,
+    "bank_verified": false,
+    "prior_claim_rate": 0.22,
+    "covered_weekly_income_B": 3780.00
+  },
+
+  "trigger_context": {
+    "rain_mm": 68,
+    "aqi": 145,
+    "temp_c": 46,
+    "traffic_delay_pct": 0.48,
+    "outage_min": 25,
+    "closure_flag": 1,
+    "demand_drop_pct": 0.40,
+    "accessibility_score": 0.30,
+    "source_reliability": 0.79
+  },
+
+  "computed_scores": {
+    "severity_score": 0.78,
+    "exposure_score": 0.84,
+    "confidence_score": 0.58,
+    "fraud_penalty": 0.18,
+    "fraud_holdback_factor": 0.195,
+    "claim_probability": 0.82
+  },
+
+  "payout_calculation": {
+    "formula": "min(Cap, B × S × E × C × (1 − FH))",
+    "covered_income_B": 3780.00,
+    "severity_S": 0.78,
+    "exposure_E": 0.84,
+    "confidence_C": 0.58,
+    "fraud_holdback_FH": 0.195,
+    "raw_payout": 1154.32,
+    "payout_cap": 2835.00,
+    "final_payout": 890.20,
+    "currency": "INR"
+  },
+
+  "decision": {
+    "status": "auto_approved",
+    "fraud_band": "low",
+    "review_required": false,
+    "payout_method": "simulated_upi",
+    "payout_timestamp": "2025-07-20T07:15:00Z"
+  },
+
+  "audit_trace": {
+    "created_at": "2025-07-20T07:12:00Z",
+    "decided_at": "2025-07-20T07:12:05Z",
+    "paid_at": "2025-07-20T07:15:00Z",
+    "decision_engine_version": "v0.1-spec",
+    "notes": "This is a sample claim for documentation purposes. All values are synthetic."
+  }
+}

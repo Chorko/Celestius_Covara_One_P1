@@ -1,0 +1,86 @@
+# ==========================
+# Python
+# ==========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+*.whl
+venv/
+.venv/
+env/
+.env
+.python-version
+
+# ==========================
+# Node / Frontend
+# ==========================
+node_modules/
+.next/
+out/
+dist/
+build/
+*.tsbuildinfo
+.npm
+.yarn/
+package-lock.json
+yarn.lock
+
+# ==========================
+# Data Science / Jupyter
+# ==========================
+.ipynb_checkpoints/
+*.h5
+*.pkl
+*.joblib
+*.model
+
+# ==========================
+# IDE / Editor
+# ==========================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ==========================
+# Environment / Secrets
+# ==========================
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# ==========================
+# Logs / Coverage / Temp
+# ==========================
+*.log
+logs/
+coverage/
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+tmp/
+temp/
+
+# ==========================
+# Generated / Large assets
+# ==========================
+*.csv
+!data/samples/*.csv
+
+# ==========================
+# Temporary Folders
+# ==========================
+TEMP_WILL_BE_DELETED/

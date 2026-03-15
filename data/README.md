@@ -9,12 +9,12 @@
 | Component | Status |
 |-----------|--------|
 | Schema definitions (worker_data, trigger_data, joined) | 📝 Documented |
-| 8-row seed dataset | 📝 Documented |
+| 8-row seed dataset | ✅ Present | See `data/samples/` |
 | Variable dictionary | 📝 Documented |
 | Threshold reference table | 📝 Documented |
+| Seed CSV files | ✅ Present | `data/samples/*.csv` (3 files, 8 rows each) |
 | Synthetic data generator script | 📋 Planned |
 | Mock-data API endpoint | 📋 Planned |
-| CSV file outputs | 📋 Planned |
 
 ---
 
@@ -143,6 +143,16 @@ The expert session required an initial manual dataset of ≈8 rows. This seed is
 
 > **Note:** Income assumptions are team assumptions, not official government wages. All values are plausible but synthetic.
 
+### Downloadable Seed Files
+
+The seed dataset is available as actual CSV files in `data/samples/`:
+
+| File | Records | Description |
+|------|---------|-------------|
+| [`worker_data_seed.csv`](samples/worker_data_seed.csv) | 8 | Worker profiles matching the schema above |
+| [`trigger_data_seed.csv`](samples/trigger_data_seed.csv) | 8 | Trigger events with all signal fields |
+| [`joined_training_data_seed.csv`](samples/joined_training_data_seed.csv) | 8 | Matched worker+trigger rows with computed scores |
+
 ---
 
 ## Variable Dictionary
@@ -162,14 +172,16 @@ The expert session required an initial manual dataset of ≈8 rows. This seed is
 
 ## Trigger Threshold Reference Table
 
-| Variable | Threshold | Reference |
-|----------|-----------|-----------|
-| Rain | 48mm watch / 64.5mm heavy / 115.6mm very heavy+ | IMD operational + heavy-rain / very-heavy-rain bands |
-| AQI | 201+ caution / 301+ severe / 401+ extreme | CPCB AQI category thresholds |
-| Heat | 45°C heat-wave / 47°C severe heat | IMD / NDMA heat-wave guidance |
-| Traffic | ≥ 40% travel delay | Internal operational threshold |
-| Platform outage | ≥ 30 minutes | Internal operational threshold |
-| Demand collapse | ≥ 35% order drop vs baseline | Internal operational threshold |
+| Variable | Thresholds Used | Official Source | Inference / Mapping | Anchoring |
+|----------|----------------|-----------------|---------------------|-----------|
+| **Rain** | 48 mm watch / 64.5 mm heavy / 115.6 mm very heavy | [IMD Rainfall FAQ](https://rsmcnewdelhi.imd.gov.in/images/pdf/faq.pdf), [IMD Heavy Rainfall Warning](https://mausam.imd.gov.in/imd_latest/contents/pdf/pubbrochures/Heavy%20Rainfall%20Warning%20Services.pdf) | IMD defines heavy rainfall at 64.5 mm and very heavy at 115.6 mm. We introduce 48 mm as an earlier product watch threshold to begin elevated monitoring before the claim level. | ✅ Public |
+| **AQI** | 201+ caution / 301+ severe / 401+ extreme | [CPCB National AQI](https://www.cpcb.nic.in/national-air-quality-index/), [OGD AQI Dataset](https://www.data.gov.in/resource/real-time-air-quality-index-various-locations) | CPCB defines Poor (201–300), Very Poor (301–400), Severe (401+). We map 201+ as caution and 301+ as claim threshold because these bands impair outdoor delivery work. | ✅ Public |
+| **Heat** | 45°C heat-wave / 47°C severe | [IMD Heat Wave Warning](https://mausam.imd.gov.in/imd_latest/contents/pdf/pubbrochures/Heat%20Wave%20Warning%20Services.pdf), [NDMA Heat Wave](https://ndma.gov.in/Natural-Hazards/Heat-Wave) | IMD/NDMA define heat-wave at ≥ 45°C for plains regions. We use 45°C as claim threshold and 47°C as severe escalation. | ✅ Public |
+| **Traffic** | ≥ 40% travel delay | Internal | No single public standard for delivery-impairment delay. 40% delay threshold is a product-engineering decision estimating the point where routes become undeliverable. | ⚙️ Operational |
+| **Platform outage** | ≥ 30 minutes | Internal | Platform data is not publicly available. 30-minute threshold estimates loss of material earning opportunity during a shift. | ⚙️ Operational |
+| **Demand collapse** | ≥ 35% order drop vs baseline | Internal | Order volume is not publicly available. 35% drop estimates the threshold where earning opportunity falls below viable levels. | ⚙️ Operational |
+
+> **Anchoring principle:** Environmental thresholds (rain, AQI, heat) are anchored to official Indian government classifications. Operational thresholds (traffic, outage, demand) are product-engineering estimates that may be refined with real operating data.
 
 ---
 
@@ -180,6 +192,10 @@ The expert session required an initial manual dataset of ≈8 rows. This seed is
 3. Generate more rows using controlled synthetic variation (perturbation of seed)
 4. Keep `worker_data` and `trigger_data` strictly separate
 5. Join only after zone and shift overlap is validated
+
+**Matching rule:** A worker record and a trigger record are matched when they share the same `zone_id` **and** the trigger `timestamp_start`/`timestamp_end` overlaps the worker's declared `shift_window`. This prevents the system from paying everyone in a city when only a subset of routes, hours, or delivery zones were actually disrupted. See `samples/worker_data_seed.csv`, `samples/trigger_data_seed.csv`, and `samples/joined_training_data_seed.csv` for the seed dataset that demonstrates this matching.
+
+> For threshold provenance and the full reference register, see [docs/README.md](../docs/README.md#reference-register).
 
 ---
 
