@@ -488,12 +488,14 @@ Key business metrics the system tracks:
 
 ---
 
-## Creating a Clean Review Package
+## 📦 Creating a Clean Evaluation Package
 
-When sharing this repo for review or evaluation, exclude `.git/` and other development artifacts:
+When packaging this repository for submission to judges and technical reviewers, it is critical to exclude `.git/` and heavy development artifacts to maintain a clean evaluation payload.
+
+To automatically generate a clean package, run:
 
 ```powershell
 .\scripts\zip_review_repo.ps1
 ```
 
-This creates `Celestius_DEVTrails_P1_review.zip` at the repo root, containing only the files a reviewer needs — no `.git/`, `node_modules/`, `__pycache__/`, or virtual environments.
+This creates a `Celestius_DEVTrails_P1_review.zip` artifact at the repository root. This package deliberately omits dependencies like `.git/`, `node_modules/`, `__pycache__/`, and `.venv/` so that judges can immediately focus on the application source code and documentation.
