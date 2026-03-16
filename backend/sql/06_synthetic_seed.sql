@@ -48,6 +48,13 @@ ON CONFLICT (id) DO NOTHING;
 -- for admin users.
 -- ────────────────────────────────────────────────────────────
 
+-- Step 2-pre: Clean up existing demo accounts for safe re-run.
+-- All FK constraints are ON DELETE CASCADE, so deleting from auth.users
+-- cascades through profiles → worker_profiles/insurer_profiles → claims → evidence/payouts/reviews.
+-- Audit events use ON DELETE SET NULL, so those rows are preserved but actor_profile_id becomes null.
+DELETE FROM auth.identities WHERE user_id IN (SELECT id FROM auth.users WHERE email IN ('worker@demo.com', 'admin@demo.com'));
+DELETE FROM auth.users WHERE email IN ('worker@demo.com', 'admin@demo.com');
+
 -- Step 2a: Insert auth users. The trigger fires and auto-creates
 -- profiles (role='worker') + worker_profiles (placeholder) for each.
 INSERT INTO auth.users (
