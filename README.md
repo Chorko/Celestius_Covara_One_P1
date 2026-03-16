@@ -33,20 +33,23 @@ DEVTrails is an AI-assisted **parametric insurance platform** that protects deli
 ## Current Repository State
 
 > [!NOTE]
-> This repository is primarily **documentation-first**, with a minimal runnable backend scaffold. It contains the complete product specification — architecture diagrams, formulas, data schemas, module interfaces, seed data, and machine-readable contracts — plus a thin API demo slice.
+> This repository contains a **functional early-stage scaffold** of the DEVTrails platform — a working FastAPI backend, a working Next.js 16 frontend, a complete Supabase SQL schema with RLS, and real integration between all layers.
 >
 > **What you will find:**
+> - A running **Next.js 16 frontend** with worker dashboard (earnings chart, zone alerts, policy quote), claim submission with GPS + photo evidence, admin review queue with AI-assisted decisions, and admin trigger engine
+> - A running **FastAPI backend** with auth, claims, policies, triggers, zones, workers, and analytics endpoints
+> - **14-table Supabase SQL schema** with Row-Level Security, auth triggers, and storage policies
+> - **8-stage claim pipeline** with severity scoring, pricing engine, fraud scoring, payout recommendation, and Gemini AI explanation
+> - Google OAuth + email/password auth via Supabase Auth with role-based routing
+> - CLI seed system + Excel import utility
 > - 10 module-level READMEs with inputs, outputs, and downstream flows
 > - 7 architecture and data-science visuals (PNGs)
 > - 5 standalone Mermaid diagram source files
-> - 3 seed CSV files (8-row sample dataset)
-> - 1 sample claim JSON with full pipeline trace + JSON Schema
-> - 1 runnable FastAPI mock API (`backend/mock_api.py`) with 3 demo endpoints
-> - 1 OpenAPI 3.0 contract (`backend/openapi.yaml`)
-> - Python dependency baseline (`requirements.txt`)
 > - Clean review zip script (`scripts/zip_review_repo.ps1`)
 >
-> **What does not yet exist:** frontend dashboards, ML notebooks, full backend services, database layer, or live integrations. Most module folders document their intended responsibilities and interfaces for the implementation phase ahead. The mock API is a thin demonstrator, not a production backend.
+> **What is scaffolded (works but incomplete):** Policy activation (mock — returns success token, no DB persistence), ML integration (Random Forest p=0.15 is hardcoded), trigger overlap matching (implemented but not called).
+>
+> **What is documented but not yet implemented:** Redis caching layer, ML training pipeline, most external integrations, SQLAlchemy ORM.
 
 ---
 
@@ -90,19 +93,18 @@ The DEVTrails 2026 challenge requires:
 |------|--------|-------|
 | Repository structure & README system | ✅ Current | 10 folder-level READMEs with inputs/outputs/downstream |
 | Product framing & scope boundaries | ✅ Current | Consistent across all documentation |
-| 15-trigger library (thresholds & logic) | 📝 Documented | Thresholds defined, formulas documented; implementation pending |
-| Premium & payout formulas | 📝 Documented | Full formula book with derivation examples; implementation pending |
-| Data schemas & seed dataset | ✅ Present | 3 seed CSVs (8-row dataset) + JSON Schema for claim objects |
-| Backend API — mock scaffold | ✅ Present | 3-endpoint FastAPI demo slice (`mock_api.py`) + OpenAPI contract |
-| Backend API — full services | 📋 Planned | 10 endpoints specified; full implementation pending |
-| Worker dashboard | 📋 Planned | Pages and components specified; implementation pending |
-| Insurer dashboard | 📋 Planned | Pages and components specified; implementation pending |
-| Claim analytics dashboard | 📋 Planned | Metrics and views specified; implementation pending |
-| Claim pipeline | 📋 Planned | 8-stage flow defined; implementation pending |
-| Fraud detection engine | 📋 Planned | 4-layer framework defined; implementation pending |
-| Synthetic data generator | 📋 Planned | Endpoint and workflow defined; implementation pending |
+| 15-trigger library (thresholds & logic) | ✅ Implemented | Trigger engine with live feed + mock injection |
+| Premium & payout formulas | ✅ Implemented | Pricing engine with actuarial formulas |
+| Data schemas & seed dataset | ✅ Present | 14-table Supabase SQL schema with RLS + seed CSVs |
+| Backend API — full services | ✅ Implemented | Auth, claims, policies, triggers, zones, workers, analytics endpoints |
+| Worker dashboard | ✅ Implemented | Profile, earnings chart, zone alerts, policy quote, claim submission |
+| Insurer dashboard | ✅ Implemented | KPI cards, trigger mix chart, review queue with AI-assisted decisions |
+| Claim pipeline | ✅ Implemented | 8-stage pipeline: severity → pricing → fraud → payout → Gemini AI |
+| Fraud detection engine | ✅ Implemented | 4-layer scoring with fraud bands and holdback |
+| Supabase Auth & RLS | ✅ Implemented | Google OAuth, role-based routing, Row-Level Security |
 | Integrations (weather, AQI, traffic) | 📋 Planned | Categories and mock strategy defined; connectors pending |
 | Caching layer | 📋 Planned | Strategy and TTL policy defined; implementation pending |
+| ML training pipeline | 📋 Planned | Random Forest baseline hardcoded at p=0.15 |
 
 **Legend:** ✅ Current Implementation — 📝 Documented Formula / Design Logic — 📋 Planned / Target Architecture
 
@@ -341,40 +343,74 @@ Where: `p` = claim probability (Random Forest), `FH` = fraud holdback, `U` = out
 Celestius_DEVTrails_P1/
 ├── .gitignore
 ├── README.md                        ← You are here
-├── requirements.txt                 ← Python dependency baseline
+├── requirements.txt                 ← Python dependencies
 ├── backend/
 │   ├── README.md                    ← API layer, services, endpoints
-│   ├── mock_api.py                  ← Runnable 3-endpoint FastAPI scaffold
+│   ├── app/
+│   │   ├── main.py                  ← FastAPI app entry point
+│   │   ├── config.py                ← Environment configuration
+│   │   ├── dependencies.py          ← Auth guards (get_current_user, require_*)
+│   │   ├── supabase_client.py       ← Supabase admin client
+│   │   ├── seed.py                  ← CLI database seeder
+│   │   ├── routers/                 ← API route handlers
+│   │   │   ├── auth.py              ← Login, signup, profile endpoints
+│   │   │   ├── claims.py            ← Claim submission, listing, review
+│   │   │   ├── policies.py          ← Premium quotes, policy activation
+│   │   │   ├── triggers.py          ← Live trigger feed, mock injection
+│   │   │   ├── workers.py           ← Worker profile & stats
+│   │   │   └── zones.py             ← Zone lookup
+│   │   └── services/                ← Business logic
+│   │       ├── claim_pipeline.py    ← 8-stage claim orchestration
+│   │       ├── severity.py          ← Severity scoring
+│   │       ├── pricing.py           ← Premium & payout calculations
+│   │       ├── fraud_engine.py      ← Ghost Shift Detector
+│   │       ├── evidence.py          ← EXIF metadata extraction
+│   │       ├── manual_claim_verifier.py ← Manual claim validation
+│   │       └── gemini_analysis.py   ← Gemini AI claim narratives
+│   ├── sql/                         ← Supabase SQL schema
+│   │   ├── 01_supabase_platform_schema.sql ← 14 tables
+│   │   ├── 02_auth_triggers.sql     ← Auth event triggers
+│   │   ├── 03_rls_policies.sql      ← Row-Level Security
+│   │   ├── 04_storage_policies.sql  ← Storage bucket policies
+│   │   ├── 05_rls_rollback.sql      ← RLS cleanup script
+│   │   └── 06_synthetic_seed.sql    ← Demo users + comprehensive seed data
+│   ├── mock_api.py                  ← Legacy 3-endpoint demo scaffold
 │   └── openapi.yaml                 ← OpenAPI 3.0 contract
+├── frontend/
+│   ├── README.md                    ← Frontend architecture & pages
+│   ├── src/app/                     ← Next.js 16 App Router pages
+│   │   ├── layout.tsx               ← Root layout
+│   │   ├── auth/callback/route.ts   ← OAuth callback handler
+│   │   ├── worker/                  ← Worker-facing pages
+│   │   │   ├── dashboard/page.tsx   ← Profile, chart, alerts, quote
+│   │   │   ├── claims/page.tsx      ← Claim submission + history
+│   │   │   ├── pricing/page.tsx     ← Coverage plans, mock payment
+│   │   │   └── layout.tsx           ← Worker route guard
+│   │   └── admin/                   ← Admin-facing pages
+│   │       ├── dashboard/page.tsx   ← KPI cards, trigger mix chart
+│   │       ├── reviews/page.tsx     ← Claim review queue + AI summary
+│   │       ├── triggers/page.tsx    ← Live trigger feed + injection
+│   │       ├── users/page.tsx       ← Worker search + profile viewer
+│   │       └── layout.tsx           ← Admin route guard
+│   └── src/lib/supabase.ts          ← Supabase browser client
 ├── caching/README.md                ← Cache strategy and TTL policies
 ├── claim-engine/
 │   ├── README.md                    ← Trigger-to-claim pipeline
-│   └── examples/
-│       ├── sample_claim.json        ← Sample claim with full pipeline trace
-│       └── sample_claim.schema.json ← JSON Schema for claim objects
+│   └── examples/                    ← Sample claim + JSON Schema
 ├── data/
 │   ├── README.md                    ← Schemas, seed dataset, generation plan
-│   └── samples/                     ← Seed CSV files (8-row dataset)
-│       ├── worker_data_seed.csv
-│       ├── trigger_data_seed.csv
-│       └── joined_training_data_seed.csv
+│   └── samples/                     ← Seed CSV files
 ├── docs/
 │   ├── README.md                    ← Documentation index + reference register
 │   ├── diagrams/                    ← Mermaid source files (.mmd)
-│   │   ├── overall-system-architecture.mmd
-│   │   ├── worker-journey.mmd
-│   │   ├── insurer-operations.mmd
-│   │   ├── trigger-to-claim-flow.mmd
-│   │   └── fraud-detection-pipeline.mmd
-│   └── assets/
-│       ├── architecture/            ← 5 architecture diagram PNGs
-│       └── insurance/               ← 2 data-science chart PNGs
+│   └── assets/                      ← Architecture & data-science PNGs
 ├── fraud/README.md                  ← Ghost Shift Detector, 4-layer fraud engine
-├── frontend/README.md               ← Worker + insurer + analytics dashboards
 ├── integrations/README.md           ← External connectors & mock integrations
 ├── ml/README.md                     ← Data science pipeline, models, experiments
 └── scripts/
-    └── zip_review_repo.ps1          ← Clean review zip exporter
+    ├── zip_review_repo.ps1          ← Clean review zip exporter
+    ├── seed_test_users.py           ← Test user seeder
+    └── force_sync_users.py          ← User sync utility
 ```
 
 Each folder README follows a consistent structure:
@@ -390,21 +426,47 @@ Each folder README follows a consistent structure:
 
 | Layer | Technology | Why |
 |-------|-----------|-----|
-| **Frontend** | React / Next.js | Fast UI iteration, component-based dashboards, clean demo experience |
+| **Frontend** | React / Next.js 16 | Fast UI iteration, component-based dashboards, clean demo experience |
 | **Backend** | Python (FastAPI) | Transparent REST endpoint design, strong data-science ecosystem integration |
-| **Cache** | Redis | Fast key-value caching for trigger feeds, dashboard summaries, simulation outputs |
-| **Data Science** | pandas, numpy, scikit-learn, matplotlib | Bootstrap EDA, Random Forest baseline, boxplot outlier analysis |
-| **Storage** | PostgreSQL | Relational storage for policies, claims, audit events, payout logs |
-| **Visualization** | Recharts | React-native charting for analytics dashboards, trigger mix, severity distribution |
+| **Database** | PostgreSQL (Supabase) | Relational storage with built-in auth, RLS, real-time subscriptions, and storage |
+| **Styling** | Tailwind CSS v4 | Utility-first CSS with glassmorphism design system, zero-config setup |
+| **Charts** | Recharts | React-native charting for analytics dashboards, trigger mix, severity distribution |
+| **State** | Zustand | Lightweight client-side state management for auth and UI state |
+| **Cache** | Redis *(planned)* | Fast key-value caching for trigger feeds, dashboard summaries, simulation outputs |
+| **Data Science** | pandas, numpy, scikit-learn | Bootstrap EDA, Random Forest baseline, boxplot outlier analysis |
 
-> **📋 Status:** Tech stack represents target technology choices. See `requirements.txt` for the Python dependency baseline. A minimal mock API scaffold exists in `backend/mock_api.py`; full services are pending.
+### Why a Web Application Over a Mobile App
+
+We deliberately chose a **responsive web application** over a native mobile app for the following reasons:
+
+1. **Instant accessibility** — Gig workers across India use a wide variety of Android devices with limited storage. A web app requires no install, no app-store approval, and no device-specific builds. Workers can access their dashboard from any browser.
+
+2. **Cross-platform from day one** — A single Next.js codebase serves both desktop (admin/insurer dashboards) and mobile (worker-facing views) without maintaining separate iOS and Android codebases or hiring platform-specific developers.
+
+3. **Faster iteration cycle** — Insurance product logic evolves rapidly during early-stage validation. Web deployments are instant (push to deploy), while mobile apps require app-store review cycles (24-72 hours per update). For a prototype in active development, this speed advantage is critical.
+
+4. **Admin-side complexity** — The insurer dashboard involves data tables, split-pane review queues, pipeline breakdowns, and chart-heavy analytics views that are better suited to wider screens with a browser-based layout engine. Building this natively on mobile would add significant complexity for minimal benefit.
+
+5. **Supabase integration** — Supabase Auth (Google OAuth, email/password) and Supabase Realtime work seamlessly with browser-based clients. The JavaScript SDK is mature and well-documented for web use cases.
+
+6. **Progressive enhancement path** — The web app can be wrapped as a PWA (Progressive Web App) later to provide an app-like experience with offline support, push notifications, and home-screen installation — bridging the gap without the overhead of native development.
+
+> **Future consideration:** Once the product reaches scale and requires hardware-level features (background GPS tracking, camera access for evidence capture in offline zones), a React Native or Flutter wrapper around the existing API layer would be the natural next step.
 
 ---
 
 ## Evaluator Quick-Start
 
 > [!NOTE]
-> The repository is primarily **documentation-first** with a minimal runnable backend scaffold. The README system provides complete product logic, formulas, and architecture. A 3-endpoint mock API is available for immediate demonstration. Full service implementation is the next phase.
+> This repository contains a **functional full-stack application** with a running FastAPI backend, a Next.js 16 frontend with glassmorphism UI, a 14-table Supabase schema with RLS, and comprehensive synthetic seed data. The README system provides complete product logic, formulas, and architecture documentation.
+
+**To see the platform in action:**
+1. Set up your `.env` files (see Supabase & Authentication Setup above)
+2. Run `backend/sql/01` through `06` in your Supabase SQL editor
+3. Start the backend: `cd backend && uvicorn app.main:app --reload --port 8000`
+4. Start the frontend: `cd frontend && npm run dev`
+5. Log in with `worker@demo.com` / `demo1234` to see the worker dashboard with pre-seeded earnings, claims, and alerts
+6. Log in with `admin@demo.com` / `demo1234` to see the admin operations center with review queue, trigger engine, and user search
 
 **To understand the platform:**
 1. Read this README for the full product overview
@@ -413,12 +475,6 @@ Each folder README follows a consistent structure:
 4. Review the trigger library table above for parametric threshold logic
 5. Review the premium/payout formula summary for insurance math
 6. Check the architecture diagrams for system flow
-
-**To run the mock API scaffold:**
-1. `pip install fastapi uvicorn`
-2. `uvicorn backend.mock_api:app --reload --port 8000`
-3. Open http://localhost:8000/docs for Swagger UI
-4. Try `/health`, `/triggers/library`, and `/claims/sample`
 
 ---
 
@@ -445,18 +501,33 @@ To run the full stack locally with functional Google OAuth and strict Role-Based
 
 ---
 
+## Demo Credentials
+
+After running `backend/sql/06_synthetic_seed.sql` in your Supabase SQL editor, the following demo accounts are available with pre-seeded data:
+
+| Role | Email | Password | What you'll see |
+|------|-------|----------|-----------------|
+| **Worker** | `worker@demo.com` | `demo1234` | Worker dashboard with 14-day earnings chart, zone alerts, claim history (1 approved rain claim, 1 pending), coverage plan quotes |
+| **Admin** | `admin@demo.com` | `demo1234` | Admin operations center with KPI cards, trigger distribution chart, full review queue with 9 claims, user search across 7 workers |
+
+**Or use your own Google account** — Sign in with Google OAuth and the system will automatically create a `worker` profile for you. Your dashboard will start empty and populate as you create shifts, submit claims, and interact with the platform.
+
+> The demo accounts are isolated synthetic users. Logging in with `worker@demo.com` or `admin@demo.com` does not affect any other user's data. All seed data uses `ON CONFLICT DO NOTHING`, so re-running the seed SQL is safe.
+
+---
+
 ## Folder Ownership
 
 | Folder | Responsibility | Status |
 |--------|---------------|--------|
-| `frontend/` | UI flows, dashboards, user experience | 📋 Planned |
-| `backend/` | API orchestration, services, business logic | ✅ Scaffold (mock API + OpenAPI) |
-| `claim-engine/` | Claim decision rules, 8-stage pipeline | 📝 Documented (sample claim + schema) |
-| `fraud/` | Ghost Shift Detector, anomaly logic, verification | 📋 Planned |
-| `ml/` | Severity modeling, pricing experiments, EDA | 📋 Planned |
-| `data/` | Synthetic data generation, CSV assets, schemas | ✅ Seed present (3 CSVs, 8 rows) |
+| `frontend/` | UI flows, dashboards, user experience | ✅ Implemented (worker + admin dashboards) |
+| `backend/` | API orchestration, services, business logic | ✅ Implemented (auth, claims, policies, triggers, workers, zones, analytics) |
+| `claim-engine/` | Claim decision rules, 8-stage pipeline | ✅ Implemented (full pipeline in backend/app/services/) |
+| `fraud/` | Ghost Shift Detector, anomaly logic, verification | ✅ Implemented (fraud_engine.py + manual_claim_verifier.py) |
+| `ml/` | Severity modeling, pricing experiments, EDA | 📋 Planned (baseline p=0.15 hardcoded) |
+| `data/` | Synthetic data generation, CSV assets, schemas | ✅ Present (14-table SQL schema + seed CSVs) |
 | `caching/` | Cache rules, TTL behavior, invalidation | 📋 Planned |
-| `integrations/` | External signal connectors, payment mocks | 📋 Planned |
+| `integrations/` | External signal connectors, payment mocks | 📋 Planned (mock data used currently) |
 | `docs/` | Diagrams, formula docs, pitch assets, references | 📝 Documented |
 
 ---
@@ -490,9 +561,9 @@ Key business metrics the system tracks:
 
 ## 📦 Creating a Clean Evaluation Package
 
-When packaging this repository for submission to judges and technical reviewers, it is critical to exclude `.git/` and heavy development artifacts to maintain a clean evaluation payload.
+It is critical to exclude `.git/` and heavy development artifacts to maintain a clean evaluation payload.
 
-To automatically generate a clean package, run:
+To generate a clean package, run:
 
 ```powershell
 .\scripts\zip_review_repo.ps1

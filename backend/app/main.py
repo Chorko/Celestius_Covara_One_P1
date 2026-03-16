@@ -29,11 +29,11 @@ async def lifespan(app: FastAPI):
     """Validate config on startup."""
     missing = settings.validate()
     if missing:
-        print(f"⚠️  Missing config: {', '.join(missing)}")
+        print(f"WARN:  Missing config: {', '.join(missing)}")
         print("   The API will start but Supabase calls will fail.")
         print("   Create a .env file — see .env.example")
     else:
-        print(f"✅ Config loaded. Supabase: {settings.supabase_url}")
+        print(f"OK: Config loaded. Supabase: {settings.supabase_url}")
         print(f"   Environment: {settings.app_env}")
     yield
 

@@ -5,7 +5,7 @@ Provides zone listing for city selection during onboarding,
 claim zone matching, and trigger zone display.
 """
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, HTTPException
 from backend.app.supabase_client import get_supabase_admin
 
 router = APIRouter(prefix="/zones", tags=["Zones"])
@@ -40,7 +40,7 @@ async def get_zone_detail(zone_id: str):
         .execute()
     )
     if not resp.data:
-        return {"error": "Zone not found"}
+        raise HTTPException(status_code=404, detail="Zone not found")
     return resp.data
 
 

@@ -1,27 +1,45 @@
 "use client"
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useUserStore } from '@/store'
 import { createClient } from '@/lib/supabase'
-import { Camera, MapPin, Send, AlertCircle, Clock, CheckCircle, XCircle } from 'lucide-react'
+import {
+  FileText,
+  Camera,
+  MapPin,
+  Send,
+  AlertCircle,
+  Clock,
+  CheckCircle,
+  XCircle,
+  Upload,
+  LocateFixed,
+  Zap,
+  ImageIcon,
+  FileWarning,
+} from 'lucide-react'
 
 export default function WorkerClaims() {
   const { user, profile } = useUserStore()
   const supabase = createClient()
-  
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   const [claims, setClaims] = useState<any[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
-  
+
   // Form State
   const [reason, setReason] = useState('')
   const [lat, setLat] = useState<number | null>(null)
   const [lng, setLng] = useState<number | null>(null)
   const [locating, setLocating] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
-  
+
   // File Upload State
   const [file, setFile] = useState<File | null>(null)
   const [uploadingFile, setUploadingFile] = useState(false)
+
+  // Drag state
+  const [isDragging, setIsDragging] = useState(false)
 
   useEffect(() => {
     if (profile) loadClaims()
@@ -63,19 +81,19 @@ export default function WorkerClaims() {
 
     try {
       let evidenceUrl = null;
-      
+
       // Handle file upload first if present
       if (file && user) {
         setUploadingFile(true)
         const fileExt = file.name.split('.').pop()
         const fileName = `${user.id}-${Date.now()}.${fileExt}`
         const filePath = `${fileName}`
-        
+
         const { error: uploadError } = await supabase.storage.from('claim-evidence').upload(filePath, file)
         if (uploadError) {
           throw new Error(`Evidence upload failed: ${uploadError.message}`)
         }
-        
+
         const { data } = supabase.storage.from('claim-evidence').getPublicUrl(filePath)
         evidenceUrl = data.publicUrl
         setUploadingFile(false)
@@ -84,7 +102,7 @@ export default function WorkerClaims() {
       const { data: session } = await supabase.auth.getSession()
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/claims`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Authorization': `Bearer ${session.session?.access_token}`,
           'Content-Type': 'application/json'
         },
@@ -97,7 +115,7 @@ export default function WorkerClaims() {
       })
 
       if (!res.ok) throw new Error("Failed to submit claim")
-      
+
       setReason('')
       setLat(null)
       setLng(null)
@@ -110,110 +128,273 @@ export default function WorkerClaims() {
     }
   }
 
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+    const droppedFile = e.dataTransfer.files?.[0]
+    if (droppedFile && droppedFile.type.startsWith('image/')) {
+      setFile(droppedFile)
+    }
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(true)
+  }
+
+  const handleDragLeave = () => {
+    setIsDragging(false)
+  }
+
+  const statusConfig: Record<string, { icon: React.ReactNode; badge: string; label: string }> = {
+    approved: {
+      icon: <CheckCircle size={16} className="text-emerald-400" />,
+      badge: 'badge-emerald',
+      label: 'Approved',
+    },
+    held: {
+      icon: <Clock size={16} className="text-amber-400" />,
+      badge: 'badge-amber',
+      label: 'Held',
+    },
+    submitted: {
+      icon: <AlertCircle size={16} className="text-amber-400" />,
+      badge: 'badge-amber',
+      label: 'Submitted',
+    },
+    rejected: {
+      icon: <XCircle size={16} className="text-red-400" />,
+      badge: 'badge-red',
+      label: 'Rejected',
+    },
+  }
+
   return (
-    <div className="p-8 max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500">
-      <div className="mb-6">
-        <h1 className="text-3xl font-semibold mb-2">My Claims</h1>
-        <p className="text-neutral-400">File a new manual claim or track the status of existing ones.</p>
-      </div>
+    <div className="min-h-screen gradient-mesh">
+      <div className="p-6 md:p-10 pb-24 max-w-6xl mx-auto space-y-8">
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        
-        {/* Submit Form */}
-        <div className="md:col-span-1 bg-neutral-900 border border-neutral-800 rounded-2xl p-6 shadow-xl h-fit">
-          <h2 className="text-lg font-medium mb-4 flex items-center gap-2">
-            <Send size={20} className="text-emerald-500" /> File a Claim
-          </h2>
-          {submitError && <div className="text-red-400 text-sm mb-4">{submitError}</div>}
-          <form onSubmit={handleSubmit} className="space-y-4">
+        {/* ===== PAGE HEADER ===== */}
+        <section className="animate-fade-in-up">
+          <div className="flex items-center gap-3 mb-1">
+            <div className="glass p-2.5 rounded-xl">
+              <FileText size={24} className="text-emerald-400" />
+            </div>
             <div>
-              <label className="text-xs text-neutral-500 uppercase tracking-wider mb-2 block">Reason for disruption</label>
-              <textarea 
-                required
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-sm text-white focus:outline-none focus:border-emerald-500/50 min-h-[100px]"
-                placeholder="e.g. Severe waterlogging blocked access to the pickup restaurant..."
-              />
+              <h1 className="text-3xl md:text-4xl font-bold text-white">My Claims</h1>
+              <p className="text-neutral-400 text-sm mt-0.5">
+                File a new manual claim or track the status of existing ones.
+              </p>
             </div>
+          </div>
+        </section>
 
-            <div className="p-4 bg-neutral-950/50 border border-neutral-800 border-dashed rounded-xl">
-              <label className="text-xs text-neutral-500 uppercase tracking-wider mb-3 block">Evidence & Location</label>
-              <div className="space-y-2">
-                <div className="relative">
-                  <input 
-                    type="file" 
-                    accept="image/*"
-                    onChange={(e) => setFile(e.target.files?.[0] || null)}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+
+          {/* ===== NEW CLAIM FORM ===== */}
+          <section className="lg:col-span-2 animate-fade-in-up delay-100">
+            <div className="glass-card p-6 h-fit sticky top-8">
+              <h2 className="text-lg font-semibold text-white mb-5 flex items-center gap-2">
+                <Send size={18} className="text-emerald-400" />
+                File a Claim
+              </h2>
+
+              {/* Error display */}
+              {submitError && (
+                <div className="glass p-3 rounded-xl border border-red-500/30 mb-4 flex items-start gap-2">
+                  <AlertCircle size={16} className="text-red-400 mt-0.5 flex-shrink-0" />
+                  <p className="text-sm text-red-300">{submitError}</p>
+                </div>
+              )}
+
+              <form onSubmit={handleSubmit} className="space-y-5">
+                {/* Reason */}
+                <div>
+                  <label className="text-xs text-neutral-500 uppercase tracking-wider mb-2 block font-medium">
+                    Disruption Reason
+                  </label>
+                  <textarea
+                    required
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    className="glass-input w-full min-h-[120px] resize-y"
+                    placeholder="e.g. Severe waterlogging blocked access to the pickup restaurant..."
                   />
-                  <button type="button" className={`w-full py-2 ${file ? 'bg-emerald-500/20 text-emerald-400' : 'bg-neutral-800 hover:bg-neutral-700'} rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors`}>
-                    <Camera size={16} /> {file ? "Photo Selected" : "Attach Photo"}
-                  </button>
-                  {file && <span className="text-xs text-neutral-400 mt-2 block text-center truncate">{file.name}</span>}
                 </div>
-                <button 
-                  type="button" 
-                  onClick={handleGetLocation}
-                  disabled={locating}
-                  className="w-full py-2 bg-neutral-800 hover:bg-neutral-700 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
-                >
-                  <MapPin size={16} className={lat ? "text-emerald-500" : ""} />
-                  {lat ? `Location: ${lat.toFixed(4)}, ${lng?.toFixed(4)}` : locating ? 'Locating...' : 'Pin Current Location'}
-                </button>
-              </div>
-            </div>
 
-            <button 
-              type="submit" 
-              disabled={isSubmitting || !reason}
-              className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed text-black font-semibold py-3 rounded-xl transition-colors"
-            >
-              {isSubmitting ? (uploadingFile ? 'Uploading Photo...' : 'Submitting...') : 'Submit Claim'}
-            </button>
-          </form>
-        </div>
+                {/* Evidence upload -- drag and drop */}
+                <div>
+                  <label className="text-xs text-neutral-500 uppercase tracking-wider mb-2 block font-medium">
+                    Evidence Photo
+                  </label>
+                  <div
+                    onDrop={handleDrop}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`glass rounded-xl p-6 border-2 border-dashed cursor-pointer transition-all text-center
+                      ${isDragging
+                        ? 'border-emerald-400/60 bg-emerald-500/[0.06]'
+                        : file
+                        ? 'border-emerald-500/30 bg-emerald-500/[0.04]'
+                        : 'border-white/10 hover:border-white/20'
+                      }`}
+                  >
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setFile(e.target.files?.[0] || null)}
+                      className="hidden"
+                    />
 
-        {/* Claim History List */}
-        <div className="md:col-span-2 space-y-4">
-          <h2 className="text-lg font-medium mb-4">Claim History</h2>
-          
-          {claims.length === 0 ? (
-            <div className="text-center p-12 bg-neutral-900 border border-neutral-800 border-dashed rounded-2xl text-neutral-500">
-              You have no past claims on record.
-            </div>
-          ) : (
-            claims.map(claim => (
-              <div key={claim.id} className="bg-neutral-900 border border-neutral-800 rounded-2xl p-5 hover:border-neutral-700 transition-colors">
-                <div className="flex justify-between items-start mb-3">
-                  <div className="flex items-center gap-2">
-                    {claim.claim_status === 'approved' && <CheckCircle size={18} className="text-emerald-500" />}
-                    {claim.claim_status === 'held' && <Clock size={18} className="text-yellow-500" />}
-                    {claim.claim_status === 'submitted' && <AlertCircle size={18} className="text-blue-500" />}
-                    {claim.claim_status === 'rejected' && <XCircle size={18} className="text-red-500" />}
-                    <span className="font-semibold capitalize text-neutral-200">{claim.claim_status}</span>
+                    {file ? (
+                      <div className="space-y-2">
+                        <ImageIcon size={28} className="text-emerald-400 mx-auto" />
+                        <p className="text-sm text-emerald-300 font-medium truncate">{file.name}</p>
+                        <p className="text-xs text-neutral-500">
+                          {(file.size / 1024).toFixed(0)} KB -- Click to change
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <Upload size={28} className="text-neutral-500 mx-auto" />
+                        <p className="text-sm text-neutral-400">
+                          Drag & drop or click to upload
+                        </p>
+                        <p className="text-xs text-neutral-600">
+                          JPG, PNG or HEIC up to 10 MB
+                        </p>
+                      </div>
+                    )}
                   </div>
-                  <span className="text-sm text-neutral-500">{new Date(claim.claimed_at).toLocaleDateString()}</span>
                 </div>
-                
-                <p className="text-sm text-neutral-400 mb-3">{claim.claim_reason}</p>
-                
-                <div className="flex gap-3 text-xs text-neutral-500 font-medium">
-                  <span className="bg-neutral-950 px-2 py-1 rounded">ID: {claim.id.split('-')[0]}</span>
-                  {claim.trigger_events && (
-                    <span className="bg-blue-500/10 text-blue-400 px-2 py-1 rounded">
-                      Matched: {claim.trigger_events.trigger_family}
-                    </span>
-                  )}
-                  {claim.stated_lat && (
-                    <span className="flex items-center gap-1"><MapPin size={12}/> {claim.stated_lat.toFixed(2)}, {claim.stated_lng?.toFixed(2)}</span>
-                  )}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
 
+                {/* GPS pin */}
+                <div>
+                  <label className="text-xs text-neutral-500 uppercase tracking-wider mb-2 block font-medium">
+                    Location
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleGetLocation}
+                    disabled={locating}
+                    className={`glass w-full py-3 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-all
+                      ${lat
+                        ? 'border border-emerald-500/30 text-emerald-300'
+                        : 'hover:bg-white/[0.06] text-neutral-300'
+                      }`}
+                  >
+                    <LocateFixed size={16} className={lat ? 'text-emerald-400' : 'text-neutral-500'} />
+                    {lat
+                      ? `${lat.toFixed(4)}, ${lng?.toFixed(4)}`
+                      : locating
+                      ? 'Acquiring GPS...'
+                      : 'Pin Current Location'}
+                  </button>
+                </div>
+
+                {/* Submit */}
+                <button
+                  type="submit"
+                  disabled={isSubmitting || !reason}
+                  className="btn-primary w-full py-3.5 text-sm font-semibold flex items-center justify-center gap-2"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <div className="h-4 w-4 border-2 border-black/40 border-t-black rounded-full animate-spin" />
+                      {uploadingFile ? 'Uploading Photo...' : 'Submitting...'}
+                    </>
+                  ) : (
+                    <>
+                      <Zap size={16} />
+                      Submit Claim
+                    </>
+                  )}
+                </button>
+              </form>
+            </div>
+          </section>
+
+          {/* ===== CLAIMS HISTORY ===== */}
+          <section className="lg:col-span-3 space-y-4 animate-fade-in-up delay-200">
+            <h2 className="text-lg font-semibold text-white flex items-center gap-2 mb-1">
+              <Clock size={18} className="text-neutral-400" />
+              Claim History
+              {claims.length > 0 && (
+                <span className="badge badge-blue ml-1">{claims.length}</span>
+              )}
+            </h2>
+
+            {claims.length === 0 ? (
+              <div className="glass-card p-12 text-center">
+                <FileWarning size={48} className="text-neutral-700 mx-auto mb-4" />
+                <h3 className="text-neutral-400 font-medium mb-1">No claims yet</h3>
+                <p className="text-sm text-neutral-600">
+                  When you file a claim, it will appear here with live status updates.
+                </p>
+              </div>
+            ) : (
+              claims.map((claim, index) => {
+                const cfg = statusConfig[claim.claim_status] || statusConfig.submitted
+                return (
+                  <div
+                    key={claim.id}
+                    className={`glass-card p-5 hover:bg-white/[0.04] transition-colors animate-fade-in-up ${
+                      index <= 4 ? `delay-${(index + 1) * 100}` : ''
+                    }`}
+                  >
+                    {/* Top row -- status + date */}
+                    <div className="flex justify-between items-start mb-3">
+                      <span className={`badge ${cfg.badge} flex items-center gap-1.5`}>
+                        {cfg.icon}
+                        {cfg.label}
+                      </span>
+                      <span className="text-xs text-neutral-500">
+                        {new Date(claim.claimed_at).toLocaleDateString('en-IN', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        })}
+                      </span>
+                    </div>
+
+                    {/* Claim reason */}
+                    <p className="text-sm text-neutral-300 mb-3 line-clamp-2 leading-relaxed">
+                      {claim.claim_reason}
+                    </p>
+
+                    {/* Meta row */}
+                    <div className="flex flex-wrap gap-2 text-xs">
+                      <span className="glass px-2.5 py-1 rounded-lg text-neutral-400 font-mono">
+                        #{claim.id.split('-')[0]}
+                      </span>
+
+                      {claim.claim_mode && (
+                        <span className={`badge ${claim.claim_mode === 'trigger_auto' ? 'badge-purple' : 'badge-blue'}`}>
+                          {claim.claim_mode === 'trigger_auto' ? 'Auto-trigger' : 'Manual'}
+                        </span>
+                      )}
+
+                      {claim.trigger_events && (
+                        <span className="badge badge-blue flex items-center gap-1">
+                          <Zap size={10} />
+                          {claim.trigger_events.trigger_family}
+                        </span>
+                      )}
+
+                      {claim.stated_lat && (
+                        <span className="glass px-2.5 py-1 rounded-lg text-neutral-400 flex items-center gap-1">
+                          <MapPin size={11} />
+                          {claim.stated_lat.toFixed(2)}, {claim.stated_lng?.toFixed(2)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </section>
+        </div>
       </div>
     </div>
   )

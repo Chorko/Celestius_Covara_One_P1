@@ -5,7 +5,16 @@ import { NextResponse } from 'next/server'
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get('code')
-  
+  const error = requestUrl.searchParams.get('error')
+  const errorDescription = requestUrl.searchParams.get('error_description')
+
+  // Handle OAuth errors (e.g., user denied consent)
+  if (error) {
+    return NextResponse.redirect(
+      new URL(`/?error=${encodeURIComponent(errorDescription || error)}`, requestUrl.origin)
+    )
+  }
+
   if (code) {
     const cookieStore = await cookies()
     const supabase = createServerClient(
@@ -25,12 +34,14 @@ export async function GET(request: Request) {
         },
       }
     )
-    
-    // Exchange the auth code directly with Supabase for a session cookie
-    await supabase.auth.exchangeCodeForSession(code)
+
+    const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
+    if (exchangeError) {
+      return NextResponse.redirect(
+        new URL(`/?error=${encodeURIComponent(exchangeError.message)}`, requestUrl.origin)
+      )
+    }
   }
 
-  // Redirect back to the root page, where the useEffect will pick up the session,
-  // query the newly trigger-generated profile, and route to /worker/dashboard securely.
   return NextResponse.redirect(new URL('/', requestUrl.origin))
 }

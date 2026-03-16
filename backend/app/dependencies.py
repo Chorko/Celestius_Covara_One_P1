@@ -65,7 +65,7 @@ async def get_current_user(request: Request) -> dict:
         .execute()
     )
 
-    profile = profile_resp.data
+    profile = getattr(profile_resp, "data", None) if profile_resp else None
     if not profile:
         # User exists in auth but has no profile yet — likely mid-onboarding
         return {

@@ -20,12 +20,13 @@ def seed_test_users():
         print(f"Ensuring user {u['email']} exists...")
         try:
             # Check if user exists (we can't easily query auth.users, so we try to sign in or create)
-            # Acutally with admin client we can create users via admin api
-            res = sb.auth.admin.create_user({
+            # Standard auth signup
+            res = sb.auth.sign_up({
                 "email": u["email"],
                 "password": u["password"],
-                "email_confirm": True,
-                "user_metadata": {"full_name": u["name"]}
+                "options": {
+                    "data": {"full_name": u["name"]}
+                }
             })
             user_id = res.user.id
             print(f"Created {u['email']} with ID: {user_id}")

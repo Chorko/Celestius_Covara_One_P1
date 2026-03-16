@@ -162,16 +162,20 @@ def _make_daily_stats(worker_id: str, days: int = 14) -> list[dict]:
     return stats
 
 
+# Namespace UUID for deterministic zone IDs (generated once, stable)
+ZONE_NAMESPACE = uuid.UUID("a1b2c3d4-e5f6-7890-abcd-ef0123456789")
+
+
 def seed_zones(sb) -> dict[str, str]:
     """Insert seed zones. Returns mapping of 'City-ZoneName' → zone UUID."""
     zone_lookup = {}
     for z in ZONES:
-        zone_id = str(uuid.uuid4())
+        key = f"{z['city']}-{z['zone_name']}"
+        zone_id = str(uuid.uuid5(ZONE_NAMESPACE, key))
         sb.table("zones").upsert({
             "id": zone_id,
             **z,
         }).execute()
-        key = f"{z['city']}-{z['zone_name']}"
         zone_lookup[key] = zone_id
     return zone_lookup
 

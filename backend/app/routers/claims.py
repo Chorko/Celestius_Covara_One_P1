@@ -15,7 +15,7 @@ from backend.app.supabase_client import get_supabase_admin
 from backend.app.services.claim_pipeline import run_claim_pipeline
 from backend.app.services.evidence import extract_exif_metadata
 from backend.app.services.gemini_analysis import generate_claim_narrative
-import requests
+import httpx
 
 router = APIRouter(prefix="/claims", tags=["Claims"])
 
@@ -53,24 +53,24 @@ async def submit_claim(body: ManualClaimRequest, user: dict = Depends(get_curren
     if body.evidence_url:
         try:
             # Download image bytes mapped from frontend Storage url
-            img_res = requests.get(body.evidence_url, timeout=10)
+            async with httpx.AsyncClient() as client:
+                img_res = await client.get(body.evidence_url, timeout=10)
             img_res.raise_for_status()
             exif_data = extract_exif_metadata(img_res.content)
-            
+
             evidence_records.append({
                 "evidence_type": "photo",
-                "evidence_url": body.evidence_url,
+                "storage_path": body.evidence_url,
                 "exif_lat": exif_data.get("exif_lat"),
                 "exif_lng": exif_data.get("exif_lng"),
                 "exif_timestamp": exif_data.get("exif_timestamp"),
-                "camera_model": exif_data.get("camera_model")
             })
         except Exception as e:
             print(f"Failed to fetch or parse evidence image: {e}")
             # Still append record but without EXIF if fetching failed
             evidence_records.append({
                 "evidence_type": "photo",
-                "evidence_url": body.evidence_url
+                "storage_path": body.evidence_url
             })
         
     # Run the pipeline just to get initial scoring / traces
@@ -79,7 +79,12 @@ async def submit_claim(body: ManualClaimRequest, user: dict = Depends(get_curren
         worker_context=worker_context,
         trigger_context=trigger_context,
         claim_mode="manual",
-        evidence_records=evidence_records
+        evidence_records=evidence_records,
+        claim_record={
+            "stated_lat": body.stated_lat,
+            "stated_lng": body.stated_lng,
+            "claim_reason": body.claim_reason,
+        }
     )
     
     # Store claim in DB
@@ -206,9 +211,9 @@ async def admin_review_claim(claim_id: str, body: AdminReviewRequest, user: dict
     sb.table("audit_events").insert({
         "entity_type": "claim",
         "entity_id": claim_id,
-        "event_type": f"claim_reviewed_{body.decision}",
-        "actor_id": user["id"],
-        "detail_json": body.model_dump()
+        "action_type": f"claim_reviewed_{body.decision}",
+        "actor_profile_id": user["id"],
+        "event_payload": body.model_dump()
     }).execute()
     
     return {"status": "reviewed", "claim_id": claim_id, "decision": body.decision}

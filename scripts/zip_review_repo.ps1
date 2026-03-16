@@ -9,6 +9,7 @@ $outPath  = Join-Path $repoRoot $zipName
 
 # Patterns to exclude
 $excludeDirs = @('.git', '.venv', 'venv', 'node_modules', '__pycache__', '.mypy_cache', '.pytest_cache', '.idea', '.vscode', 'TEMP_WILL_BE_DELETED')
+$excludeFiles = @('.env', '.env.local', '.env.production', '.env.development')
 
 Write-Host "Creating clean repository package for judges and reviewers..."
 Write-Host "  Source Directory : $repoRoot"
@@ -20,6 +21,7 @@ $files = Get-ChildItem -Path $repoRoot -Recurse -File | Where-Object {
     foreach ($dir in $excludeDirs) {
         if ($_.FullName -like "*\$dir\*") { $exclude = $true; break }
     }
+    if ($_.Name -in $excludeFiles) { $exclude = $true }
     -not $exclude
 }
 

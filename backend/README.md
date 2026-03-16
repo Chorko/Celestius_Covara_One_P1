@@ -8,14 +8,26 @@
 
 | Component | Status |
 |-----------|--------|
-| Service architecture definition | 📝 Documented |
-| Endpoint inventory | 📝 Documented |
-| Input/output specifications | 📝 Documented |
-| Mock API scaffold (3 endpoints) | ✅ Present | See [`mock_api.py`](mock_api.py) |
-| OpenAPI contract | ✅ Present | See [`openapi.yaml`](openapi.yaml) |
-| Full API implementation | 📋 Planned |
-| Database schema | 📋 Planned |
-| Authentication layer | 📋 Planned |
+| Service architecture definition | ✅ Implemented |
+| FastAPI app with routers | ✅ Implemented |
+| Auth endpoints (login, signup, profile) | ✅ Implemented |
+| Claims endpoints (submit, list, detail, review) | ✅ Implemented |
+| Policies endpoints (quote, activate) | ✅ Implemented |
+| Triggers endpoints (live feed, inject) | ✅ Implemented |
+| Workers endpoints (profile, stats) | ✅ Implemented |
+| Zones endpoints (list, detail, cities) | ✅ Implemented |
+| Analytics endpoint (admin KPIs) | ✅ Implemented |
+| 8-stage claim pipeline | ✅ Implemented |
+| Pricing engine (actuarial formulas) | ✅ Implemented |
+| Fraud scoring engine | ✅ Implemented |
+| Manual claim verifier | ✅ Implemented |
+| Gemini AI claim narrative | ✅ Implemented |
+| EXIF evidence extraction | ✅ Implemented |
+| Supabase SQL schema (14 tables) | ✅ Implemented |
+| Row-Level Security policies | ✅ Implemented |
+| CLI seed system | ✅ Implemented |
+| Redis caching layer | 📋 Planned |
+| ML training pipeline | 📋 Planned |
 
 ---
 
@@ -24,42 +36,26 @@
 | Component | Technology | Why |
 |-----------|-----------|-----|
 | Framework | Python (FastAPI) | Transparent REST endpoint design, automatic OpenAPI docs, strong data-science ecosystem integration |
-| Database | PostgreSQL | Relational storage for policies, claims, audit events, payout logs with ACID guarantees |
-| ORM | SQLAlchemy | Declarative models, migration support, clean query interface |
-| Cache | Redis | Fast key-value caching for trigger feeds and dashboard summaries (see [caching/README.md](../caching/README.md)) |
-| Auth | JWT tokens | Stateless authentication for worker and admin personas |
-
-> **📋 Status:** Tech stack represents the selected target technologies. See `requirements.txt` for the Python dependency baseline. A minimal mock API scaffold is available — see instructions below.
+| Database | Supabase (PostgreSQL) | Managed PostgreSQL with built-in Auth, Storage, RLS, and real-time capabilities |
+| Auth | Supabase Auth | Google OAuth + email/password, JWT tokens, auth triggers for profile bootstrap |
+| AI | Google Gemini | Claim narrative generation for admin-assisted review |
+| HTTP Client | httpx | Async HTTP for evidence fetching and external calls |
 
 ---
 
-## Quick Start — Mock API
-
-A minimal runnable scaffold proves the documented architecture works. It exposes 3 read-only endpoints:
-
-| Endpoint | What it returns |
-|----------|----------------|
-| `GET /health` | Service status and version |
-| `GET /triggers/library` | Full 15-trigger library as JSON |
-| `GET /claims/sample` | The sample claim from `claim-engine/examples/sample_claim.json` |
-
-**To run:**
+## Quick Start
 
 ```bash
 # From the repo root:
-pip install fastapi uvicorn
-uvicorn backend.mock_api:app --reload --port 8000
+pip install -r requirements.txt
+
+# Set environment variables (see backend/.env)
+uvicorn backend.app.main:app --reload --port 8000
 ```
 
 Then open:
+- http://localhost:8000/docs (Swagger UI — all endpoints)
 - http://localhost:8000/health
-- http://localhost:8000/triggers/library
-- http://localhost:8000/claims/sample
-- http://localhost:8000/docs (auto-generated Swagger UI)
-
-> This is a **demo scaffold**, not a production backend. It reuses data already documented in the repo and adds no new business logic. Premium and payout formulas are documented centrally in [docs/README.md](../docs/README.md#formula-summary). `/claims/sample` returns the documented claim structure from `claim-engine/examples/sample_claim.json`. `/triggers/library` returns the 15-trigger threshold library as documented in the [root README](../README.md#the-15-trigger-library).
-
-**OpenAPI contract:** [`openapi.yaml`](openapi.yaml) defines the formal API contract for these 3 endpoints.
 
 ---
 
@@ -82,26 +78,23 @@ flowchart TD
     end
 
     subgraph "Data Layer"
-        DB[("PostgreSQL")]
-        RD[("Redis Cache")]
+        DB[("Supabase<br/>PostgreSQL")]
     end
 
     subgraph "External"
+        GM["Gemini AI"]
         EX["Integrations<br/>(Weather, AQI, etc.)"]
-        MD["Mock Data<br/>Generator"]
     end
 
     AUTH --> PS
     PS --> PR
     EX --> TM
-    MD --> TM
     TM --> CO
     CO --> FS
     FS --> PO
     CO --> AS
+    CO --> GM
     PS & PR & CO & FS & PO & AS --> DB
-    TM --> RD
-    AS --> RD
 
     style AUTH fill:#4a9eff,color:#fff
     style CO fill:#e74c3c,color:#fff
@@ -111,92 +104,73 @@ flowchart TD
 
 ---
 
-## Core Modules
-
-| Module | Responsibility | Connects to |
-|--------|---------------|-------------|
-| **Auth & Onboarding** | Worker registration, login, profile management | Policy service |
-| **Policy Service** | Weekly plan lifecycle — create, activate, expire, renew | Pricing service, frontend |
-| **Pricing Service** | Dynamic weekly premium calculation using Income Twin formula | ML layer, policy service |
-| **Trigger Monitor** | Ingest external disruption signals, evaluate T1–T15 thresholds | Claim orchestrator, integrations |
-| **Claim Orchestrator** | Run the [8-stage claim pipeline](../claim-engine/README.md) | Fraud service, payout service |
-| **Fraud Scoring Service** | Execute [4-layer Ghost Shift Detector](../fraud/README.md) | Claim orchestrator |
-| **Payout Service** | Calculate payout, apply cap, simulate UPI/gateway response | Worker dashboard, insurer dashboard |
-| **Analytics Service** | Aggregate metrics for all three dashboards | Frontend dashboards |
-
----
-
 ## Endpoint Inventory
+
+### Auth Endpoints
+
+| Method | Endpoint | Purpose | Status |
+|--------|----------|---------|--------|
+| `POST` | `/auth/signup` | Register new user (worker or insurer) | ✅ Implemented |
+| `POST` | `/auth/login` | Email/password login | ✅ Implemented |
+| `GET` | `/auth/profile` | Get current user profile + role | ✅ Implemented |
 
 ### Worker Endpoints
 
 | Method | Endpoint | Purpose | Status |
 |--------|----------|---------|--------|
-| `POST` | `/workers` | Register new worker profile | 📋 Planned |
-| `GET` | `/workers/{id}` | Get worker profile | 📋 Planned |
-| `POST` | `/policies/quote` | Generate weekly premium quote | 📋 Planned |
-| `POST` | `/policies/activate` | Activate weekly policy | 📋 Planned |
-| `GET` | `/policies/{id}` | Get policy details and status | 📋 Planned |
+| `GET` | `/workers/profile` | Get worker profile with zone info | ✅ Implemented |
+| `GET` | `/workers/stats` | Get worker earnings stats (14-day chart) | ✅ Implemented |
+
+### Policy Endpoints
+
+| Method | Endpoint | Purpose | Status |
+|--------|----------|---------|--------|
+| `GET` | `/policies/quote` | Generate weekly premium quote | ✅ Implemented |
+| `POST` | `/policies/activate` | Activate weekly policy (mock) | ✅ Implemented |
 
 ### Trigger & Claim Endpoints
 
 | Method | Endpoint | Purpose | Status |
 |--------|----------|---------|--------|
-| `GET` | `/triggers/live` | Current active trigger events | 📋 Planned |
-| `POST` | `/claims/initiate` | Manually initiate a claim | 📋 Planned |
-| `GET` | `/claims/{id}` | Get claim details and timeline | 📋 Planned |
-| `POST` | `/claims/{id}/review` | Insurer review action on claim | 📋 Planned |
+| `GET` | `/triggers/live` | Current active trigger events | ✅ Implemented |
+| `POST` | `/triggers/inject` | Inject mock trigger event (admin) | ✅ Implemented |
+| `POST` | `/claims` | Submit manual claim with evidence | ✅ Implemented |
+| `GET` | `/claims` | List claims (worker=own, admin=all) | ✅ Implemented |
+| `GET` | `/claims/{id}` | Get claim detail, evidence, payout | ✅ Implemented |
+| `POST` | `/claims/{id}/review` | Admin review action on claim | ✅ Implemented |
 
-### Data & Analytics Endpoints
+### Zone & Analytics Endpoints
 
 | Method | Endpoint | Purpose | Status |
 |--------|----------|---------|--------|
-| `GET` | `/mock-data/generate` | Generate synthetic worker & trigger data | 📋 Planned |
-| `GET` | `/simulate/claim-scenario` | Run scenario simulation | 📋 Planned |
-| `GET` | `/analytics/summary` | Dashboard metrics aggregate | 📋 Planned |
+| `GET` | `/zones` | List zones, optionally by city | ✅ Implemented |
+| `GET` | `/zones/{id}` | Zone detail with polygon | ✅ Implemented |
+| `GET` | `/zones/cities/list` | Distinct cities with zones | ✅ Implemented |
+| `GET` | `/analytics/summary` | Admin KPI metrics | ✅ Implemented |
 
 ---
 
-## Inputs
+## Core Services (backend/app/services/)
 
-| Input | Source |
-|-------|--------|
-| Worker details (zone, shift, earnings, trust) | Frontend onboarding |
-| Zone and city identifiers | Worker profile |
-| Trigger stream (real or mock) | Integrations / mock generator |
-| Bank verification state | Integrations (mock) |
-| Policy state (active, expired, renewed) | Database |
-| Prior claim information | Database |
-
-## Outputs
-
-| Output | Consumer |
-|--------|----------|
-| Premium quote (₹ amount + breakdown) | Worker dashboard |
-| Claim status (approved / review / hold) | Worker dashboard, insurer dashboard |
-| Fraud risk band (low / medium / high) | Insurer dashboard, fraud review panel |
-| Payout amount (₹ amount + formula trace) | Worker dashboard, insurer dashboard |
-| Analytics aggregates | All three dashboards |
-| Audit events (timestamped pipeline log) | Claim analytics dashboard |
+| Module | File | Responsibility |
+|--------|------|---------------|
+| **Claim Pipeline** | `claim_pipeline.py` | 8-stage orchestration: validation → severity → pricing → fraud → payout → decision |
+| **Severity Scoring** | `severity.py` | Compute severity score S from trigger data |
+| **Pricing Engine** | `pricing.py` | Compute B (covered income), E (exposure), C (confidence), premiums and payouts |
+| **Fraud Engine** | `fraud_engine.py` | 4-layer Ghost Shift Detector with fraud bands and holdback |
+| **Manual Verifier** | `manual_claim_verifier.py` | Evidence completeness and geo confidence for manual claims |
+| **Evidence Processing** | `evidence.py` | EXIF metadata extraction from uploaded photos |
+| **Gemini Analysis** | `gemini_analysis.py` | AI-generated claim narrative for admin review |
 
 ---
 
-## Downstream Flow
+## Database Schema (backend/sql/)
 
-```mermaid
-flowchart LR
-    BE["Backend APIs"]
-    BE --> WD["Worker Dashboard"]
-    BE --> ID["Insurer Dashboard"]
-    BE --> AD["Analytics Dashboard"]
-    BE --> CE["Claim Engine"]
-    BE --> FE["Fraud Module"]
+14 tables across 4 SQL files:
 
-    style BE fill:#4a9eff,color:#fff
-```
-
-Most backend outputs move to:
-- **Frontend dashboards** — worker, insurer, and analytics views
-- **Claim engine** — trigger evaluation and claim orchestration
-- **Fraud module** — claim validation and fraud scoring
-- **Analytics layer** — aggregated metrics and trend analysis
+| File | Contents |
+|------|----------|
+| `01_supabase_platform_schema.sql` | profiles, worker_profiles, insurer_profiles, zones, trigger_events, manual_claims, claim_evidence, payout_recommendations, claim_reviews, audit_events, and more |
+| `02_auth_triggers.sql` | Auth event triggers for automatic profile creation |
+| `03_rls_policies.sql` | Row-Level Security policies for all tables |
+| `04_storage_policies.sql` | Storage bucket policies for claim evidence uploads |

@@ -37,9 +37,10 @@ async def get_my_worker_profile(user: dict = Depends(require_worker)):
         .maybe_single()
         .execute()
     )
-    if not resp.data:
+    data = getattr(resp, "data", None) if resp else None
+    if not data:
         raise HTTPException(status_code=404, detail="Worker profile not found.")
-    return resp.data
+    return data
 
 
 @router.put("/me")
@@ -70,15 +71,17 @@ async def get_my_worker_stats(user: dict = Depends(require_worker)):
     # 1. Fetch real stats if they exist
     resp = sb.table("platform_worker_daily_stats").select("*").eq("worker_profile_id", user["id"]).order("stat_date", desc=False).execute()
     
-    if resp.data and len(resp.data) > 0:
-        return {"stats": resp.data}
+    data = getattr(resp, "data", None) if resp else None
+    if data and len(data) > 0:
+        return {"stats": data}
         
     # 2. If new user, dynamically generate 14 days of history to power the UI
     import datetime
     import random
     
     worker_resp = sb.table("worker_profiles").select("avg_hourly_income_inr").eq("profile_id", user["id"]).maybe_single().execute()
-    hourly_rate = float(worker_resp.data.get("avg_hourly_income_inr", 85.0)) if worker_resp.data else 85.0
+    worker_data = getattr(worker_resp, "data", None) if worker_resp else None
+    hourly_rate = float(worker_data.get("avg_hourly_income_inr", 85.0)) if worker_data else 85.0
     
     synthetic_stats = []
     today = datetime.date.today()
@@ -140,6 +143,7 @@ async def get_worker_detail(worker_id: str):
         .maybe_single()
         .execute()
     )
-    if not resp.data:
+    data = getattr(resp, "data", None) if resp else None
+    if not data:
         raise HTTPException(status_code=404, detail="Worker not found.")
-    return resp.data
+    return data

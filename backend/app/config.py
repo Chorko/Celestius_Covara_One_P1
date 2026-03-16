@@ -28,8 +28,10 @@ class Settings:
 
     def __post_init__(self):
         origins = os.getenv("CORS_ORIGINS", "http://localhost:3000")
-        # frozen=True requires object.__setattr__ for post-init
-        object.__setattr__(self, "cors_origins", [o.strip() for o in origins.split(",")])
+        # Ensure we cover all bases for local e2e testing
+        parsed = [o.strip() for o in origins.split(",")]
+        parsed.extend(["http://localhost:3000", "http://127.0.0.1:3000"])
+        object.__setattr__(self, "cors_origins", list(set(parsed)))
 
     def validate(self) -> list[str]:
         """Return list of missing critical config vars."""

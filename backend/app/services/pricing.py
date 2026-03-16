@@ -11,10 +11,10 @@ def clip(val: float, min_val: float, max_val: float) -> float:
 def calculate_policy_metrics(worker_context: dict) -> dict:
     """
     Computes base policy metrics: B, E, C.
-    Requires: hourly_income, shift_hours, active_days, trust_score, gps_consistency, bank_verified, accessibility_score
+    Requires: avg_hourly_income_inr (or hourly_income), shift_hours, active_days, trust_score, gps_consistency, bank_verified, accessibility_score
     """
-    income = worker_context.get("hourly_income", 0.0)
-    shift_hours = worker_context.get("shift_hours", 0.0)
+    income = worker_context.get("avg_hourly_income_inr") or worker_context.get("hourly_income") or 0.0
+    shift_hours = worker_context.get("shift_hours", 9.0)
     active_days = worker_context.get("active_days", 6)
     
     # B = 0.70 × hourly_income × shift_hours × active_days

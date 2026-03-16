@@ -19,11 +19,12 @@ from backend.app.services.fraud_engine import evaluate_fraud_risk
 from backend.app.services.manual_claim_verifier import evaluate_manual_claim
 
 def run_claim_pipeline(
-    claim_id: str, 
-    worker_context: dict, 
+    claim_id: str,
+    worker_context: dict,
     trigger_context: dict | None,
     claim_mode: str, # 'manual' or 'trigger_auto'
-    evidence_records: list[dict] = None
+    evidence_records: list[dict] = None,
+    claim_record: dict = None
 ) -> dict:
     
     trace = []
@@ -54,7 +55,7 @@ def run_claim_pipeline(
     hold_reasons = []
     
     if claim_mode == "manual":
-        mv = evaluate_manual_claim(claim_record={}, evidence_records=evidence_records or [], worker_context=worker_context)
+        mv = evaluate_manual_claim(claim_record=claim_record or {}, evidence_records=evidence_records or [], worker_context=worker_context)
         evidence_completeness = mv["evidence_completeness_score"]
         geo_confidence = mv["geo_confidence_score"]
         if mv["manual_verification_status"] == "hold":

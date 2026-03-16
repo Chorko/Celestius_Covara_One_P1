@@ -26,6 +26,10 @@ matplotlib>=3.8.0
 
 # Image / Evidence processing
 Pillow>=10.0.0
+piexif>=1.1.3
 
 # HTTP client (for external API calls)
 httpx>=0.25.0
+
+# Gemini AI
+google-generativeai>=0.3.0
