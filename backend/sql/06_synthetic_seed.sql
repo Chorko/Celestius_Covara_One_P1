@@ -496,3 +496,7 @@ ON CONFLICT (id) DO NOTHING;
 -- 9 payout recommendations, 4 reviews, 12 audit events,
 -- 56 daily stats, 10 order events.
 -- ============================================================
+
+-- Force PostgREST to reload its schema cache.
+-- This prevents "Database error querying schema" after running DDL/seed.
+NOTIFY pgrst, 'reload schema';

@@ -203,3 +203,27 @@ comment on table public.platform_order_events is 'Synthetic or future platform-A
 comment on table public.trigger_events is 'Normalized public and internal disruption events.';
 comment on table public.manual_claims is 'Manual or auto-routed claim intake records.';
 comment on table public.payout_recommendations is 'Formula outputs: B, p, S, E, C, FH, U, Cap, expected payout, premium, recommended payout.';
+
+-- ── PostgREST schema access grants ──────────────────────────────────────────
+-- Without these, PostgREST returns "Database error querying schema".
+
+GRANT USAGE ON SCHEMA public TO anon, authenticated;
+
+GRANT SELECT, INSERT, UPDATE, DELETE
+  ON ALL TABLES IN SCHEMA public TO authenticated;
+
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO anon;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO authenticated;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT SELECT ON TABLES TO anon;
+
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT USAGE, SELECT ON SEQUENCES TO authenticated;
+
+-- Reload PostgREST schema cache after all DDL.
+NOTIFY pgrst, 'reload schema';
