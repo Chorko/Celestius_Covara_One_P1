@@ -12,7 +12,7 @@ export default function Home() {
   const { setUser, setProfile } = useUserStore()
 
   const [email, setEmail] = useState('worker@demo.com')
-  const [password, setPassword] = useState('demopassword')
+  const [password, setPassword] = useState('demo1234')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -23,11 +23,19 @@ export default function Home() {
         setUser(session.user)
         routeToRole(session.user.id)
       }
+    }).catch(() => {
+      // Session expired or invalid — stay on login page
     })
   }, [supabase.auth, setUser])
 
   const routeToRole = async (userId: string) => {
-    const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).single()
+    const { data: profile, error: profileError } = await supabase.from('profiles').select('*').eq('id', userId).single()
+    if (profileError) {
+      // Schema or RLS error — sign out stale session so user can re-login cleanly
+      await supabase.auth.signOut()
+      setError(profileError.message)
+      return
+    }
     if (profile) {
       setProfile(profile)
       if (profile.role === 'worker') router.push('/worker/dashboard')
@@ -105,7 +113,7 @@ export default function Home() {
           <div className="flex gap-2 mb-5 animate-fade-in-up delay-200">
             <button
               type="button"
-              onClick={() => { setEmail('worker@demo.com'); setPassword('demopassword') }}
+              onClick={() => { setEmail('worker@demo.com'); setPassword('demo1234') }}
               className={`flex-1 py-2 px-3 rounded-xl text-xs font-semibold transition-all cursor-pointer ${email === 'worker@demo.com' ? 'text-emerald-300' : 'text-white/40 hover:text-white/60'}`}
               style={email === 'worker@demo.com'
                 ? { background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)' }
@@ -116,7 +124,7 @@ export default function Home() {
             </button>
             <button
               type="button"
-              onClick={() => { setEmail('admin@demo.com'); setPassword('demopassword') }}
+              onClick={() => { setEmail('admin@demo.com'); setPassword('demo1234') }}
               className={`flex-1 py-2 px-3 rounded-xl text-xs font-semibold transition-all cursor-pointer ${email === 'admin@demo.com' ? 'text-blue-300' : 'text-white/40 hover:text-white/60'}`}
               style={email === 'admin@demo.com'
                 ? { background: 'rgba(59, 130, 246, 0.15)', border: '1px solid rgba(59, 130, 246, 0.3)' }
