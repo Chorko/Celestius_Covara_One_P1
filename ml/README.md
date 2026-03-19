@@ -1,6 +1,8 @@
 # ML — Data Science & Severity Modeling
 
 > This folder contains the data-science side of the project. The first job is not to chase fancy models. The first job is to **prove that the numbers make sense** — and then let the model improve them.
+>
+> **Key principle:** ML supports classification, anomaly ranking, and review routing, but does not independently authorize payout.
 
 ---
 
@@ -18,6 +20,8 @@
 | EDA notebooks | 📋 Planned |
 | XGBoost comparison | 📋 Planned |
 | Feedback loop implementation | 📋 Planned |
+| Anti-spoofing feature engineering | 📝 Documented |
+| What ML Does vs Does Not Do | 📝 Documented |
 
 ---
 
@@ -178,9 +182,55 @@ flowchart LR
     style PO fill:#f39c12,color:#fff
 ```
 
-The ML model's predicted `p` is the key input that bridges data science and insurance logic:
-- **Premium:** `Gross Premium = [p × B × S × E × C × (1 − FH) / (1 − α − β)] × U`
-- **Payout:** `Payout = min(Cap, B × S × E × C × (1 − FH))` (triggered when claim approved)
+The ML model's predicted `p` is the key input that bridges data science and **internal** pricing logic:
+- **Premium calibration:** `Gross Premium = [p × B × S × E × C × (1 − FH) / (1 − α − β)] × U`
+- **Plan benefit sizing:** The formula helps calibrate whether Essential (₹3,000) and Plus (₹4,500) weekly benefits are appropriate
+- **Review routing:** ML-derived anomaly scores help route claims to `auto_approve`, `needs_review`, `hold_for_fraud`, or `reject_spoof_risk`
+
+> **Important:** The public-facing payout is **not** derived from this formula. It follows the [parametric payout ladder](../README.md#parametric-payout-ladder): Band 1 = 0.25 × W, Band 2 = 0.50 × W, Band 3 = 1.00 × W, where W is the selected plan's weekly benefit.
+
+---
+
+## What ML Does vs. What ML Does Not Do
+
+| ML does | ML does not |
+|---|---|
+| Estimate claim probability `p` | Directly authorize or block payout |
+| Support fraud / spoofing risk ranking | Set the final payout amount |
+| Anomaly and cluster scoring | Replace the parametric payout ladder |
+| Zone-level trend detection | Replace underwriting judgment |
+| Power `needs_review` classification | Act as a black-box decision engine |
+
+**Correct architecture:**
+- **Parametric payout ladder** = public-facing insurance logic (trigger band → pre-agreed benefit)
+- **Formula engine** = internal premium and benefit calibration
+- **ML model** = supporting signal for probability estimation, anomaly detection, and review routing
+
+---
+
+## Anti-Spoofing Feature Engineering
+
+Beyond standard severity and pricing features, the ML pipeline engineers these features for spoof detection:
+
+| Feature | Description | Expected genuine value | Expected spoof value |
+|---------|-------------|----------------------|--------------------|
+| `exif_browser_gps_distance_m` | Distance between EXIF GPS and device GPS | < 100m | > 500m or missing |
+| `exif_claim_time_lag_min` | Time between EXIF timestamp and claim submission | < 30min | > 72h |
+| `claim_zone_vs_assigned_zone` | Binary mismatch flag | Match | Mismatch |
+| `shift_overlap_ratio` | Fraction of trigger window covered by shift | > 0.5 | 0.0 |
+| `route_plausibility_score` | TomTom Snap-to-Roads confidence | > 0.7 | < 0.3 |
+| `historical_order_continuity` | Orders completed in 2h before claim | > 0 | 0 |
+| `repeated_coord_density` | Claims within 50m radius in same window | < 3 | > 10 |
+| `batch_timing_similarity` | Submission time std deviation within cluster | High variance | < 5min |
+| `trigger_correlation_score` | Was a real trigger verified for the zone? | 1.0 | 0.0 |
+| `evidence_completeness` | Photo + text + geo presence score | > 0.7 | < 0.3 |
+| `prior_suspicious_rate` | Historical flagged claim rate | < 0.05 | > 0.20 |
+| `device_account_ratio` | Devices per account / accounts per device | 1:1 | Many:1 |
+| `network_cluster_size` | Claimants on same IP/ASN in same window | < 3 | > 10 |
+
+These features are designed for a review-routing classifier with four output labels: `auto_approve`, `needs_review`, `hold_for_fraud`, `reject_spoof_risk`.
+
+> For full anti-spoofing architecture details, see [fraud/README.md](../fraud/README.md) and the [Adversarial Defense section](../README.md#adversarial-defense--anti-spoofing-strategy) in the root README.
 
 ---
 
@@ -235,7 +285,7 @@ The ML model's predicted `p` is the key input that bridges data science and insu
 
 **Why XGBoost as future benchmark?** XGBoost ([Chen & Guestrin, 2016](https://doi.org/10.1145/2939672.2939785)) is retained as a planned benchmark if dataset scale and feature complexity warrant gradient-boosted tree performance. It is not yet used in the current pipeline.
 
-**Role of ML in the pricing pipeline:** The Random Forest model estimates claim probability `p` on the joined worker-trigger row. Premium and payout are **not predicted directly by ML alone** — they are derived from documented formulas (`B × S × E × C × (1 − FH)`) where ML contributes only the `p` factor. This keeps the pricing pipeline explainable and auditable.
+**Role of ML in the pricing pipeline:** The Random Forest model estimates claim probability `p` on the joined worker-trigger row. Premium and payout are **not predicted directly by ML alone** — they are derived from documented formulas (`B × S × E × C × (1 − FH)`) where ML contributes only the `p` factor. The public-facing product uses a [parametric payout ladder](../README.md#parametric-payout-ladder) with pre-agreed benefit bands, not flexible formula outputs. ML supports classification, anomaly ranking, and review routing, but does not independently authorize payout.
 
 **Feature normalization provenance:** Environmental features (rain_mm, AQI, temp_c) are normalized against official public-source thresholds from [CPCB](https://www.cpcb.nic.in/aqi_report.php), [IMD](https://mausam.imd.gov.in/imd_latest/contents/pdf/pubbrochures/Heavy%20Rainfall%20Warning%20Services.pdf), and [NDMA](https://ndma.gov.in/Natural-Hazards/Heat-Wave). Operational features (traffic_delay_pct, outage_min, demand_drop_pct) use internal product thresholds documented in the [root README](../README.md#threshold-references-and-why-they-were-chosen).
 

@@ -94,19 +94,21 @@ The DEVTrails 2026 challenge requires:
 | Repository structure & README system | ✅ Current | 10 folder-level READMEs with inputs/outputs/downstream |
 | Product framing & scope boundaries | ✅ Current | Consistent across all documentation |
 | 15-trigger library (thresholds & logic) | ✅ Implemented | Trigger engine with live feed + mock injection |
-| Premium & payout formulas | ✅ Implemented | Pricing engine with actuarial formulas |
+| Premium & payout formulas | ✅ Implemented | Internal calibration engine with actuarial formulas |
+| Parametric product (Essential / Plus) | ✅ Designed | Two-plan weekly benefit ladder with pre-agreed payout bands |
 | Data schemas & seed dataset | ✅ Present | 14-table Supabase SQL schema with RLS + seed CSVs |
 | Backend API — full services | ✅ Implemented | Auth, claims, policies, triggers, zones, workers, analytics endpoints |
 | Worker dashboard | ✅ Implemented | Profile, earnings chart, zone alerts, policy quote, claim submission |
 | Insurer dashboard | ✅ Implemented | KPI cards, trigger mix chart, review queue with AI-assisted decisions |
 | Claim pipeline | ✅ Implemented | 8-stage pipeline: severity → pricing → fraud → payout → Gemini AI |
-| Fraud detection engine | ✅ Implemented | 4-layer scoring with fraud bands and holdback |
+| Fraud detection engine | ✅ Implemented | 5-layer scoring with anti-spoofing, cluster intelligence, and fraud bands |
+| Adversarial defense & anti-spoofing | ✅ Designed | Multi-signal verification, coordinated-ring detection, liquidity circuit-breaker |
 | Supabase Auth & RLS | ✅ Implemented | Google OAuth, role-based routing, Row-Level Security |
-| Integrations (weather, AQI, traffic) | 📋 Planned | Categories and mock strategy defined; connectors pending |
+| Integrations (weather, AQI, traffic) | ✅ Designed | OpenWeather, TomTom, NewsAPI mapped; connectors planned |
 | Caching layer | 📋 Planned | Strategy and TTL policy defined; implementation pending |
 | ML training pipeline | 📋 Planned | Random Forest baseline hardcoded at p=0.15 |
 
-**Legend:** ✅ Current Implementation — 📝 Documented Formula / Design Logic — 📋 Planned / Target Architecture
+**Legend:** ✅ Current Implementation / Design — 📝 Documented Formula / Design Logic — 📋 Planned / Target Architecture
 
 ---
 
@@ -262,6 +264,190 @@ The platform uses a **3-tier trigger architecture**: early warning → claim tri
 
 ---
 
+## Adversarial Defense & Anti-Spoofing Strategy
+
+> [!CAUTION]
+> **Market-Shift Context:** A sophisticated syndicate of 500 delivery workers in a tier-1 city has successfully exploited a beta parametric insurance platform using coordinated GPS spoofing via Telegram groups — faking locations in severe weather zones while resting at home, triggering mass false payouts and draining the liquidity pool. Simple GPS verification is officially obsolete. This section documents how DEVTrails defends against this exact attack vector.
+
+### 1. The Differentiation: Genuine Worker vs. Bad Actor
+
+DEVTrails does **not** trust raw GPS coordinates alone. The platform differentiates genuinely stranded delivery partners from spoofers using **multi-signal verification** — a layered approach where no single data point can trigger or block a payout in isolation.
+
+| Signal layer | What it checks | Why GPS alone fails here |
+|---|---|---|
+| **Trigger-event correlation** | Does a verified external disruption (rain, AQI, heat, closure) actually exist in the claimed zone at the claimed time? | Spoofers fake location but cannot fake a weather event |
+| **EXIF GPS vs. browser/device GPS** | Does the photo evidence GPS match the device-reported location? | Spoofing apps change device GPS but cannot alter already-captured EXIF metadata |
+| **EXIF timestamp freshness** | Was the evidence photo taken within the claim window, or days/weeks ago? | Reused evidence from old events fails freshness checks |
+| **Shift overlap ratio** | Was the worker's declared shift active during the trigger window? | Spoofers claiming outside their shift schedule are flagged |
+| **Zone consistency** | Does the worker's claim zone match their assigned/historical operating zone? | Claiming disruption in a zone the worker has never operated in is suspicious |
+| **Route plausibility** | Does TomTom Snap-to-Roads confirm the worker was on a real delivery route? | Spoofed coordinates often land on rooftops, parks, or impossible road positions |
+| **Activity continuity** | Was the worker completing orders before the disruption hit? | A genuinely stranded worker shows pre-disruption delivery activity; a spoofer shows none |
+| **Movement plausibility over time** | Does the GPS trail show realistic movement patterns across multiple time points? | Spoofers show teleportation or perfect stillness — real workers show natural drift |
+| **Device continuity** | Is the same device consistently associated with this worker account? | Fraud rings rotate devices across accounts |
+| **Network / IP / ASN pattern** | Do multiple claimants share the same network fingerprint? | Coordinated rings operating from one location share IP/ASN patterns |
+| **AI-generated image detection** | Was the evidence photo created by an AI model rather than a real camera? | AI-generated "proof" photos bypass traditional photo checks — SynthID and forensic analysis catch them |
+| **EXIF integrity & modification detection** | Has the evidence photo been edited, re-saved, or had metadata tampered with? | Fraudsters edit photos to change GPS coordinates, timestamps, or splice scenes — integrity checks detect this |
+| **Image forensics (ELA / noise)** | Does the pixel-level structure match a genuine camera capture? | AI-generated and manipulated images show anomalous compression artifacts and noise patterns |
+
+A **genuinely stranded worker** will show: pre-disruption delivery activity → trigger event confirmed by external source → GPS trail consistent with operating zone → evidence freshness verified → natural movement pattern → evidence photo taken by real camera with intact metadata. The system scores this as high-confidence and routes to `auto_approve`.
+
+A **spoofing bad actor** will show: no pre-disruption activity → GPS coordinates inconsistent with EXIF and zone history → evidence reused, AI-generated, or modified → movement pattern impossible → network fingerprint shared with other claimants. The system scores this as high-risk and routes to `hold_for_fraud` or `reject_spoof_risk`.
+
+### 1a. Evidence Integrity & AI Image Detection
+
+Sophisticated fraud rings may submit **AI-generated photos** as disruption evidence, or **edit real photos** to alter GPS coordinates and timestamps. DEVTrails defends against this using multi-layer image forensics:
+
+#### AI-Generated Image Detection (Gemini + SynthID)
+
+Google embeds **SynthID** — an invisible, robust digital watermark — into images generated by its AI models. This watermark survives compression, cropping, and re-encoding. DEVTrails leverages this:
+
+| Check | Method | What it catches |
+|---|---|---|
+| **SynthID watermark scan** | Gemini API analyzes submitted evidence for embedded SynthID markers | Photos generated by Google's AI models (Imagen, Gemini) are flagged immediately |
+| **AI-generation probability score** | Gemini Vision assesses whether image characteristics are consistent with AI generation (texture uniformity, lighting inconsistencies, artifact patterns) | Catches AI-generated images from non-Google models (DALL-E, Midjourney, Stable Diffusion) that lack SynthID |
+| **Camera vs. AI metadata signature** | Real camera photos contain specific EXIF fields (Make, Model, LensModel, FocalLength, ExposureTime, ISO) that AI-generated images lack | AI images have no genuine camera sensor data — they may have no EXIF at all or use synthetic metadata |
+
+> [!IMPORTANT]
+> **How DEVTrails uses Gemini for AI image detection:** Since we already integrate Gemini API for claim narrative generation, we extend it to perform evidence analysis. Gemini Vision can detect SynthID watermarks in AI-generated images and assess the probability that an image was synthetically created. This is not a separate integration — it's an extension of our existing Gemini pipeline.
+
+#### EXIF Integrity & Modification Detection
+
+| Check | Method | What it catches |
+|---|---|---|
+| **EXIF completeness** | Verify presence of core EXIF fields: DateTimeOriginal, DateTimeDigitized, Make, Model, GPSLatitude, GPSLongitude, Software | Stripped or missing EXIF suggests tampering or screenshot reuse |
+| **Software field check** | Flag if EXIF `Software` field contains image editors (Photoshop, GIMP, Snapseed, PicsArt) | Photos edited to change location or content are flagged |
+| **Timestamp chain-of-custody** | Compare `DateTimeOriginal` (when shutter fired) vs `DateTimeDigitized` (when sensor captured) vs `ModifyDate` (last save) | Genuine: all three within seconds. Tampered: ModifyDate is hours/days later |
+| **EXIF thumbnail vs. full image** | Compare the embedded EXIF thumbnail against the full-resolution image | If the photo was cropped or edited, the thumbnail may still show the original unedited version |
+| **GPS precision analysis** | Check GPS coordinate decimal precision — real GPS sensors produce 6+ decimal places with slight variance | Manually entered or copied GPS coordinates often have suspiciously round numbers or identical precision across submissions |
+| **Camera-device consistency** | Cross-check EXIF Make/Model against the worker's registered device | If a worker registered a Samsung phone but evidence EXIF shows an iPhone camera, the evidence is flagged |
+
+#### Additional Image Forensic Methods
+
+| Method | How it works | What it catches |
+|---|---|---|
+| **Error Level Analysis (ELA)** | Re-compress the image at a known quality level and compare the error difference across regions — uniform images show uniform error; spliced/edited regions show anomalous error levels | Photoshopped regions, pasted elements, cloned areas where disruption evidence was fabricated |
+| **Noise pattern consistency** | Analyze sensor noise distribution across the image — real cameras produce consistent noise patterns; composites show noise discontinuities | Composite images where a fake weather scene was placed over a real location |
+| **JPEG quantization table analysis** | Examine the JPEG compression tables — images re-saved through editing software have different quantization signatures than camera-original images | Evidence that was downloaded, edited, and re-uploaded rather than captured fresh |
+| **Perceptual hash cross-matching** | Generate perceptual hashes of all evidence photos across the claim batch and compare for similarity | Identical or near-identical photos submitted by different claimants in a fraud ring |
+| **Reverse image search signal** | Hash submitted evidence against a database of previously submitted images | Recycled evidence from previous claims or stock photos used as fake proof |
+
+#### Image verdict integration
+
+The image forensics layer produces a composite **evidence integrity score** that feeds into the fraud engine:
+
+| Evidence integrity | Meaning | Claim routing |
+|---|---|---|
+| **High** (0.8–1.0) | Fresh camera capture, intact EXIF, no AI markers, camera matches device | Normal processing — no evidence-related flags |
+| **Medium** (0.4–0.79) | Some EXIF gaps (e.g., stripped by messaging app) but no tampering indicators | Routes to `needs_review` — human reviewer evaluates holistically |
+| **Low** (0.0–0.39) | AI-generated markers detected, EXIF tampering, or edit signatures found | Routes to `hold_for_fraud` or `reject_spoof_risk` depending on other signals |
+
+> [!NOTE]
+> Workers who submit photos via WhatsApp or Telegram may have EXIF data stripped automatically by the messaging platform. This is **not treated as fraud** — it reduces the evidence integrity score to Medium and routes the claim to `needs_review`, where a human reviewer evaluates the claim using other available signals. The system never auto-rejects based on EXIF absence alone.
+
+### 2. The Data: Detecting Coordinated Fraud Rings
+
+Beyond individual spoof detection, DEVTrails analyzes **cross-claimant patterns** to identify organized fraud rings:
+
+| Data point | What it reveals | Detection method |
+|---|---|---|
+| **Synchronized claim submission timing** | Multiple workers filing claims within a narrow time window suggests coordination | Statistical clustering (DBSCAN) on submission timestamps |
+| **Repeated identical / near-identical coordinates** | Spoofers using shared GPS-spoofing coordinates | Coordinate density analysis — flag when N+ claims share coordinates within a 50m radius |
+| **Shared payout destinations** | Multiple worker accounts routing payouts to the same bank/UPI endpoint | Graph analysis on payout destination overlap |
+| **Shared device fingerprints** | One physical device used across multiple accounts | Device ID and browser fingerprint cross-matching |
+| **Evidence similarity scoring** | Identical or near-identical photos/videos across claimants | Perceptual hash comparison across batch submissions |
+| **Network / IP / ASN overlap** | Coordinated claims from the same physical network suggest co-location | ASN and IP subnet clustering across claim batch |
+| **Low evidence variety** | Fraud rings often submit templated or minimal evidence | Evidence type diversity scoring per claimant |
+| **Weak or absent route continuity** | No verifiable delivery activity before the disruption | Historical order completion cross-check |
+| **Prior suspicious claim rate** | Repeat offenders with elevated fraud history | Bayesian prior weighting on individual fraud scores |
+| **Trigger presence / absence mismatch** | Claims filed for a zone where no trigger event was independently verified | Trigger correlation score: was the disruption real? |
+
+### 3. The UX Balance: Protecting Honest Workers
+
+Anti-spoofing must not punish honest gig workers who experience genuine disruptions with poor network conditions, stripped photo metadata, or imperfect GPS signals.
+
+**Core principle:** The system escalates only when **multiple signals align**. A single weak signal (e.g., missing EXIF data) triggers review, not rejection.
+
+#### Decision Matrix
+
+| Outcome | Conditions | Worker impact |
+|---|---|---|
+| **`auto_approve`** | Trigger present + exposure match + anti-spoofing pass + low fraud score | Instant payout — fastest path |
+| **`needs_review`** | Manual claim OR missing EXIF OR moderate uncertainty OR weak trigger match | Queued for human-assisted review (with Gemini AI explanation) — no penalty |
+| **`hold_for_fraud`** | Spoof indicators + cluster anomaly detected + evidence mismatch | Held pending investigation — worker notified with reason |
+| **`reject_spoof_risk`** | No valid trigger + high spoof confidence + strong fraud-ring pattern match | Rejected — worker can appeal and resubmit evidence within a 48-hour grace window |
+
+#### Fairness safeguards
+
+- Workers with **missing EXIF metadata** are **never auto-rejected** — they are routed to `needs_review` where a human reviewer (aided by Gemini AI) evaluates the claim holistically
+- **Bad weather and network drops** can cause GPS inconsistencies and stripped metadata — the system recognizes this pattern and does not treat it as spoofing
+- **Escalation requires convergence**: at least 3+ independent signals must align before a claim is held for fraud
+- Workers can **appeal and resubmit** evidence within a 48-hour grace window from the worker dashboard
+- The system tracks **false-positive rates** and adjusts thresholds to minimize honest-worker friction
+
+### 4. Liquidity Protection & Circuit-Breaker Controls
+
+The 500-worker syndicate attack is fundamentally a **liquidity drain** attack. DEVTrails defends the payout pool with automated circuit-breakers:
+
+| Control | Trigger condition | Action |
+|---|---|---|
+| **Mass-claim throttling** | > 50 claims from a single zone within 1 hour | All new claims from that zone enter `needs_review` automatically |
+| **Batch hold on anomaly spike** | Cluster analysis detects coordinated submission pattern | Entire batch held pending cluster-level fraud screening |
+| **Payout release gate** | Extreme events (Band 3 severity in 3+ zones simultaneously) | Payouts released only after cluster-level fraud screening completes |
+| **Emergency admin override** | Manual insurer/admin intervention | Admin can freeze, release, or escalate any claim batch from the operations dashboard |
+| **Daily zone payout cap** | Cumulative zone payouts exceed 3× historical daily average | Remaining claims queued for next-day release after review |
+
+These controls protect the liquidity pool without blocking legitimate claims — genuine mass-disruption events (e.g., city-wide flooding) are still processed, but with an additional verification layer.
+
+### 5. Fraud-Ring Scenario: The 500-Worker Syndicate
+
+To demonstrate the system's defense capability, consider the exact attack described in the market-shift briefing:
+
+| Step | What happens | DEVTrails response |
+|---|---|---|
+| 1. **Coordination** | 500 workers in one zone coordinate via Telegram to spoof GPS during a red-alert weather warning | — |
+| 2. **Mass submission** | Claims flood in within a 20-minute window, all from near-identical coordinates | **Circuit-breaker fires**: mass-claim throttling activates for the zone |
+| 3. **Cluster detection** | DBSCAN clustering identifies the batch: 500 claims, < 100m coordinate spread, synchronized timing | **Entire batch moved to `hold_for_fraud`** |
+| 4. **Individual screening** | Each claim is cross-checked: no pre-disruption delivery activity, no route plausibility, EXIF missing or inconsistent, shared IP/ASN patterns | **490 claims flagged as `reject_spoof_risk`** |
+| 5. **Genuine workers preserved** | 10 workers in the batch had real delivery activity, valid EXIF, and unique network patterns | **10 claims routed to `needs_review`** for human verification |
+| 6. **Liquidity protected** | Zero unauthorized payouts released; pool remains intact | **Admin dashboard shows the full audit trail** |
+
+The key insight: even within a coordinated fraud ring, the system preserves genuine workers by evaluating each claim on multi-signal evidence, not batch-level assumptions.
+
+### 6. Basis-Risk Acknowledgment
+
+As a parametric insurance product, DEVTrails explicitly acknowledges **basis risk** — the gap between trigger activation and individual impact:
+
+- A trigger may fire (e.g., 72mm rain in a zone) but not every worker in that zone suffers equally — some may have already completed their shift
+- A worker may suffer genuine disruption even when the trigger value is borderline (e.g., 63mm rain, just below the 64.5mm threshold)
+- The system mitigates basis risk through:
+  - **Tiered trigger thresholds** (watch → claim → escalation) that capture a range of severity
+  - **Exposure matching** that verifies individual shift/zone overlap with the event
+  - **Anti-spoofing verification** that validates genuine presence
+  - **Review routing** that escalates uncertain cases for human judgment rather than auto-rejecting
+
+This acknowledgment is critical for regulatory defensibility and insurer credibility.
+
+---
+
+## What ML Does vs. What ML Does Not Do
+
+> ML supports classification, anomaly ranking, and review routing, but does not independently authorize payout.
+
+| ML does | ML does not |
+|---|---|
+| Estimate claim probability `p` | Directly authorize or block payout |
+| Support fraud / spoofing risk ranking | Set the final payout amount |
+| Anomaly and cluster scoring | Replace the parametric payout ladder |
+| Zone-level trend detection | Replace underwriting judgment |
+| Power `needs_review` classification | Act as a black-box decision engine |
+
+**Correct architecture:**
+- **Parametric payout ladder** = public-facing insurance logic (trigger band → pre-agreed benefit)
+- **Formula engine** = internal premium and benefit calibration
+- **ML model** = supporting signal for probability estimation, anomaly detection, and review routing
+
+---
+
 ## Threshold References and Why They Were Chosen
 
 | Parameter | Source | What the source gives us | How we infer our product threshold | Anchoring |
@@ -297,43 +483,94 @@ Used for EDA, ML experiments, and premium/payout calculations.
 
 Environmental thresholds (rain, AQI, heat) are anchored to official Indian government classifications — IMD, CPCB, and NDMA. Pricing and payout derivation follow expected-loss premium principles grounded in actuarial literature. The repo separates hazard classification from pricing methodology by design.
 
-- **Central reference register** with all 9 sources, threshold inference logic, and formula summary → [docs/README.md](docs/README.md#reference-register)
+- **Central reference register** with all sources, threshold inference logic, and formula summary → [docs/README.md](docs/README.md#reference-register)
 - **Threshold basis per trigger family** with source links → [data/README.md](data/README.md#trigger-threshold-reference-table)
 - **ML baseline and feature normalization provenance** → [ml/README.md](ml/README.md#pricing-baseline-and-reference-notes)
+- **Insurance-side trend sources** (IRDAI, IIB) → [docs/README.md](docs/README.md#insurance-side-trend-sources)
 
 ---
 
-## Premium and Payout Logic Summary
+## Parametric Product: Weekly Benefit Plans
 
-> Full formula derivations and worked examples are documented in [docs/README.md](docs/README.md) and the insurance formula reference. For central documentation references, including threshold sources and premium/pricing reference notes, see [docs/README.md](docs/README.md#reference-register).
+> DEVTrails uses an internal weekly risk-and-pricing model to calibrate fair premiums and benefit levels, while the final worker-facing product remains parametric: once a pre-agreed trigger band is hit and both exposure matching and anti-spoofing verification pass, the payout is released according to the selected weekly benefit plan.
 
-### Key Formulas
+The formula engine remains an **internal pricing and calibration tool**. The **customer-facing product** is structured as a parametric weekly benefit ladder released only when both the trigger threshold and the anti-spoofing verification checks pass.
 
-| Formula | Expression |
-|---------|-----------|
-| Covered Income (B) | `0.70 × hourly_income × shift_hours × 6` |
-| Severity Score (S) | Weighted composite: rain 0.23, AQI 0.14, heat 0.14, outage 0.12, traffic 0.10, closure 0.10, access 0.10, demand 0.07 |
-| Exposure (E) | `clip(0.45 + 0.30×(shift_hours/12) + 0.25×(1−accessibility_score), 0.35, 1.00)` |
-| Confidence (C) | `clip(0.50 + 0.30×trust + 0.10×gps + 0.10×bank, 0.45, 1.00) × (1 − 0.70×fraud_penalty)` |
-| Expected Payout | `p × B × S × E × C × (1 − FH)` |
-| Gross Premium | `[Expected Payout / (1 − 0.12 − 0.10)] × U` |
-| Payout Cap | `0.75 × B × U` |
-| Final Payout | `min(Cap, B × S × E × C × (1 − FH))` |
+### Two Plans Only: Essential & Plus
 
-Where: `p` = claim probability (Random Forest), `FH` = fraud holdback, `U` = outlier uplift factor.
+DEVTrails offers exactly **two** worker-facing plans to keep the purchase decision simple and transparent:
 
-### Sample Scenario
+| Plan | Weekly benefit (W) | Target worker | Indicative weekly premium |
+|---|---:|---|---|
+| **Essential** | ₹3,000 | Lower premium / wider adoption / cost-sensitive workers | Baseline calibrated |
+| **Plus** | ₹4,500 | Higher protection / experienced workers / tougher zones | Baseline × 1.35–1.50 |
 
-**Worker:** hourly income = ₹84, shift = 11h, 6 days/wk, trust = 0.82, GPS consistency = 0.91, bank verified = ✅
+**Why only two plans?**
+- **Essential** reduces entry friction and improves conversion for price-sensitive workers — the affordable starting point
+- **Plus** gives a higher weekly benefit and serves as a natural upgrade path for workers who want stronger protection
+- This creates a clean, ethical ladder: low-friction entry option + higher-margin upgrade option
+- It helps the **insurer** by improving risk segmentation
+- It helps the **worker** by giving a simple choice between affordability and strength of cover
+- Too many plans reduce conversion, confuse workers, and slow purchase decisions
 
-**Trigger:** rain = 72mm, AQI = 240, temp = 41°C, traffic delay = 48%, outage = 12 min
+### Parametric Payout Ladder
 
-**Interpretation:**
-- Rain exceeds both the 48mm watch and 64.5mm heavy-rain thresholds → T2 fires
-- AQI 240 sits in the 201–300 caution band → T5 fires
-- Exposure is high: long shift + weak accessibility
-- Confidence stays high: strong trust score and GPS consistency
-- Payout can be automated unless fraud score triggers review
+The public payout is based on **trigger severity band** × **selected plan benefit** — not a flexible formula output:
+
+Let `W` = selected weekly benefit.
+
+| Trigger / exposure band | Description | Parametric payout |
+|---|---|---:|
+| **Band 1** — Moderate disruption | Watch-level trigger confirmed with partial exposure | `0.25 × W` |
+| **Band 2** — Major disruption | Claim-level trigger confirmed with strong exposure | `0.50 × W` |
+| **Band 3** — Severe disruption | Escalation-level trigger with full exposure match | `1.00 × W` |
+
+#### Example: Essential plan (W = ₹3,000)
+
+| Band | Payout |
+|---|---:|
+| Band 1 | ₹750 |
+| Band 2 | ₹1,500 |
+| Band 3 | ₹3,000 |
+
+#### Example: Plus plan (W = ₹4,500)
+
+| Band | Payout |
+|---|---:|
+| Band 1 | ₹1,125 |
+| Band 2 | ₹2,250 |
+| Band 3 | ₹4,500 |
+
+This structure is **much easier to defend as parametric insurance** than a flexible "pay whatever the formula outputs" model. Workers know exactly what they get. Insurers know exactly what they owe.
+
+### Internal Calibration Engine (Not Public-Facing)
+
+The existing formula engine is retained for internal use only:
+
+| Formula | Expression | Internal use |
+|---|---|---|
+| Covered Income (B) | `0.70 × hourly_income × shift_hours × 6` | Plan benefit calibration |
+| Severity Score (S) | Weighted composite of 8 components | Trigger band mapping |
+| Exposure (E) | `clip(0.45 + 0.30×(shift_hours/12) + 0.25×(1−accessibility_score), 0.35, 1.00)` | Exposure verification |
+| Confidence (C) | `clip(0.50 + 0.30×trust + 0.10×gps + 0.10×bank, 0.45, 1.00) × (1 − 0.70×fraud_penalty)` | Review routing |
+| Expected Payout | `p × B × S × E × C × (1 − FH)` | Premium calibration |
+| Gross Premium | `[Expected Payout / (1 − 0.12 − 0.10)] × U` | Weekly premium pricing |
+
+These formulas calibrate whether Essential and Plus benefit amounts are appropriately sized for the worker segment, whether weekly premiums are actuarially reasonable, and whether synthetic data scenarios produce realistic outcomes. They do **not** determine the worker-facing payout — the parametric ladder does.
+
+### Sample Scenario (Parametric)
+
+**Worker:** Plus plan (W = ₹4,500), shift = 11h, zone = MU-WE-01, trust = 0.82, GPS consistency = 0.91
+
+**Trigger:** rain = 72mm in zone MU-WE-01, AQI = 240, temp = 41°C, traffic delay = 48%
+
+**Decision flow:**
+1. Rain 72mm exceeds 64.5mm threshold → **T2 fires** (claim-level trigger)
+2. AQI 240 → T5 fires (caution-level, contributing to composite severity)
+3. Composite severity maps to **Band 2** (major disruption)
+4. Anti-spoofing: EXIF GPS matches zone, shift overlap confirmed, route plausibility verified ✅
+5. Fraud score: low (0.12) → `auto_approve`
+6. **Payout: ₹2,250** (0.50 × ₹4,500)
 
 ---
 
@@ -507,8 +744,8 @@ After running `backend/sql/06_synthetic_seed.sql` in your Supabase SQL editor, t
 
 | Role | Email | Password | What you'll see |
 |------|-------|----------|-----------------|
-| **Worker** | `worker@demo.com` | `demo1234` | Worker dashboard with 14-day earnings chart, zone alerts, claim history (1 approved rain claim, 1 pending), coverage plan quotes |
-| **Admin** | `admin@demo.com` | `demo1234` | Admin operations center with KPI cards, trigger distribution chart, full review queue with 9 claims, user search across 7 workers |
+| **Worker** | `worker@demo.com` | `demo1234` | Worker dashboard with 14-day earnings chart, zone alerts, claim history (1 approved rain claim, 1 held for review), coverage plan quotes with auto-renew toggle |
+| **Admin** | `admin@demo.com` | `demo1234` | Admin operations center with KPI cards (including Needs Review + Fraud Detected), trigger distribution chart, full review queue with 10 claims (including 1 fraud-detected), user search across 7 workers |
 
 **Or use your own Google account** — Sign in with Google OAuth and the system will automatically create a `worker` profile for you. Your dashboard will start empty and populate as you create shifts, submit claims, and interact with the platform.
 
@@ -536,11 +773,13 @@ After running `backend/sql/06_synthetic_seed.sql` in your Supabase SQL editor, t
 
 - The project is about **income loss**, not generic insurance
 - The platform uses **weekly pricing** matched to gig-worker earning cycles
-- The system is **parametric** — claims triggered by objective conditions, not manual forms
-- The claims pipeline is **automated** with multi-layer verification
-- The fraud layer uses **real logic** (4-layer Ghost Shift Detector), not buzzwords
+- The system is **parametric** — two plans (Essential / Plus), three payout bands, pre-agreed benefits
+- The claims pipeline is **automated** with multi-layer verification and anti-spoofing
+- The fraud layer uses **real logic** (5-layer Ghost Shift Detector with anti-spoofing and cluster intelligence), not buzzwords
+- The anti-spoofing strategy addresses the **coordinated GPS-spoofing syndicate** attack vector with multi-signal verification, circuit-breakers, and liquidity protection
 - The trigger library has **15 thresholds** anchored to public government data
-- The premium and payout math is **formula-driven and explainable**
+- The premium and payout math uses **documented internal calibration** while the public product is a **clean parametric benefit ladder**
+- ML **supports** classification and anomaly detection but does **not** independently authorize payout
 - The repo is **readable enough to evaluate quickly** without inspecting code
 - Current state vs. target architecture is **honestly labeled throughout**
 

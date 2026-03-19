@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useUserStore } from '@/store'
@@ -16,6 +16,58 @@ export default function Home() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Route user based on role
+  const routeToRole = useCallback(async (userId: string) => {
+    const controller = new AbortController()
+    const tid = setTimeout(() => controller.abort(), 10000)
+
+    let profileError: { code?: string; message?: string; details?: string } | null = null
+    let profileData: Record<string, unknown> | null = null
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .abortSignal(controller.signal)
+        .single()
+      clearTimeout(tid)
+      profileError = error
+      profileData = data
+    } catch (e: unknown) {
+      clearTimeout(tid)
+      await supabase.auth.signOut()
+      if (controller.signal.aborted || (e instanceof Error && e.name === 'AbortError')) {
+        setError('Cannot reach Supabase — request timed out. Check your network or try refreshing.')
+      } else {
+        setError(e instanceof Error ? e.message : 'Network error')
+      }
+      setLoading(false)
+      return
+    }
+
+    if (profileError) {
+      console.error('routeToRole error:', JSON.stringify(profileError))
+      await supabase.auth.signOut()
+      const code = profileError.code ?? ''
+      const msg = profileError.message ?? ''
+      const detail = profileError.details ?? ''
+      if (code === 'PGRST205' || msg.toLowerCase().includes('schema') || detail.toLowerCase().includes('schema')) {
+        setError(`Database not set up — run SQL migration files 01–07 in the Supabase SQL Editor for project aptgddoivrzpvpmydfyh, then try again. [${code || 'no-code'}: ${msg}]`)
+      } else if (code === 'PGRST116') {
+        setError(`Profile row missing — demo seed (06_synthetic_seed.sql) may not have run successfully. [${code}: ${msg}]`)
+      } else {
+        setError(`[${code || 'error'}] ${msg}${detail ? ` — ${detail}` : ''}`)
+      }
+      setLoading(false)
+      return
+    }
+    if (profileData) {
+      setProfile(profileData as Parameters<typeof setProfile>[0])
+      if ((profileData as Record<string, unknown>).role === 'worker') router.push('/worker/dashboard')
+      else if ((profileData as Record<string, unknown>).role === 'insurer_admin') router.push('/admin/dashboard')
+    }
+  }, [supabase, setProfile, router])
+
   // Check existing session
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -26,22 +78,7 @@ export default function Home() {
     }).catch(() => {
       // Session expired or invalid — stay on login page
     })
-  }, [supabase.auth, setUser])
-
-  const routeToRole = async (userId: string) => {
-    const { data: profile, error: profileError } = await supabase.from('profiles').select('*').eq('id', userId).single()
-    if (profileError) {
-      // Schema or RLS error — sign out stale session so user can re-login cleanly
-      await supabase.auth.signOut()
-      setError(profileError.message)
-      return
-    }
-    if (profile) {
-      setProfile(profile)
-      if (profile.role === 'worker') router.push('/worker/dashboard')
-      else if (profile.role === 'insurer_admin') router.push('/admin/dashboard')
-    }
-  }
+  }, [supabase.auth, setUser, routeToRole])
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -50,7 +87,16 @@ export default function Home() {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
     if (error) {
-      setError(error.message)
+      console.error('signInWithPassword error:', JSON.stringify(error))
+      const msg = error.message ?? ''
+      const name = (error as unknown as Record<string, unknown>).name ?? ''
+      if (error.status === 0 || name === 'AuthRetryableFetchError' || msg.toLowerCase().includes('failed to fetch') || msg.toLowerCase().includes('network')) {
+        setError('Cannot reach Supabase — your free-tier project may be paused. Visit the Supabase dashboard and click "Restore project", then try again.')
+      } else if (msg.toLowerCase().includes('schema') || error.status === 500) {
+        setError('Auth service error (500) — demo accounts may be broken. Run 08_fix_demo_auth_users.sql and recreate accounts via Supabase Dashboard → Authentication → Users.')
+      } else {
+        setError(msg || 'Sign in failed')
+      }
       setLoading(false)
     } else if (data.user) {
       setUser(data.user)
@@ -60,10 +106,16 @@ export default function Home() {
 
   const handleGoogleLogin = async () => {
     setLoading(true)
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback` }
-    })
+    setError(null)
+    try {
+      await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: `${window.location.origin}/auth/callback` }
+      })
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Google sign-in failed')
+      setLoading(false)
+    }
   }
 
   return (

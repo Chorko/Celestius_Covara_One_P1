@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import {
   Users, Search, MapPin, ChevronDown, ChevronUp, Mail,
@@ -8,40 +8,62 @@ import {
   Fingerprint, BarChart3, FileText, Clock
 } from 'lucide-react'
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+interface WorkerProfile {
+  profile_id: string
+  city?: string
+  platform_name?: string
+  vehicle_type?: string
+  avg_hourly_income_inr?: number
+  trust_score?: number
+  gps_consistency_score?: number
+  gps_consent?: boolean
+  bank_verified?: boolean
+  preferred_zone_id?: string
+  profiles?: { id?: string; full_name?: string; email?: string; phone?: string }
+  zones?: { zone_name?: string }
+  [key: string]: any
+}
+
+interface WorkerClaim {
+  id: string
+  claim_status: string
+  claim_reason: string
+  claimed_at: string
+  trigger_events?: { trigger_code?: string; trigger_family?: string }
+  [key: string]: any
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
 export default function AdminUsers() {
   const supabase = createClient()
-  const [workers, setWorkers] = useState<any[]>([])
+  const [workers, setWorkers] = useState<WorkerProfile[]>([])
   const [loading, setLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [cityFilter, setCityFilter] = useState('')
   const [expandedWorker, setExpandedWorker] = useState<string | null>(null)
-  const [workerClaims, setWorkerClaims] = useState<Record<string, any[]>>({})
+  const [workerClaims, setWorkerClaims] = useState<Record<string, WorkerClaim[]>>({})
   const [claimLoading, setClaimLoading] = useState<string | null>(null)
 
-  useEffect(() => {
-    loadWorkers()
-  }, [])
-
-  const loadWorkers = async (city?: string) => {
+  const loadWorkers = useCallback(async (city?: string) => {
     setLoading(true)
     try {
-      const { data: session } = await supabase.auth.getSession()
-      let url = `${process.env.NEXT_PUBLIC_API_URL}/workers`
-      if (city) {
-        url += `?city=${encodeURIComponent(city)}`
-      }
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${session.session?.access_token}` },
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setWorkers(data.workers || [])
-      }
+      let query = supabase
+        .from('worker_profiles')
+        .select('*, profiles(id, full_name, email, phone), zones(zone_name)')
+        .order('trust_score', { ascending: false })
+      if (city) query = query.eq('city', city)
+      const { data } = await query
+      setWorkers(data || [])
     } catch (e) {
       console.error('Could not load workers', e)
     }
     setLoading(false)
-  }
+  }, [supabase])
+
+  useEffect(() => {
+    loadWorkers()
+  }, [loadWorkers])
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -63,17 +85,13 @@ export default function AdminUsers() {
     if (!workerClaims[workerId]) {
       setClaimLoading(workerId)
       try {
-        const { data: session } = await supabase.auth.getSession()
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/claims`, {
-          headers: { Authorization: `Bearer ${session.session?.access_token}` },
-        })
-        if (res.ok) {
-          const data = await res.json()
-          const filtered = (data.claims || []).filter(
-            (c: any) => c.worker_profile_id === workerId
-          )
-          setWorkerClaims((prev) => ({ ...prev, [workerId]: filtered }))
-        }
+        const { data } = await supabase
+          .from('manual_claims')
+          .select('id, claim_status, claim_reason, claimed_at, trigger_events(trigger_code, trigger_family)')
+          .eq('worker_profile_id', workerId)
+          .order('claimed_at', { ascending: false })
+          .limit(5)
+        setWorkerClaims((prev) => ({ ...prev, [workerId]: (data || []) as WorkerClaim[] }))
       } catch (e) {
         console.error('Could not load claims for worker', e)
       }

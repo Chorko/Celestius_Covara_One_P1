@@ -1,10 +1,20 @@
 import { create } from 'zustand'
+import type { User } from '@supabase/supabase-js'
+
+export interface Profile {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  phone: string | null;
+  role: string | null;
+  [key: string]: unknown;
+}
 
 interface UserState {
-  user: any | null;
-  profile: any | null;
-  setUser: (user: any) => void;
-  setProfile: (profile: any) => void;
+  user: User | null;
+  profile: Profile | null;
+  setUser: (user: User) => void;
+  setProfile: (profile: Profile) => void;
   logout: () => void;
 }
 

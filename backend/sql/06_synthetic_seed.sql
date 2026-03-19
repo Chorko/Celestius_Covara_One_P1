@@ -337,18 +337,20 @@ INSERT INTO public.manual_claims (id, worker_profile_id, trigger_event_id, claim
   ('11110000-0000-0000-0000-000000000002', 'aaaa0000-0000-0000-0000-000000000002', 'ffff0000-0000-0000-0000-000000000002', 'manual', 'Severe waterlogging in BKC area due to extreme rainfall. Completely unable to deliver. Bike stalled in water.', 19.0600, 72.8650, '2026-03-10T12:00:00+05:30', 'cccc0000-0000-0000-0000-000000000004', 'held'),
   -- Arun: AQI claim — auto-matched
   ('11110000-0000-0000-0000-000000000003', 'aaaa0000-0000-0000-0000-000000000003', 'ffff0000-0000-0000-0000-000000000004', 'trigger_auto', 'Severe air quality in Connaught Place. AQI above 300. Breathing difficulty during deliveries, had to stop mid-shift.', 28.6320, 77.2170, '2026-03-11T09:00:00+05:30', 'cccc0000-0000-0000-0000-000000000006', 'approved'),
-  -- Meena: Heat wave — manual claim
-  ('11110000-0000-0000-0000-000000000004', 'aaaa0000-0000-0000-0000-000000000004', 'ffff0000-0000-0000-0000-000000000007', 'manual', 'Extreme heat in Saket. Temperature over 46C. Got heat exhaustion symptoms — dizziness and nausea. Had to abandon shift.', 28.5250, 77.2060, '2026-03-12T13:00:00+05:30', 'cccc0000-0000-0000-0000-000000000008', 'submitted'),
+  -- Meena: Heat wave — manual claim (AI uncertain: low trust, no bank verification → held for review)
+  ('11110000-0000-0000-0000-000000000004', 'aaaa0000-0000-0000-0000-000000000004', 'ffff0000-0000-0000-0000-000000000007', 'manual', 'Extreme heat in Saket. Temperature over 46C. Got heat exhaustion symptoms — dizziness and nausea. Had to abandon shift.', 28.5250, 77.2060, '2026-03-12T13:00:00+05:30', 'cccc0000-0000-0000-0000-000000000008', 'held'),
   -- Suresh: Traffic disruption — manual claim
   ('11110000-0000-0000-0000-000000000005', 'aaaa0000-0000-0000-0000-000000000005', 'ffff0000-0000-0000-0000-000000000009', 'manual', 'Major traffic jam on Hosur Road near Koramangala. 55%+ delay inflation. Three orders timed out while stuck. Lost full morning earnings.', 12.9360, 77.6240, '2026-03-13T11:30:00+05:30', 'cccc0000-0000-0000-0000-000000000009', 'held'),
-  -- Fatima: Demand collapse — manual claim
-  ('11110000-0000-0000-0000-000000000006', 'aaaa0000-0000-0000-0000-000000000006', 'ffff0000-0000-0000-0000-000000000011', 'manual', 'Order demand collapsed in Madhapur area today. Only 3 orders in 5 hours vs usual 10-12. Platform showing very low demand zone.', 17.4490, 78.3910, '2026-03-15T15:00:00+05:30', 'cccc0000-0000-0000-0000-000000000010', 'submitted'),
+  -- Fatima: Demand collapse — manual claim (no GPS consent, AI uncertain → held for review)
+  ('11110000-0000-0000-0000-000000000006', 'aaaa0000-0000-0000-0000-000000000006', 'ffff0000-0000-0000-0000-000000000011', 'manual', 'Order demand collapsed in Madhapur area today. Only 3 orders in 5 hours vs usual 10-12. Platform showing very low demand zone.', 17.4490, 78.3910, '2026-03-15T15:00:00+05:30', 'cccc0000-0000-0000-0000-000000000010', 'held'),
   -- Ravi: Second claim — manual, no trigger match
   ('11110000-0000-0000-0000-000000000007', 'aaaa0000-0000-0000-0000-000000000001', NULL,                                   'manual', 'Restaurant closure due to health inspection. Three assigned orders could not be picked up. Stood idle for 2 hours with no reassignment.', 19.1380, 72.8300, '2026-03-14T14:00:00+05:30', 'cccc0000-0000-0000-0000-000000000003', 'rejected'),
   -- Demo Worker: Rain claim — auto-matched to RAIN_HEAVY trigger in Andheri
   ('11110000-0000-0000-0000-000000000008', 'aaaa0000-0000-0000-0000-000000000201', 'ffff0000-0000-0000-0000-000000000001', 'trigger_auto', 'Heavy rain in Andheri West caused widespread waterlogging. Roads submerged near Link Road. Could not access pickup locations for 4 hours.', 19.1365, 72.8288, '2026-03-10T11:00:00+05:30', 'cccc0000-0000-0000-0000-000000000011', 'approved'),
-  -- Demo Worker: Watch-level rain — manual claim
-  ('11110000-0000-0000-0000-000000000009', 'aaaa0000-0000-0000-0000-000000000201', 'ffff0000-0000-0000-0000-000000000003', 'manual', 'Moderate rain causing slow traffic in Andheri area. Deliveries delayed significantly, multiple orders timed out before pickup.', 19.1372, 72.8295, '2026-03-14T15:30:00+05:30', 'cccc0000-0000-0000-0000-000000000013', 'submitted')
+  -- Demo Worker: Watch-level rain — manual claim (below claim threshold, AI escalated → held)
+  ('11110000-0000-0000-0000-000000000009', 'aaaa0000-0000-0000-0000-000000000201', 'ffff0000-0000-0000-0000-000000000003', 'manual', 'Moderate rain causing slow traffic in Andheri area. Deliveries delayed significantly, multiple orders timed out before pickup.', 19.1372, 72.8295, '2026-03-14T15:30:00+05:30', 'cccc0000-0000-0000-0000-000000000013', 'held'),
+  -- ★ Suresh: FRAUD CLAIM — fake rain claim in Bangalore with mismatched GPS (Delhi coords), no trigger match, EXIF time mismatch. Clearly fraudulent.
+  ('11110000-0000-0000-0000-000000000010', 'aaaa0000-0000-0000-0000-000000000005', NULL, 'manual', 'Heavy rain flooding in Koramangala area. Roads completely waterlogged. Unable to reach any restaurants for pickup. Lost entire morning shift earnings.', 28.6320, 77.2170, '2026-03-16T10:00:00+05:30', 'cccc0000-0000-0000-0000-000000000009', 'rejected')
 ON CONFLICT (id) DO NOTHING;
 
 
@@ -373,7 +375,10 @@ INSERT INTO public.claim_evidence (id, claim_id, evidence_type, storage_path, ca
   ('22220000-0000-0000-0000-000000000009', '11110000-0000-0000-0000-000000000007', 'text',  NULL,                                       '2026-03-14T14:00:00+05:30', NULL,    NULL,    NULL,                        0.40),
   -- Demo Worker rain claim (photo + geo)
   ('22220000-0000-0000-0000-000000000010', '11110000-0000-0000-0000-000000000008', 'photo', 'claim-evidence/demo-rain-andheri-01.jpg',   '2026-03-10T10:55:00+05:30', 19.1363, 72.8286, '2026-03-10T10:55:00+05:30', 0.91),
-  ('22220000-0000-0000-0000-000000000011', '11110000-0000-0000-0000-000000000008', 'geo',   NULL,                                       '2026-03-10T11:00:00+05:30', 19.1365, 72.8288, '2026-03-10T11:00:00+05:30', 0.94)
+  ('22220000-0000-0000-0000-000000000011', '11110000-0000-0000-0000-000000000008', 'geo',   NULL,                                       '2026-03-10T11:00:00+05:30', 19.1365, 72.8288, '2026-03-10T11:00:00+05:30', 0.94),
+  -- ★ Suresh FRAUD claim evidence: GPS is in Delhi NOT Bangalore, EXIF timestamp is 3 hours before claimed time
+  ('22220000-0000-0000-0000-000000000012', '11110000-0000-0000-0000-000000000010', 'photo', 'claim-evidence/suresh-fraud-rain-blr-01.jpg','2026-03-16T06:45:00+05:30', 28.6318, 77.2165, '2026-03-16T06:45:00+05:30', 0.15),
+  ('22220000-0000-0000-0000-000000000013', '11110000-0000-0000-0000-000000000010', 'geo',   NULL,                                       '2026-03-16T10:00:00+05:30', 28.6310, 77.2160, '2026-03-16T10:00:00+05:30', 0.10)
 ON CONFLICT (id) DO NOTHING;
 
 
@@ -452,7 +457,15 @@ INSERT INTO public.payout_recommendations (id, claim_id, covered_weekly_income_b
    109.80,
    140.77,
    788.42,
-   '{"ai_summary": "Manual claim by Demo Worker during rain watch event in Andheri-W. Rain at 52mm is above the 48mm watch threshold but below the 64.5mm heavy-rain claim threshold. Manual claim path applied. Evidence not yet submitted. Pending review.", "pipeline_stages_passed": 6, "manual_hold_reasons": ["watch_level_trigger", "manual_claim_multiplier_applied"]}'::jsonb)
+   '{"ai_summary": "Manual claim by Demo Worker during rain watch event in Andheri-W. Rain at 52mm is above the 48mm watch threshold but below the 64.5mm heavy-rain claim threshold. Manual claim path applied. Evidence not yet submitted. Pending review.", "pipeline_stages_passed": 6, "manual_hold_reasons": ["watch_level_trigger", "manual_claim_multiplier_applied"]}'::jsonb),
+  -- ★ Suresh FRAUD claim — all red flags
+  ('33330000-0000-0000-0000-000000000010', '11110000-0000-0000-0000-000000000010',
+   3024.00, 0.1500, 0.7500, 0.1200, 0.2000, 0.8500, 1.00,
+   2268.00,
+   4.08,
+   5.23,
+   43.54,
+   '{"ai_summary": "FRAUD DETECTED. Manual rain claim in Koramangala (Bangalore) but all evidence GPS coordinates point to Delhi (28.63°N, 77.22°E) — over 1,700 km away from the claimed zone (12.94°N, 77.62°E). No rain trigger event exists for Bangalore Koramangala on this date. Photo EXIF timestamp is 06:45 — over 3 hours before the claimed disruption time of 10:00. Evidence integrity scores are critically low (0.15 photo, 0.10 geo). Fraud holdback at maximum (0.85). GPS mismatch distance: 1,742 km. The claim appears to reuse Delhi evidence from a previous legitimate AQI event. RECOMMENDATION: Reject immediately. Flag worker for enhanced monitoring.", "pipeline_stages_passed": 3, "fraud_flags": ["gps_mismatch_1742km", "exif_timestamp_3h_early", "no_trigger_match", "evidence_integrity_critical", "suspected_evidence_reuse"], "manual_hold_reasons": ["fraud_auto_reject"]}'::jsonb)
 ON CONFLICT (id) DO NOTHING;
 
 
@@ -467,7 +480,9 @@ INSERT INTO public.claim_reviews (id, claim_id, reviewer_profile_id, fraud_score
   -- Ravi restaurant closure — rejected by Neha
   ('44440000-0000-0000-0000-000000000003', '11110000-0000-0000-0000-000000000007', 'aaaa0000-0000-0000-0000-000000000101', 0.80, 0.00, 0.40, 'reject', 'No matching trigger event found. Text-only evidence without photo or geo corroboration. High fraud score (0.80). Insufficient evidence to support claim. Rejected.', '2026-03-15T10:00:00+05:30'),
   -- Demo Worker rain — approved by Demo Admin
-  ('44440000-0000-0000-0000-000000000004', '11110000-0000-0000-0000-000000000008', 'aaaa0000-0000-0000-0000-000000000202', 0.08, 0.94, 0.91, 'approve', 'Auto-triggered rain claim with strong photo and GPS evidence. EXIF timestamp aligns with shift window. Heavy rain threshold confirmed via IMD data (72mm). Approved for recommended payout.', '2026-03-10T15:30:00+05:30')
+  ('44440000-0000-0000-0000-000000000004', '11110000-0000-0000-0000-000000000008', 'aaaa0000-0000-0000-0000-000000000202', 0.08, 0.94, 0.91, 'approve', 'Auto-triggered rain claim with strong photo and GPS evidence. EXIF timestamp aligns with shift window. Heavy rain threshold confirmed via IMD data (72mm). Approved for recommended payout.', '2026-03-10T15:30:00+05:30'),
+  -- ★ Suresh FRAUD claim — rejected by Neha with detailed fraud reasoning
+  ('44440000-0000-0000-0000-000000000005', '11110000-0000-0000-0000-000000000010', 'aaaa0000-0000-0000-0000-000000000101', 0.92, 0.02, 0.15, 'reject', 'FRAUD: GPS coordinates in evidence (28.63°N, 77.22°E) are in Delhi — 1,742 km from claimed Koramangala zone in Bangalore. EXIF timestamp 06:45 predates claimed disruption by 3+ hours. No rain trigger event recorded for Bangalore on this date. Evidence photo appears reused from a Delhi AQI event. Integrity scores critically low. Claim rejected and worker flagged for enhanced monitoring.', '2026-03-16T12:00:00+05:30')
 ON CONFLICT (id) DO NOTHING;
 
 
@@ -485,16 +500,19 @@ INSERT INTO public.audit_events (id, actor_profile_id, entity_type, entity_id, a
   ('55550000-0000-0000-0000-000000000008', 'aaaa0000-0000-0000-0000-000000000101', 'claim', '11110000-0000-0000-0000-000000000007', 'claim_reviewed',   '{"decision": "reject", "fraud_score": 0.80}'::jsonb),
   ('55550000-0000-0000-0000-000000000009', 'aaaa0000-0000-0000-0000-000000000201', 'claim', '11110000-0000-0000-0000-000000000008', 'claim_submitted',  '{"claim_mode": "trigger_auto", "trigger_code": "RAIN_HEAVY"}'::jsonb),
   ('55550000-0000-0000-0000-000000000010', 'aaaa0000-0000-0000-0000-000000000202', 'claim', '11110000-0000-0000-0000-000000000008', 'claim_reviewed',   '{"decision": "approve", "fraud_score": 0.08}'::jsonb),
-  ('55550000-0000-0000-0000-000000000011', 'aaaa0000-0000-0000-0000-000000000201', 'claim', '11110000-0000-0000-0000-000000000009', 'claim_submitted',  '{"claim_mode": "manual", "reason": "moderate_rain"}'::jsonb)
+  ('55550000-0000-0000-0000-000000000011', 'aaaa0000-0000-0000-0000-000000000201', 'claim', '11110000-0000-0000-0000-000000000009', 'claim_submitted',  '{"claim_mode": "manual", "reason": "moderate_rain"}'::jsonb),
+  -- ★ Suresh FRAUD claim audit events
+  ('55550000-0000-0000-0000-000000000012', 'aaaa0000-0000-0000-0000-000000000005', 'claim', '11110000-0000-0000-0000-000000000010', 'claim_submitted',  '{"claim_mode": "manual", "reason": "rain_flooding"}'::jsonb),
+  ('55550000-0000-0000-0000-000000000013', 'aaaa0000-0000-0000-0000-000000000101', 'claim', '11110000-0000-0000-0000-000000000010', 'claim_reviewed',   '{"decision": "reject", "fraud_score": 0.92, "fraud_flags": ["gps_mismatch_1742km", "exif_timestamp_3h_early", "no_trigger_match"]}'::jsonb)
 ON CONFLICT (id) DO NOTHING;
 
 
 -- ============================================================
 -- Seed Complete.
 -- 7 workers (incl. demo), 3 admins (incl. demo), 8 zones,
--- 12 triggers, 9 claims, 11 evidence records,
--- 9 payout recommendations, 4 reviews, 12 audit events,
--- 56 daily stats, 10 order events.
+-- 12 triggers, 10 claims (incl. 1 fraud), 13 evidence records,
+-- 10 payout recommendations, 5 reviews (incl. 1 fraud reject),
+-- 14 audit events, 56 daily stats, 10 order events.
 -- ============================================================
 
 -- Force PostgREST to reload its schema cache.

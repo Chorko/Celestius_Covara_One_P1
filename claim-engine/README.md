@@ -1,6 +1,6 @@
 # Claim Engine
 
-> This module owns the **trigger-to-claim-to-approval decision flow** — the core business logic pipeline that turns a raw disruption event into an approved, held, or rejected claim with an explainable payout.
+> This module owns the **trigger-to-claim-to-approval decision flow** — the core business logic pipeline that turns a raw disruption event into an approved, reviewed, held, or rejected claim with a **pre-agreed parametric payout**.
 
 ---
 
@@ -43,36 +43,40 @@ flowchart TD
     V["✅ Signal Validated<br/>(Cross-check external sources)"]
     E["👤 Worker Exposure Checked<br/>(Zone + shift overlap)"]
     S["📊 Severity Calculated<br/>(Disruption DNA score)"]
-    P["💰 Payout Estimate Created<br/>(B × S × E × C formula)"]
-    F["🔍 Fraud Score Applied<br/>(Ghost Shift Detector)"]
+    B["🏷️ Payout Band Mapped<br/>(Band 1 / 2 / 3)"]
+    F["🔍 Anti-Spoofing + Fraud<br/>(5-Layer Ghost Shift Detector)"]
     D{"Decision"}
-    A["✅ Auto-Approve<br/>(Low fraud risk)"]
-    R["⏸️ Soft Review<br/>(Medium fraud risk)"]
-    H["🚫 Hard Hold<br/>(High fraud risk)"]
+    A["✅ Auto-Approve"]
+    R["🔍 Needs Review"]
+    H["⏸️ Hold for Fraud"]
+    X["🚫 Reject Spoof Risk"]
     AU["📝 Audit Events<br/>& Payout Recorded"]
 
     T --> V
     V --> E
     E --> S
-    S --> P
-    P --> F
+    S --> B
+    B --> F
     F --> D
-    D -- "fraud_score LOW" --> A
-    D -- "fraud_score MEDIUM" --> R
-    D -- "fraud_score HIGH" --> H
+    D -- "auto_approve" --> A
+    D -- "needs_review" --> R
+    D -- "hold_for_fraud" --> H
+    D -- "reject_spoof_risk" --> X
     A --> AU
     R --> AU
     H --> AU
+    X --> AU
 
     style T fill:#e74c3c,color:#fff
     style V fill:#3498db,color:#fff
     style E fill:#3498db,color:#fff
     style S fill:#f39c12,color:#fff
-    style P fill:#2ecc71,color:#fff
+    style B fill:#2ecc71,color:#fff
     style F fill:#9b59b6,color:#fff
     style A fill:#2ecc71,color:#fff
-    style R fill:#f39c12,color:#fff
-    style H fill:#e74c3c,color:#fff
+    style R fill:#3498db,color:#fff
+    style H fill:#f39c12,color:#fff
+    style X fill:#e74c3c,color:#fff
 ```
 
 ![Trigger to Claim to Approval](../docs/assets/architecture/trigger_claim_approval_flow.png)
@@ -106,30 +110,39 @@ Each component is normalized to 0–1 using public thresholds (IMD, CPCB) or ope
 
 > **Threshold provenance:** Environmental components (rain, AQI, heat) are normalized against official Indian government category bands — see [IMD rainfall FAQ](https://rsmcnewdelhi.imd.gov.in/images/pdf/faq.pdf), [CPCB AQI Index](https://www.cpcb.nic.in/national-air-quality-index/), and [NDMA heat-wave guidance](https://ndma.gov.in/Natural-Hazards/Heat-Wave). Operational components (traffic, outage, demand, closure, accessibility) use internal product thresholds documented in the [root README](../README.md#threshold-references-and-why-they-were-chosen).
 
-### Stage 5 — Payout Estimate Created
-The system computes:
+### Stage 5 — Payout Band Mapped
+The system maps the composite severity score to a **parametric payout band**:
 
-```
-Payout = min(Cap, B × S × E × C × (1 − FH))
-```
+Let `W` = selected weekly benefit (Essential = ₹3,000, Plus = ₹4,500).
 
-Where B = covered weekly income, S = severity, E = exposure, C = effective confidence, FH = fraud holdback, Cap = `0.75 × B × U`. The outlier uplift factor U adjusts both premium and cap proportionally for validated high-risk cases. For the full variable dictionary and formula derivation, see the [Reference Register](../docs/README.md#formula-summary) in `docs/README.md`.
+| Trigger / exposure band | Description | Parametric payout |
+|---|---|---:|
+| **Band 1** | Watch-level trigger + partial exposure | `0.25 × W` |
+| **Band 2** | Claim-level trigger + strong exposure | `0.50 × W` |
+| **Band 3** | Escalation-level trigger + full exposure | `1.00 × W` |
 
-### Stage 6 — Fraud Score Applied
-The [Ghost Shift Detector](../fraud/README.md) evaluates:
-- Event truth (did the disruption happen?)
-- Worker truth (was the worker genuinely exposed?)
-- Behavioral anomalies (GPS spoofing, impossible movement)
-- Cluster intelligence (group-level suspicious patterns)
+The internal calibration formula (`B × S × E × C`) is used behind the scenes for premium sizing and plan calibration, but the worker-facing payout follows this pre-agreed ladder. See the [Parametric Product](../README.md#parametric-product-weekly-benefit-plans) section in the root README.
+
+### Stage 6 — Anti-Spoofing + Fraud Check
+The [5-Layer Ghost Shift Detector](../fraud/README.md) evaluates:
+- Layer 1: Event truth (did the disruption happen? — OpenWeather / IMD / CPCB cross-check)
+- Layer 2: Worker truth (was the worker genuinely exposed? — shift + zone overlap + activity continuity)
+- Layer 3: **Anti-spoofing verification** (EXIF vs browser GPS, timestamp freshness, route plausibility via TomTom, device continuity, network/IP/ASN pattern, movement plausibility)
+- Layer 4: Cluster intelligence (DBSCAN clustering, synchronized timing, shared payouts/devices, coordinate density)
+- Layer 5: Behavioral anomaly (claim history, impossible movement, prior suspicious rate)
 
 ### Stage 7 — Claim Decision
-Based on the fraud confidence score:
+Based on the multi-signal verification result:
 
-| Fraud risk band | Decision | Action |
-|----------------|----------|--------|
-| Low | Auto-approve | Payout initiated immediately |
-| Medium | Soft review | Queued for insurer review |
-| High | Hard hold | Blocked pending investigation |
+| Outcome | Conditions | Action |
+|---|---|---|
+| **`auto_approve`** | Trigger present + exposure match + anti-spoofing pass + low fraud score | Payout released via parametric ladder |
+| **`needs_review`** | Manual claim OR missing EXIF OR moderate uncertainty OR weak trigger match | Queued for human-assisted review — no penalty to worker |
+| **`hold_for_fraud`** | Spoof indicators + cluster anomaly + evidence mismatch | Held pending investigation — worker notified with reason |
+| **`reject_spoof_risk`** | No valid trigger + high spoof confidence + fraud-ring pattern | Rejected — 48-hour appeal/resubmit window |
+
+> [!NOTE]
+> **Basis-risk acknowledgment:** A trigger may fire but not every worker suffers equally. A worker may suffer disruption even when the trigger is borderline. The system mitigates this through tiered thresholds, exposure matching, anti-spoofing verification, and review routing for uncertain cases.
 
 ### Stage 8 — Audit Events Recorded
 Every stage emits a timestamped audit event so the full claim can be reconstructed as a timeline.

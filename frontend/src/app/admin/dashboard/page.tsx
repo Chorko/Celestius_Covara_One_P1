@@ -1,58 +1,137 @@
 "use client"
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useUserStore } from '@/store'
 import { createClient } from '@/lib/supabase'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts'
 import {
   Users, Clock, CheckCircle, IndianRupee, Activity, ArrowRight,
-  FileSearch, Zap, Shield, TrendingUp, AlertTriangle
+  FileSearch, Zap, Shield, TrendingUp, AlertTriangle, Fingerprint
 } from 'lucide-react'
 import Link from 'next/link'
+
+interface DashboardMetrics {
+  active_workers: number
+  needs_review: number
+  fraud_detected: number
+  approved_claims: number
+  total_claims: number
+  total_recommended_payout_inr: number
+  total_expected_payout_inr: number
+}
+
+interface DashboardData {
+  metrics: DashboardMetrics
+  charts: { trigger_mix: Record<string, number> }
+}
+
+interface RecentClaim {
+  id: string
+  claim_status: string
+  claim_reason: string
+  claimed_at: string
+  worker_profiles?: {
+    platform_name?: string
+    city?: string
+    profiles?: { full_name?: string; email?: string }
+  }
+}
 
 const COLORS = ['#3b82f6', '#f59e0b', '#ef4444', '#10b981', '#6366f1', '#a855f7']
 
 export default function AdminDashboard() {
   const { profile } = useUserStore()
   const supabase = createClient()
-  const [data, setData] = useState<any>(null)
-  const [recentClaims, setRecentClaims] = useState<any[]>([])
+  const [data, setData] = useState<DashboardData | null>(null)
+  const [recentClaims, setRecentClaims] = useState<RecentClaim[]>([])
+  const [fetchError, setFetchError] = useState<string | null>(null)
+
+  const loadAnalytics = useCallback(async () => {
+    try {
+      const [
+        { count: active_workers },
+        { data: claimsData },
+        { data: triggerData },
+      ] = await Promise.all([
+        supabase.from('worker_profiles').select('*', { count: 'exact', head: true }),
+        supabase.from('manual_claims').select('claim_status, claim_mode, payout_recommendations(recommended_payout, expected_payout, fraud_holdback_fh)'),
+        supabase.from('trigger_events').select('trigger_family').is('ended_at', null),
+      ])
+
+      // "Needs Review" = only held claims (manually escalated or AI-uncertain)
+      // NOT submitted auto-trigger claims that were auto-processed
+      const needs_review = claimsData?.filter(
+        (c) => c.claim_status === 'held'
+      ).length ?? 0
+      // "Fraud Detected" = rejected claims with high fraud holdback
+      const fraud_detected = claimsData?.filter(
+        (c) => c.claim_status === 'rejected' &&
+          (c.payout_recommendations as { fraud_holdback_fh?: number }[])?.[0]?.fraud_holdback_fh &&
+          ((c.payout_recommendations as { fraud_holdback_fh?: number }[])?.[0]?.fraud_holdback_fh ?? 0) > 0.30
+      ).length ?? 0
+      const approved_claims = claimsData?.filter((c) => c.claim_status === 'approved').length ?? 0
+      const total_claims = claimsData?.length ?? 0
+      const total_recommended_payout_inr = claimsData?.reduce(
+        (s, c) => s + ((c.payout_recommendations as { recommended_payout?: number; expected_payout?: number }[])?.[0]?.recommended_payout || 0), 0
+      ) ?? 0
+      const total_expected_payout_inr = claimsData?.reduce(
+        (s, c) => s + ((c.payout_recommendations as { recommended_payout?: number; expected_payout?: number }[])?.[0]?.expected_payout || 0), 0
+      ) ?? 0
+
+      const familyCounts: Record<string, number> = {}
+      triggerData?.forEach((t) => {
+        familyCounts[t.trigger_family] = (familyCounts[t.trigger_family] || 0) + 1
+      })
+
+      setData({
+        metrics: {
+          active_workers: active_workers ?? 0,
+          needs_review,
+          fraud_detected,
+          approved_claims,
+          total_claims,
+          total_recommended_payout_inr,
+          total_expected_payout_inr,
+        },
+        charts: { trigger_mix: familyCounts },
+      })
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Could not load analytics'
+      setFetchError(msg)
+      console.error('Could not load analytics', e)
+    }
+  }, [supabase])
+
+  const loadRecentClaims = useCallback(async () => {
+    try {
+      const { data } = await supabase
+        .from('manual_claims')
+        .select('*, worker_profiles(profile_id, platform_name, city, profiles(full_name, email))')
+        .order('claimed_at', { ascending: false })
+        .limit(6)
+      setRecentClaims(data || [])
+    } catch (e) {
+      console.error('Could not load recent claims', e)
+    }
+  }, [supabase])
 
   useEffect(() => {
     loadAnalytics()
     loadRecentClaims()
-  }, [])
-
-  const loadAnalytics = async () => {
-    try {
-      const { data: session } = await supabase.auth.getSession()
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/analytics/summary`, {
-        headers: { Authorization: `Bearer ${session.session?.access_token}` },
-      })
-      if (res.ok) {
-        setData(await res.json())
-      }
-    } catch (e) {
-      console.error('Could not load analytics', e)
-    }
-  }
-
-  const loadRecentClaims = async () => {
-    try {
-      const { data: session } = await supabase.auth.getSession()
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/claims`, {
-        headers: { Authorization: `Bearer ${session.session?.access_token}` },
-      })
-      if (res.ok) {
-        const d = await res.json()
-        setRecentClaims((d.claims || []).slice(0, 6))
-      }
-    } catch (e) {
-      console.error('Could not load recent claims', e)
-    }
-  }
+  }, [loadAnalytics, loadRecentClaims])
 
   if (!data) {
+    if (fetchError) {
+      return (
+        <div className="p-8 max-w-7xl mx-auto gradient-mesh-admin min-h-screen flex items-center justify-center">
+          <div className="glass-card p-8 max-w-md w-full text-center space-y-4">
+            <AlertTriangle size={32} className="text-amber-400 mx-auto" />
+            <p className="text-white font-semibold">Dashboard unavailable</p>
+            <p className="text-neutral-400 text-sm leading-relaxed">{fetchError}</p>
+          </div>
+        </div>
+      )
+    }
     return (
       <div className="p-8 max-w-7xl mx-auto gradient-mesh-admin min-h-screen">
         <div className="animate-pulse space-y-6">
@@ -106,7 +185,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5 mb-8">
         <div className="glass-card p-6 animate-fade-in-up delay-100">
           <div className="flex items-center justify-between mb-4">
             <span className="text-sm font-medium text-neutral-400">Active Workers</span>
@@ -122,13 +201,24 @@ export default function AdminDashboard() {
 
         <div className="glass-card p-6 animate-fade-in-up delay-200">
           <div className="flex items-center justify-between mb-4">
-            <span className="text-sm font-medium text-neutral-400">Pending Claims</span>
+            <span className="text-sm font-medium text-neutral-400">Needs Review</span>
             <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center">
               <Clock size={20} className="text-amber-400" />
             </div>
           </div>
-          <div className="text-3xl font-bold mb-1">{metrics.pending_claims}</div>
-          <p className="text-xs text-amber-400">Awaiting manual review</p>
+          <div className="text-3xl font-bold mb-1">{metrics.needs_review}</div>
+          <p className="text-xs text-amber-400">Manual / escalated / AI-uncertain</p>
+        </div>
+
+        <div className="glass-card p-6 animate-fade-in-up delay-250">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-sm font-medium text-neutral-400">Fraud Detected</span>
+            <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center">
+              <Fingerprint size={20} className="text-red-400" />
+            </div>
+          </div>
+          <div className="text-3xl font-bold text-red-400 mb-1">{metrics.fraud_detected}</div>
+          <p className="text-xs text-red-400/70">High fraud score — rejected</p>
         </div>
 
         <div className="glass-card p-6 animate-fade-in-up delay-300">

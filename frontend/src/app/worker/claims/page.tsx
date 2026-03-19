@@ -1,11 +1,10 @@
 "use client"
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useUserStore } from '@/store'
 import { createClient } from '@/lib/supabase'
 import {
   FileText,
-  Camera,
   MapPin,
   Send,
   AlertCircle,
@@ -19,12 +18,27 @@ import {
   FileWarning,
 } from 'lucide-react'
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+interface ClaimItem {
+  id: string
+  claim_status: string
+  claim_reason: string
+  claim_mode?: string
+  claimed_at: string
+  stated_lat?: number
+  stated_lng?: number
+  trigger_events?: { trigger_code?: string; trigger_family?: string; severity_band?: string }
+  claim_evidence?: { storage_path?: string; evidence_type?: string }[]
+  [key: string]: any
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
 export default function WorkerClaims() {
   const { user, profile } = useUserStore()
   const supabase = createClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const [claims, setClaims] = useState<any[]>([])
+  const [claims, setClaims] = useState<ClaimItem[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Form State
@@ -41,22 +55,20 @@ export default function WorkerClaims() {
   // Drag state
   const [isDragging, setIsDragging] = useState(false)
 
+  const loadClaims = useCallback(async () => {
+    try {
+      const { data } = await supabase
+        .from('manual_claims')
+        .select('*, trigger_events(trigger_code, trigger_family, severity_band), claim_evidence(*)')
+        .eq('worker_profile_id', profile!.id)
+        .order('claimed_at', { ascending: false })
+      setClaims(data || [])
+    } catch (e) { console.error("Could not load claims", e) }
+  }, [supabase, profile])
+
   useEffect(() => {
     if (profile) loadClaims()
-  }, [profile])
-
-  const loadClaims = async () => {
-    try {
-      const { data: session } = await supabase.auth.getSession()
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/claims`, {
-        headers: { 'Authorization': `Bearer ${session.session?.access_token}` }
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setClaims(data.claims)
-      }
-    } catch (e) { console.error("Could not load claims", e) }
-  }
+  }, [profile, loadClaims])
 
   const handleGetLocation = () => {
     setLocating(true)
@@ -80,49 +92,55 @@ export default function WorkerClaims() {
     setSubmitError(null)
 
     try {
-      let evidenceUrl = null;
+      let storagePath: string | null = null
 
       // Handle file upload first if present
       if (file && user) {
         setUploadingFile(true)
         const fileExt = file.name.split('.').pop()
         const fileName = `${user.id}-${Date.now()}.${fileExt}`
-        const filePath = `${fileName}`
 
-        const { error: uploadError } = await supabase.storage.from('claim-evidence').upload(filePath, file)
+        const { error: uploadError, data: uploadData } = await supabase.storage
+          .from('claim-evidence')
+          .upload(fileName, file)
         if (uploadError) {
           throw new Error(`Evidence upload failed: ${uploadError.message}`)
         }
-
-        const { data } = supabase.storage.from('claim-evidence').getPublicUrl(filePath)
-        evidenceUrl = data.publicUrl
+        storagePath = uploadData?.path || fileName
         setUploadingFile(false)
       }
 
-      const { data: session } = await supabase.auth.getSession()
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/claims`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.session?.access_token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
+      const { data: newClaim, error: insertError } = await supabase
+        .from('manual_claims')
+        .insert({
+          worker_profile_id: profile!.id,
+          claim_mode: 'manual',
           claim_reason: reason,
-          stated_lat: lat,
-          stated_lng: lng,
-          evidence_url: evidenceUrl
+          stated_lat: lat || null,
+          stated_lng: lng || null,
+          claim_status: 'submitted',
+          claimed_at: new Date().toISOString(),
         })
-      })
+        .select()
+        .single()
 
-      if (!res.ok) throw new Error("Failed to submit claim")
+      if (insertError) throw new Error(insertError.message || 'Failed to submit claim')
+
+      if (newClaim && storagePath) {
+        await supabase.from('claim_evidence').insert({
+          claim_id: newClaim.id,
+          evidence_type: 'photo',
+          storage_path: storagePath,
+        })
+      }
 
       setReason('')
       setLat(null)
       setLng(null)
       setFile(null)
       await loadClaims()
-    } catch (e: any) {
-      setSubmitError(e.message)
+    } catch (e: unknown) {
+      setSubmitError(e instanceof Error ? e.message : 'Failed to submit claim')
     } finally {
       setIsSubmitting(false)
     }

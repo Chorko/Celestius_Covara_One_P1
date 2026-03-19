@@ -1,73 +1,148 @@
 "use client"
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
+import { useUserStore } from '@/store'
 import { createClient } from '@/lib/supabase'
 import {
-  FileSearch, CheckCircle, XCircle, Clock, AlertTriangle, Shield,
-  ChevronDown, ChevronUp, Eye, Image, Bot, Scale, ShieldAlert,
-  Pause, ArrowUpCircle, IndianRupee, Fingerprint, Brain
+  FileSearch, CheckCircle, XCircle, Shield,
+  ChevronDown, ChevronUp, Eye, Image, Bot, Scale,
+  Pause, ArrowUpCircle, IndianRupee, Fingerprint, Brain, AlertTriangle
 } from 'lucide-react'
 
+interface ClaimRecord {
+  id: string
+  claim_status: string
+  claim_reason: string
+  claim_mode?: string
+  claimed_at: string
+  worker_profiles?: {
+    platform_name?: string
+    city?: string
+    trust_score?: number
+    profiles?: { full_name?: string; email?: string }
+  }
+  trigger_events?: { trigger_family?: string; trigger_code?: string; zone_id?: string }
+  payout_recommendations?: PayoutRecommendation[]
+  claim_evidence?: EvidenceItem[]
+}
+
+interface PayoutRecommendation {
+  recommended_payout?: number
+  expected_payout?: number
+  payout_cap?: number
+  fraud_holdback_fh?: number
+  confidence_score_c?: number
+  covered_weekly_income_b?: number
+  claim_probability_p?: number
+  severity_score_s?: number
+  exposure_score_e?: number
+  outlier_uplift_u?: number
+  gross_premium?: number
+  explanation_json?: { ai_summary?: string }
+}
+
+interface EvidenceItem {
+  storage_path?: string
+  evidence_type?: string
+  exif_lat?: number
+  exif_lng?: number
+  exif_timestamp?: string
+}
+
+interface DetailData {
+  claim: ClaimRecord
+  payout_recommendation: PayoutRecommendation | null
+  evidence: EvidenceItem[]
+}
+
 export default function AdminReviews() {
+  const { user } = useUserStore()
   const supabase = createClient()
-  const [claims, setClaims] = useState<any[]>([])
-  const [selectedClaim, setSelectedClaim] = useState<any | null>(null)
-  const [detailData, setDetailData] = useState<any | null>(null)
+  const [claims, setClaims] = useState<ClaimRecord[]>([])
+  const [selectedClaim, setSelectedClaim] = useState<string | null>(null)
+  const [detailData, setDetailData] = useState<DetailData | null>(null)
   const [loading, setLoading] = useState(false)
   const [pipelineExpanded, setPipelineExpanded] = useState(false)
   const [decisionReason, setDecisionReason] = useState('')
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+
+  const loadClaims = useCallback(async () => {
+    try {
+      const { data } = await supabase
+        .from('manual_claims')
+        .select(`
+          *,
+          worker_profiles(profile_id, platform_name, city, trust_score,
+            profiles(full_name, email)),
+          trigger_events(trigger_family, trigger_code, zone_id),
+          payout_recommendations(*),
+          claim_evidence(*)
+        `)
+        .order('claimed_at', { ascending: false })
+      setClaims(data || [])
+    } catch (e) {
+      console.error('Could not load claims', e)
+    }
+  }, [supabase])
 
   useEffect(() => {
     loadClaims()
-  }, [])
+  }, [loadClaims])
 
-  const loadClaims = async () => {
-    const { data: session } = await supabase.auth.getSession()
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/claims`, {
-      headers: { Authorization: `Bearer ${session.session?.access_token}` },
-    })
-    if (res.ok) {
-      const data = await res.json()
-      setClaims(data.claims)
-    }
-  }
-
-  const loadDetail = async (id: string) => {
+  const loadDetail = async (claimId: string) => {
+    setSelectedClaim(claimId)
     setLoading(true)
-    setDecisionReason('')
-    setPipelineExpanded(false)
-    const { data: session } = await supabase.auth.getSession()
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/claims/${id}`, {
-      headers: { Authorization: `Bearer ${session.session?.access_token}` },
-    })
-    if (res.ok) {
-      setDetailData(await res.json())
-      setSelectedClaim(id)
+    setActionError(null)
+    try {
+      const found = claims.find((c) => c.id === claimId)
+      if (found) {
+        setDetailData({
+          claim: found,
+          payout_recommendation: found.payout_recommendations?.[0] || null,
+          evidence: found.claim_evidence || [],
+        })
+      }
+    } catch (e) {
+      console.error('Could not load claim detail', e)
     }
     setLoading(false)
   }
 
   const handleReviewAction = async (decision: string) => {
-    if (!selectedClaim) return
+    if (!detailData) return
+    const claimId = detailData.claim.id
     setActionLoading(decision)
-    const { data: session } = await supabase.auth.getSession()
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/claims/${selectedClaim}/review`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session.session?.access_token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          decision,
-          decision_reason: decisionReason || `Admin review - ${decision}`,
-        }),
+    setActionError(null)
+    try {
+      const newStatus =
+        decision === 'approve' ? 'approved' :
+        decision === 'reject'  ? 'rejected' : 'held'
+
+      const { error: reviewError } = await supabase.from('claim_reviews').insert({
+        claim_id: claimId,
+        reviewer_profile_id: user?.id,
+        decision,
+        decision_reason: decisionReason || `Admin review — ${decision}`,
+        reviewed_at: new Date().toISOString(),
+      })
+      if (reviewError) {
+        setActionError(reviewError.message || 'Review insert failed')
+        setActionLoading(null)
+        return
       }
-    )
-    if (!res.ok) {
-      console.error('Review action failed:', res.status)
+
+      const { error: updateError } = await supabase
+        .from('manual_claims')
+        .update({ claim_status: newStatus })
+        .eq('id', claimId)
+      if (updateError) {
+        setActionError(updateError.message || 'Status update failed')
+        setActionLoading(null)
+        return
+      }
+    } catch (e: unknown) {
+      setActionError(e instanceof Error ? e.message : 'Review action failed')
       setActionLoading(null)
       return
     }
@@ -96,6 +171,7 @@ export default function AdminReviews() {
   const claim = detailData?.claim
   const evidence = detailData?.evidence || []
   const explJson = pr?.explanation_json
+  const isFraud = (pr?.fraud_holdback_fh ?? 0) > 0.30
 
   return (
     <div className="p-6 h-full flex flex-col md:flex-row gap-6 gradient-mesh-admin min-h-screen animate-fade-in-up">
@@ -117,8 +193,7 @@ export default function AdminReviews() {
             </div>
           ) : (
             claims.map((c) => (
-              <div
-                key={c.id}
+              <div key={c.id}
                 onClick={() => loadDetail(c.id)}
                 className={`p-4 rounded-xl cursor-pointer transition-all ${
                   selectedClaim === c.id
@@ -130,9 +205,17 @@ export default function AdminReviews() {
                   <span className="text-sm font-medium truncate pr-2">
                     {c.worker_profiles?.platform_name || 'Worker'} - {c.worker_profiles?.city || 'Unknown'}
                   </span>
-                  <span className={`badge ${statusBadge(c.claim_status)} shrink-0`}>
-                    {c.claim_status}
-                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {(c.payout_recommendations as PayoutRecommendation[])?.[0]?.fraud_holdback_fh &&
+                     ((c.payout_recommendations as PayoutRecommendation[])?.[0]?.fraud_holdback_fh ?? 0) > 0.30 && (
+                      <span className="badge badge-red text-[10px] flex items-center gap-1">
+                        <AlertTriangle size={10} /> Fraud
+                      </span>
+                    )}
+                    <span className={`badge ${statusBadge(c.claim_status)} shrink-0`}>
+                      {c.claim_status}
+                    </span>
+                  </div>
                 </div>
                 <p className="text-xs text-neutral-500 truncate">{c.claim_reason}</p>
                 <p className="text-[10px] text-neutral-600 mt-2">
@@ -177,22 +260,29 @@ export default function AdminReviews() {
               <div>
                 <h2 className="text-xl font-bold flex items-center gap-2">
                   <Scale size={22} className="text-blue-400" />
-                  Claim {claim.id.split('-')[0]}
+                  Claim {claim?.id?.split('-')[0] ?? '???'}
                 </h2>
                 <p className="text-sm text-neutral-500 mt-1">
                   Submitted{' '}
-                  {new Date(claim.claimed_at).toLocaleString('en-IN', {
+                  {claim?.claimed_at ? new Date(claim.claimed_at).toLocaleString('en-IN', {
                     dateStyle: 'medium',
                     timeStyle: 'short',
-                  })}
-                  {claim.trigger_events?.zone_id && (
+                  }) : 'N/A'}
+                  {claim?.trigger_events?.zone_id && (
                     <span> | Zone: {claim.trigger_events.zone_id.split('-')[0]}</span>
                   )}
                 </p>
               </div>
-              <span className={`badge ${claim.claim_mode === 'auto' ? 'badge-emerald' : 'badge-blue'}`}>
-                {claim.claim_mode === 'auto' ? 'Auto-Triggered' : 'Manual Claim'}
-              </span>
+              <div className="flex items-center gap-2">
+                {isFraud && (
+                  <span className="badge badge-red flex items-center gap-1">
+                    <AlertTriangle size={12} /> Fraud Detected
+                  </span>
+                )}
+                <span className={`badge ${claim?.claim_mode === 'auto' ? 'badge-emerald' : 'badge-blue'}`}>
+                  {claim?.claim_mode === 'auto' ? 'Auto-Triggered' : 'Manual Claim'}
+                </span>
+              </div>
             </div>
 
             {/* Score Cards */}
@@ -216,13 +306,13 @@ export default function AdminReviews() {
 
                 <div
                   className={`glass-card p-5 ${
-                    pr.fraud_holdback_fh > 0.1 ? 'glow-purple' : ''
+                    (pr.fraud_holdback_fh ?? 0) > 0.1 ? 'glow-purple' : ''
                   }`}
                 >
                   <div className="flex items-center gap-2 mb-3">
                     <Fingerprint
                       size={16}
-                      className={pr.fraud_holdback_fh > 0.15 ? 'text-red-400' : 'text-amber-400'}
+                      className={(pr.fraud_holdback_fh ?? 0) > 0.15 ? 'text-red-400' : 'text-amber-400'}
                     />
                     <h3 className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
                       Fraud Holdback
@@ -230,24 +320,24 @@ export default function AdminReviews() {
                   </div>
                   <div
                     className={`text-3xl font-bold mb-1 ${
-                      pr.fraud_holdback_fh > 0.15
+                      (pr.fraud_holdback_fh ?? 0) > 0.15
                         ? 'text-red-400'
-                        : pr.fraud_holdback_fh > 0.05
+                        : (pr.fraud_holdback_fh ?? 0) > 0.05
                         ? 'text-amber-400'
                         : 'text-emerald-400'
                     }`}
                   >
-                    {(pr.fraud_holdback_fh * 100).toFixed(1)}%
+                    {((pr.fraud_holdback_fh ?? 0) * 100).toFixed(1)}%
                   </div>
                   <div className="progress-bar mt-2">
                     <div
                       className="progress-bar-fill"
                       style={{
-                        width: `${Math.min(pr.fraud_holdback_fh * 100 * 2, 100)}%`,
+                        width: `${Math.min((pr.fraud_holdback_fh ?? 0) * 100 * 2, 100)}%`,
                         background:
-                          pr.fraud_holdback_fh > 0.15
+                          (pr.fraud_holdback_fh ?? 0) > 0.15
                             ? '#ef4444'
-                            : pr.fraud_holdback_fh > 0.05
+                            : (pr.fraud_holdback_fh ?? 0) > 0.05
                             ? '#f59e0b'
                             : '#10b981',
                       }}
@@ -263,13 +353,13 @@ export default function AdminReviews() {
                     </h3>
                   </div>
                   <div className="text-3xl font-bold text-blue-400 mb-1">
-                    {(pr.confidence_score_c * 100).toFixed(0)}%
+                    {((pr.confidence_score_c ?? 0) * 100).toFixed(0)}%
                   </div>
                   <div className="progress-bar mt-2">
                     <div
                       className="progress-bar-fill"
                       style={{
-                        width: `${pr.confidence_score_c * 100}%`,
+                        width: `${(pr.confidence_score_c ?? 0) * 100}%`,
                         background: '#3b82f6',
                       }}
                     />
@@ -279,6 +369,7 @@ export default function AdminReviews() {
             )}
 
             {/* Worker Statement */}
+            {claim?.claim_reason && (
             <div className="glass-card p-5">
               <h3 className="text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-3 flex items-center gap-2">
                 <FileSearch size={14} /> Worker&apos;s Statement
@@ -287,6 +378,7 @@ export default function AdminReviews() {
                 {claim.claim_reason}
               </p>
             </div>
+            )}
 
             {/* Evidence Gallery */}
             {evidence.length > 0 && (
@@ -295,12 +387,13 @@ export default function AdminReviews() {
                   <Image size={14} /> Evidence Gallery
                 </h3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {evidence.map((ev: any, idx: number) => (
+                  {evidence.map((ev: EvidenceItem, idx: number) => (
                     <div
                       key={idx}
                       className="aspect-video rounded-xl bg-white/[0.03] border border-white/[0.06] overflow-hidden flex items-center justify-center relative group"
                     >
                       {ev.storage_path ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
                         <img
                           src={ev.storage_path}
                           alt={`Evidence ${idx + 1}`}
@@ -312,7 +405,7 @@ export default function AdminReviews() {
                         />
                       ) : null}
                       <div className={`flex flex-col items-center text-neutral-600 ${ev.storage_path ? 'hidden' : ''}`}>
-                        <Image size={24} />
+                        <Image size={24} aria-label="Evidence placeholder" />
                         <span className="text-xs mt-1">{ev.evidence_type || 'photo'}</span>
                       </div>
                       {ev.exif_lat && (
@@ -433,8 +526,13 @@ export default function AdminReviews() {
             )}
 
             {/* Actions */}
-            {(claim.claim_status === 'held' || claim.claim_status === 'submitted') ? (
+            {(claim?.claim_status === 'held' || claim?.claim_status === 'submitted') ? (
               <div className="border-t border-white/[0.06] pt-6 space-y-4">
+                {actionError && (
+                  <div className="p-3 rounded-xl text-sm" style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', color: '#fca5a5' }}>
+                    {actionError}
+                  </div>
+                )}
                 <div>
                   <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider block mb-2">
                     Decision Reason (Optional)
@@ -501,7 +599,7 @@ export default function AdminReviews() {
               <div className="border-t border-white/[0.06] pt-6 text-center">
                 <p className="text-neutral-500 text-sm">
                   This claim has already been{' '}
-                  <span className="font-semibold text-neutral-400">{claim.claim_status}</span>.
+                  <span className="font-semibold text-neutral-400">{claim?.claim_status}</span>.
                 </p>
               </div>
             )}

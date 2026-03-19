@@ -47,7 +47,8 @@ Five architecture views are defined for this project (per expert-session require
 | 2 | Gig Worker Journey | [Root README](../README.md) | Mermaid (inline) |
 | 3 | Insurance Company Operations | Below (this file) | Mermaid (inline) |
 | 4 | Trigger → Claim → Approval Flow | [claim-engine/README.md](../claim-engine/README.md) | Mermaid (inline) |
-| 5 | Fraud Detection Pipeline | [fraud/README.md](../fraud/README.md) | Mermaid (inline) |
+| 5 | Fraud Detection Pipeline (5-Layer) | [fraud/README.md](../fraud/README.md) | Mermaid (inline) |
+| 6 | Adversarial Defense & Anti-Spoofing | [Root README](../README.md#adversarial-defense--anti-spoofing-strategy) | Tables + narrative |
 
 #### View 3 — Insurer Operations
 
@@ -78,7 +79,10 @@ flowchart LR
 
 | Document | Content | Where referenced |
 |----------|---------|-----------------| 
-| Premium formula book | Covered income (B), severity (S), exposure (E), confidence (C), expected payout, gross premium, payout cap | [Root README](../README.md), [ml/README.md](../ml/README.md) |
+| Premium formula book | Internal calibration: B, S, E, C, expected payout, gross premium | [Root README](../README.md), [ml/README.md](../ml/README.md) |
+| Parametric payout ladder | Public-facing: Essential/Plus plans, Band 1/2/3 payouts | [Root README](../README.md#parametric-product-weekly-benefit-plans) |
+| Adversarial defense & anti-spoofing | Multi-signal verification, decision matrix, circuit-breakers, fraud-ring scenario | [Root README](../README.md#adversarial-defense--anti-spoofing-strategy), [fraud/README.md](../fraud/README.md) |
+| What ML Does vs Does Not Do | ML role boundaries, correct architecture split | [Root README](../README.md#what-ml-does-vs-what-ml-does-not-do), [ml/README.md](../ml/README.md) |
 | Trigger threshold reference | IMD rain bands, CPCB AQI categories, IMD/NDMA heat-wave guidance, operational thresholds | [Root README](../README.md), [claim-engine/README.md](../claim-engine/README.md) |
 | Derivation example | Worked scenario: ₹84/hr worker, 72mm rain, AQI 240 → premium and payout outputs | [Root README](../README.md) |
 | Seed dataset | 8-row manually created base dataset | [data/README.md](../data/README.md) |
@@ -163,6 +167,17 @@ Environmental trigger thresholds and premium/payout formulation are grounded in 
 | 8 | *Loss Data Analytics*, Ch. 7: Premium Foundations | Expected-loss premium principle | Provides the actuarial grounding for the expected-value premium formula used in our gross premium calculation. | [openacttexts.github.io](https://openacttexts.github.io/Loss-Data-Analytics/ChapPremiumFoundations.html) |
 | 9 | Mikosch, *Non-Life Insurance Mathematics* | Premium loading and risk margin methodology | Supports the expense-loading (α) and risk-margin (β) assumptions in the gross premium formula. | [Springer PDF](https://unina2.on-line.it/sebina/repository/catalogazione/documenti/Mikosch%20-%20Non-life%20insurance%20mathematics.pdf) |
 
+### Insurance-Side Trend Sources
+
+| # | Source | What it supports | Why it is relevant | Link |
+|---|--------|------------------|--------------------|------|
+| 10 | IRDAI Annual Reports & Handbook | Claim trends, market structure, complaint/settlement statistics | Grounds pricing and claims reasoning in actual Indian insurance market data rather than pure synthetic logic | [irdai.gov.in](https://www.irdai.gov.in/annual-reports) |
+| 11 | IIB (Insurance Information Bureau) | Analytics-oriented insurance datasets, general-insurance patterns | Provides fraud/risk-analytics orientation and claims/operational trend benchmarking | [iib.gov.in](https://iib.gov.in/) |
+| 12 | Swiss Re Parametric Insurance Guide | Parametric insurance product framing | Provides the conceptual framework for trigger-band-based payouts and basis-risk acknowledgment | [swissre.com](https://www.swissre.com/) |
+| 13 | Financial Protection Forum | Disaster-response parametric insurance | Supports the parametric trigger architecture for weather-linked income protection | [financialprotectionforum.org](https://www.financialprotectionforum.org/) |
+
+> These insurance-side sources do not magically produce gig-delivery product data, but they make the pricing, claims reasoning, and product framing more defensible than pure synthetic logic alone.
+
 ### Threshold Inference Notes
 
 | Trigger family | Official / source threshold | Product threshold used | Why we inferred it this way | Anchoring |
@@ -185,14 +200,15 @@ Environmental trigger thresholds and premium/payout formulation are grounded in 
 | p | Claim probability | Random Forest model output on the joined worker-trigger row |
 | FH | Fraud holdback | `clip(0.15 + 0.25×fraud_penalty, 0.15, 0.30)` |
 | U | Outlier uplift | `min(1.35, gross_premium / median_premium)` if outlier; else `1.00` |
-| Cap | Payout cap | `0.75 × B × U` |
 
-**Key formulas:**
+> [!IMPORTANT]
+> These formulas are the **internal calibration engine**. The **public-facing product** uses a parametric payout ladder: Band 1 = 0.25 × W, Band 2 = 0.50 × W, Band 3 = 1.00 × W, where W is the selected plan's weekly benefit (Essential = ₹3,000, Plus = ₹4,500). See [Parametric Product](../README.md#parametric-product-weekly-benefit-plans) in the root README.
+
+**Key internal formulas:**
 - **Expected Payout** = `p × B × S × E × C × (1 − FH)`
 - **Gross Premium** = `[Expected Payout / (1 − α − β)] × U` where α = 0.12 (expense load), β = 0.10 (risk margin)
-- **Payout** = `min(Cap, B × S × E × C × (1 − FH))`
 
-Public thresholds anchor hazard normalization (the S component). Worker-specific variables drive exposure (E) and confidence (C). ML is used as an explainable baseline for claim probability (p), not as a hidden actuarial black-box — feature importance is transparent and the model's role is narrow and auditable.
+Public thresholds anchor hazard normalization (the S component). Worker-specific variables drive exposure (E) and confidence (C). ML is used as an explainable baseline for claim probability (p), not as a hidden actuarial black-box — feature importance is transparent and the model's role is narrow and auditable. ML supports classification, anomaly ranking, and review routing, but does not independently authorize payout.
 
 ---
 

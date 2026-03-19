@@ -1,15 +1,34 @@
 "use client"
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import {
   Activity, PlayCircle, AlertTriangle, Zap, Radio,
   MapPin, Clock, Globe, Cpu
 } from 'lucide-react'
 
+interface TriggerEvent {
+  id: string
+  city: string
+  zone_id?: string
+  trigger_family: string
+  trigger_code: string
+  observed_value: number
+  severity_band: string
+  source_type?: string
+  started_at: string
+  ended_at?: string
+  official_threshold_label?: string
+  product_threshold_value?: number
+  zones?: { zone_name?: string }
+}
+
 export default function AdminTriggers() {
   const supabase = createClient()
-  const [triggers, setTriggers] = useState<any[]>([])
+  const [triggers, setTriggers] = useState<TriggerEvent[]>([])
+  const [historyTriggers, setHistoryTriggers] = useState<TriggerEvent[]>([])
+  const [showHistory, setShowHistory] = useState(true)
+  const [simResult, setSimResult] = useState<{ ok: boolean; msg: string } | null>(null)
 
   // Simulator State
   const [isSimulating, setIsSimulating] = useState(false)
@@ -22,39 +41,64 @@ export default function AdminTriggers() {
     severity_band: 'escalation',
   })
 
+  const loadTriggers = useCallback(async () => {
+    try {
+      const { data } = await supabase
+        .from('trigger_events')
+        .select('*, zones(zone_name)')
+        .is('ended_at', null)
+        .order('started_at', { ascending: false })
+      setTriggers(data || [])
+      // Auto-set the first zone ID for simulator if available
+      if (data && data.length > 0) {
+        setSimForm((s) => s.zone_id ? s : { ...s, zone_id: data[0].zone_id || '' })
+      }
+    } catch (e) {
+      console.error('Could not load triggers', e)
+    }
+  }, [supabase])
+
+  const loadHistoryTriggers = useCallback(async () => {
+    try {
+      const { data } = await supabase
+        .from('trigger_events')
+        .select('*, zones(zone_name)')
+        .not('ended_at', 'is', null)
+        .order('started_at', { ascending: false })
+        .limit(20)
+      setHistoryTriggers(data || [])
+    } catch (e) {
+      console.error('Could not load history triggers', e)
+    }
+  }, [supabase])
+
   useEffect(() => {
     loadTriggers()
-  }, [])
-
-  const loadTriggers = async () => {
-    const { data: session } = await supabase.auth.getSession()
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/triggers/live`, {
-      headers: { Authorization: `Bearer ${session.session?.access_token}` },
-    })
-    if (res.ok) {
-      const data = await res.json()
-      setTriggers(data.active_triggers || [])
-      // Auto-set the first zone ID for simulator if available
-      if (data.active_triggers && data.active_triggers.length > 0 && !simForm.zone_id) {
-        setSimForm((s) => ({ ...s, zone_id: data.active_triggers[0].zone_id }))
-      }
-    }
-  }
+    loadHistoryTriggers()
+  }, [loadTriggers, loadHistoryTriggers])
 
   const handleSimulate = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSimulating(true)
-    const { data: session } = await supabase.auth.getSession()
-
-    await fetch(`${process.env.NEXT_PUBLIC_API_URL}/triggers/simulate`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${session.session?.access_token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(simForm),
-    })
-
+    setSimResult(null)
+    try {
+      const { error } = await supabase.from('trigger_events').insert({
+        city: simForm.city,
+        zone_id: simForm.zone_id || null,
+        trigger_family: simForm.trigger_family,
+        trigger_code: simForm.trigger_code,
+        observed_value: Number(simForm.observed_value),
+        severity_band: simForm.severity_band,
+        source_type: 'mock',
+        started_at: new Date().toISOString(),
+      })
+      setSimResult(error
+        ? { ok: false, msg: error.message || 'Inject failed' }
+        : { ok: true, msg: 'Trigger injected successfully.' }
+      )
+    } catch (e: unknown) {
+      setSimResult({ ok: false, msg: e instanceof Error ? e.message : 'Inject failed' })
+    }
     setIsSimulating(false)
     await loadTriggers()
   }
@@ -234,19 +278,41 @@ export default function AdminTriggers() {
                 </>
               )}
             </button>
+
+            {simResult && (
+              <div className="p-3 rounded-xl text-sm mt-1" style={simResult.ok
+                ? { background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.2)', color: '#6ee7b7' }
+                : { background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', color: '#fca5a5' }
+              }>
+                {simResult.msg}
+              </div>
+            )}
           </form>
         </section>
 
         {/* Live Feed */}
         <section className="lg:col-span-2 animate-fade-in-up delay-200">
-          <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center justify-between mb-5">
             <h2 className="text-lg font-semibold flex items-center gap-2">
               <Activity size={20} className="text-emerald-400" /> Live Evaluator Feed
             </h2>
-            <span className="badge badge-emerald">
-              <Radio size={10} className="animate-pulse-glow" />
-              {triggers.length} active
-            </span>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowHistory(!showHistory)}
+                className={`text-xs px-3 py-1.5 rounded-lg transition-all font-medium ${
+                  showHistory
+                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                    : 'bg-white/[0.03] text-neutral-500 border border-white/[0.06] hover:text-neutral-300'
+                }`}
+              >
+                <Clock size={10} className="inline mr-1" />
+                {showHistory ? 'Hide History' : 'Show History'}
+              </button>
+              <span className="badge badge-emerald">
+                <Radio size={10} className="animate-pulse-glow" />
+                {triggers.length} active
+              </span>
+            </div>
           </div>
 
           <div className="space-y-3">
@@ -334,6 +400,85 @@ export default function AdminTriggers() {
               ))
             )}
           </div>
+
+          {/* Historical Triggers */}
+          {showHistory && historyTriggers.length > 0 && (
+            <div className="mt-6">
+              <h3 className="text-sm font-semibold text-neutral-400 mb-3 flex items-center gap-2">
+                <Clock size={14} />
+                Recent History — {historyTriggers.length} ended events
+              </h3>
+              <div className="space-y-3">
+                {historyTriggers.map((t) => (
+                  <div
+                    key={t.id}
+                    className="glass-card p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 opacity-75"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-2 flex-wrap">
+                        <span className={`badge ${severityBadge(t.severity_band)}`}>
+                          {severityIcon(t.severity_band)}
+                          {t.severity_band}
+                        </span>
+                        <span className="text-sm font-semibold text-white">
+                          {t.trigger_code.replaceAll('_', ' ')}
+                        </span>
+                        {t.source_type && (
+                          <span
+                            className={`badge ${
+                              t.source_type === 'public_source'
+                                ? 'badge-emerald'
+                                : 'badge-purple'
+                            }`}
+                          >
+                            {t.source_type === 'public_source' ? (
+                              <Globe size={10} />
+                            ) : (
+                              <Cpu size={10} />
+                            )}
+                            {t.source_type === 'public_source'
+                              ? 'Public Source'
+                              : 'Internal'}
+                          </span>
+                        )}
+                        <span className="badge" style={{ background: 'rgba(107,114,128,0.15)', border: '1px solid rgba(107,114,128,0.25)', color: '#9ca3af' }}>
+                          Ended
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-4 text-xs text-neutral-500 flex-wrap">
+                        <span className="flex items-center gap-1">
+                          <MapPin size={12} />
+                          {t.city}
+                          {t.zones?.zone_name && ` / ${t.zones.zone_name}`}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <AlertTriangle size={12} />
+                          {t.official_threshold_label || `Threshold: ${t.product_threshold_value}`}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-4 text-[10px] text-neutral-600 mt-2 flex-wrap">
+                        <span className="flex items-center gap-1">
+                          <Clock size={10} />
+                          Start: {new Date(t.started_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}
+                        </span>
+                        {t.ended_at && (
+                          <span>
+                            End: {new Date(t.ended_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="text-2xl font-bold text-white">{t.observed_value}</div>
+                      <div className="text-xs text-neutral-500">
+                        {familyUnit(t.trigger_family)}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
       </div>
     </div>

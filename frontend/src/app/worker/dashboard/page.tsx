@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useUserStore } from '@/store'
 import { createClient } from '@/lib/supabase'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
@@ -20,42 +20,65 @@ import {
 } from 'lucide-react'
 
 export default function WorkerDashboard() {
-  const { user, profile } = useUserStore()
+  const { profile } = useUserStore()
   const supabase = createClient()
 
+  /* eslint-disable @typescript-eslint/no-explicit-any */
   const [workerDetails, setWorkerDetails] = useState<any>(null)
   const [stats, setStats] = useState<any[]>([])
   const [activeTriggers, setActiveTriggers] = useState<any[]>([])
   const [policyQuote, setPolicyQuote] = useState<any>(null)
+  /* eslint-enable @typescript-eslint/no-explicit-any */
   const [activating, setActivating] = useState(false)
   const [activationMsg, setActivationMsg] = useState<string | null>(null)
+  const [dashboardError, setDashboardError] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (!profile) return
-    loadDashboardData()
-  }, [profile])
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const loadDashboardData = useCallback(async () => {
+    const controller = new AbortController()
+    const tid = setTimeout(() => controller.abort(), 10000)
 
-  const loadDashboardData = async () => {
-    // Fetch Worker specifics
-    const { data: wData } = await supabase
-      .from('worker_profiles')
-      .select('*, zones(zone_name)')
-      .eq('profile_id', profile.id)
-      .single()
-    setWorkerDetails(wData)
-
-    // Fetch Daily Stats (synthetic history via backend API)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let wData: any = null
     try {
-      const { data: session } = await supabase.auth.getSession()
-      const token = session.session?.access_token
+      const { data, error: wError } = await supabase
+        .from('worker_profiles')
+        .select('*, zones(zone_name)')
+        .eq('profile_id', profile!.id)
+        .abortSignal(controller.signal)
+        .single()
 
-      const statsRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/workers/me/stats`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
-      if (statsRes.ok) {
-        const statsData = await statsRes.json()
-        setStats(statsData.stats || [])
+      clearTimeout(tid)
+
+      if (wError) {
+        if (wError.code === 'PGRST205' || wError.message?.toLowerCase().includes('schema')) {
+          setDashboardError('Database not set up — run SQL migration files 01–07 in the Supabase SQL Editor, then try again.')
+        } else {
+          setDashboardError(wError.message)
+        }
+        return
       }
+      wData = data
+      setWorkerDetails(wData)
+    } catch (e: unknown) {
+      clearTimeout(tid)
+      if (controller.signal.aborted || (e instanceof Error && e.name === 'AbortError')) {
+        setDashboardError('Cannot reach Supabase — request timed out. Check your network or try refreshing.')
+      } else {
+        setDashboardError(e instanceof Error ? e.message : 'Failed to load dashboard')
+      }
+      return
+    }
+
+    // Fetch Daily Stats directly from Supabase
+    try {
+      const { data: statsData } = await supabase
+        .from('platform_worker_daily_stats')
+        .select('stat_date, gross_earnings_inr, completed_orders, gps_consistency_score')
+        .eq('worker_profile_id', wData.profile_id)
+        .order('stat_date', { ascending: true })
+        .limit(14)
+      setStats(statsData || [])
     } catch(e) { console.error("Could not fetch dashboard stats", e) }
 
     // Fetch live triggers using our backend route pattern if we want, or supabase direct for prep
@@ -70,19 +93,54 @@ export default function WorkerDashboard() {
        setActiveTriggers(tData || [])
     }
 
-    // Call backend API for quote
+    // Compute policy quote inline from worker profile
+    // Use actual weekly gross from daily stats if available, else fallback
     try {
-      const { data: session } = await supabase.auth.getSession()
-      const token = session.session?.access_token
+      // Try observed weekly gross from the last 7 active days of stats
+      let observed_weekly_gross: number | null = null
+      try {
+        const { data: recentStats } = await supabase
+          .from('platform_worker_daily_stats')
+          .select('gross_earnings_inr')
+          .eq('worker_profile_id', wData.profile_id)
+          .order('stat_date', { ascending: false })
+          .limit(7)
+        if (recentStats && recentStats.length >= 3) {
+          const totalGross = recentStats.reduce((s, r) => s + (r.gross_earnings_inr || 0), 0)
+          // Normalize to 6-day week if we have fewer days
+          observed_weekly_gross = Math.round((totalGross / recentStats.length) * 6)
+        }
+      } catch { /* fallback below */ }
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/policies/quote`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+      // Fallback: hourly × 8hrs × 6 days
+      const fallback_weekly_gross = Math.round((wData.avg_hourly_income_inr || 0) * 8 * 6)
+      const weekly_gross = observed_weekly_gross ?? fallback_weekly_gross
+
+      // Covered weekly income = 70% of observed/estimated weekly gross
+      const B = Math.round(weekly_gross * 0.70)
+      // Payout cap = 75% of covered weekly income
+      const raw_cap = Math.round(B * 0.75)
+      // Sanity guard: cap at ₹10,000 for demo/synthetic flows
+      const payout_cap = Math.min(raw_cap, 10000)
+
+      const cityFactor: Record<string, number> = { Mumbai: 1.3, Delhi: 1.2, Bangalore: 1.25 }
+      const C = cityFactor[wData.city] ?? 1.0
+      const E = wData.trust_score ?? 0.8
+      setPolicyQuote({
+        weekly_premium_inr: Math.round(B * 0.035 * E * C),
+        max_payout_cap_inr: payout_cap,
+        observed_weekly_gross: weekly_gross,
+        B,
+        E: Math.round(E * 100) / 100,
+        C,
       })
-      if (res.ok) {
-        setPolicyQuote(await res.json())
-      }
-    } catch(e) { console.error("Could not fetch policy quote", e) }
-  }
+    } catch(e) { console.error("Could not compute policy quote", e) }
+  }, [supabase, profile])
+
+  useEffect(() => {
+    if (!profile) return
+    loadDashboardData()
+  }, [profile, loadDashboardData])
 
   const activatePolicy = async () => {
     setActivating(true)
@@ -102,10 +160,24 @@ export default function WorkerDashboard() {
   /* ---- Derived stats ---- */
   const totalEarnings = stats.reduce((sum, s) => sum + (s.gross_earnings_inr || 0), 0)
   const avgDailyOrders = stats.length
-    ? Math.round(stats.reduce((sum, s) => sum + (s.orders_completed || 0), 0) / stats.length)
+    ? Math.round(stats.reduce((sum, s) => sum + (s.completed_orders || 0), 0) / stats.length)
     : 0
+  const avgGpsScore = stats.length
+    ? Math.round(stats.reduce((sum, s) => sum + (s.gps_consistency_score || 0), 0) / stats.length * 100)
+    : '--'
 
   if (!workerDetails) {
+    if (dashboardError) {
+      return (
+        <div className="min-h-screen gradient-mesh flex items-center justify-center p-4">
+          <div className="glass-card p-8 max-w-md w-full text-center space-y-4">
+            <AlertTriangle size={32} className="text-amber-400 mx-auto" />
+            <p className="text-white font-semibold">Dashboard unavailable</p>
+            <p className="text-neutral-400 text-sm leading-relaxed">{dashboardError}</p>
+          </div>
+        </div>
+      )
+    }
     return (
       <div className="min-h-screen gradient-mesh flex items-center justify-center">
         <div className="glass-card p-8 flex items-center gap-3">
@@ -126,7 +198,7 @@ export default function WorkerDashboard() {
             {/* Welcome text */}
             <div>
               <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">
-                Welcome back, <span className="text-emerald-400">{profile.full_name}</span>
+                Welcome back, <span className="text-emerald-400">{profile?.full_name}</span>
               </h1>
               <p className="text-neutral-400 text-sm">
                 Here is your performance snapshot and coverage status.
@@ -168,7 +240,7 @@ export default function WorkerDashboard() {
             },
             {
               icon: <Navigation2 size={22} className="text-purple-400" />,
-              value: workerDetails.gps_score ?? '--',
+              value: avgGpsScore,
               label: 'GPS Score',
               delay: 'delay-300',
             },

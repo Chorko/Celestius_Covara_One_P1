@@ -8,14 +8,17 @@
 
 | Component | Status |
 |-----------|--------|
-| Integration inventory | 📝 Documented |
-| Real-vs-mock classification | 📝 Documented |
-| Mock strategy documentation | 📝 Documented |
-| Weather API connector | 📋 Planned |
-| AQI API connector | 📋 Planned |
-| Traffic data connector | 📋 Planned |
+| Integration inventory | ✅ Documented |
+| Real-vs-mock classification | ✅ Documented |
+| Mock strategy documentation | ✅ Documented |
+| OpenWeather API integration | ✅ Designed (API key available) |
+| TomTom API integration | ✅ Designed (API key available) |
+| NewsAPI integration | ✅ Designed (API key available) |
+| API-to-Defense mapping | ✅ Documented |
+| Weather API connector (IMD/OGD) | 📋 Planned |
+| AQI API connector (CPCB/OGD) | 📋 Planned |
 | Payment sandbox | 📋 Planned |
-| Gemini API integration | 📋 Planned |
+| Gemini API integration | ✅ Implemented |
 
 ---
 
@@ -32,7 +35,11 @@
 | 7 | **Zone Closure Feed** | Civic | Municipal / police notices | Mock | No real-time API; simulate closure flags |
 | 8 | **Payment Gateway** | Payout | UPI / payment sandbox | Mock | Actual payment integration not required for hackathon demo |
 | 9 | **Bank Verification** | Identity | Banking API | Mock | Simulate bank account verification status |
-| 10 | **Gemini AI** | Risk scoring | Google Gemini API | Real (API key) | AI-assisted risk assessment and analysis |
+| 10 | **Gemini AI** | Risk scoring | Google Gemini API | Real (API key) | AI-assisted risk assessment and claim narrative generation |
+| 11 | **OpenWeather API** | Weather / Trigger | OpenWeather | Real (API key) | Weather severity feed, rain risk, temperature / heat signals for trigger validation |
+| 12 | **TomTom APIs** | Traffic / Anti-Spoofing | TomTom | Real (API key) | Traffic Flow, Incidents, Geofencing, Routing, Snap-to-Roads, Reverse Geocoding for disruption verification and anti-spoofing |
+| 13 | **NewsAPI** | Civic / Context | NewsAPI | Real (API key) | Strike, protest, closure context; narrative intelligence for dashboards; NOT a primary claims source |
+| 14 | **Guidewire Cloud APIs** | Insurer Workflow | Guidewire | Future integration | Organizational reference for policy, claims, billing, and party domain mapping |
 
 ---
 
@@ -116,9 +123,76 @@ Platform-specific APIs (delivery order volume, outage heartbeats, GPS traces) ar
 - **Consumer:** Fraud engine (Layer 4), payout service
 
 ### Gemini AI (Real — API Key)
-- **Purpose:** AI-assisted risk analysis and scenario evaluation
+- **Purpose:** AI-assisted risk analysis, claim narrative generation, and review queue explanation
 - **Integration:** Google Gemini API with key rotation
-- **Consumer:** Risk scoring service, scenario simulator
+- **Consumer:** Claim pipeline (Gemini narrative stage), insurer review queue
+
+### OpenWeather API (Real — API Key)
+- **Purpose:** Weather severity feed for trigger validation
+- **Data:** Current and forecast weather conditions, rain intensity, temperature, heat signals
+- **Used for:**
+  - Trigger validation: rain risk (T1–T3), heat signals (T7–T9)
+  - Event truth verification (Layer 1 of fraud pipeline)
+  - Near-real-time disruption monitoring
+- **Consumer:** Trigger engine, fraud engine (event truth layer)
+
+### TomTom APIs (Real — API Key)
+- **Purpose:** Traffic disruption verification and anti-spoofing location validation
+- **APIs used:**
+  - **Traffic API / Traffic Flow API** — traffic delay percentage for T12 trigger
+  - **Traffic Incidents API** — disruption event detection
+  - **Geofencing API** — zone boundary validation for anti-spoofing
+  - **Routing API** — route plausibility checks
+  - **Snap-to-Roads API** — verify GPS coordinates map to real roads (anti-spoofing)
+  - **Reverse Geocoding API** — location verification
+  - **Matrix Routing / Waypoint Optimization** — route stress analysis where helpful
+- **Used for:**
+  - Disruption verification (traffic collapse, route inaccessibility)
+  - Zone match confidence
+  - Route accessibility scoring
+  - **Anti-spoofing logic** — confirming claimed location is on a real delivery route
+  - Geofence-based evidence checks
+- **Consumer:** Trigger engine, fraud engine (anti-spoofing layer), exposure matching
+
+### NewsAPI (Real — API Key)
+- **Purpose:** Civic disruption context and narrative enrichment
+- **Data:** News articles about strikes, protests, closures, civic disruptions
+- **Used for:**
+  - Contextual disruption narrative in the admin dashboard
+  - Trend enrichment for closure/strike triggers (T10, T11)
+  - **NOT** a primary claims truth source — context only
+- **Consumer:** Admin dashboard, trigger context enrichment
+
+> [!WARNING]
+> News data should support context and trend dashboards, but should **never** be the sole trigger truth source. All claims are validated against structured trigger data, not news headlines.
+
+### Guidewire Cloud APIs (Future — Organizational Reference)
+- **Purpose:** Future insurer workflow integration
+- **Conceptual mapping:**
+  - Policy / quote / renewal → `backend/app/routers/policies.py`
+  - Claims / FNOL / review → `backend/app/routers/claims.py`
+  - Billing / payout / payment → `backend/app/routers/payouts.py` (planned)
+  - Customer / party / identity → `backend/app/routers/workers.py`
+  - Document / evidence → evidence service
+  - Analytics / event / integration → `backend/app/routers/analytics.py`
+- **Note:** Used only as organizational / future integration guidance, not as proof that DEVTrails is currently running on Guidewire
+
+---
+
+## API-to-Defense Mapping
+
+How each API contributes to the platform's defense layers:
+
+| API | Primary role | Anti-spoofing role | Dashboard role |
+|---|---|---|---|
+| **OpenWeather** | Hazard trigger validation (rain, heat) | Event truth verification — was the disruption real? | Weather severity feed display |
+| **TomTom Traffic / Incidents** | Traffic disruption trigger (T12) | Mobility plausibility — was traffic actually disrupted? | Traffic status in zone view |
+| **TomTom Snap-to-Roads** | — | Route plausibility — was the worker on a real road? | — |
+| **TomTom Geofencing** | Zone boundary definition | Geofence match — was the device inside the operating zone? | Zone boundary visualization |
+| **TomTom Routing** | Route accessibility scoring | — | Route stress display |
+| **NewsAPI** | Civic disruption context (T10, T11) | Contextual corroboration for closure/strike claims | News feed in admin dashboard |
+| **Gemini AI** | Claim narrative generation | — | AI explanation in review queue |
+| **Guidewire** | Future insurer workflow integration | — | — |
 
 ---
 
@@ -143,4 +217,4 @@ Platform-specific APIs (delivery order volume, outage heartbeats, GPS traces) ar
 
 ## Why This Folder Matters
 
-Judges need to know **exactly** what data is real and what is simulated. A transparent mock strategy with documented assumptions is more credible than hiding behind vague "API integration" claims. This folder proves we know the difference and designed the system to work with either real or mock data sources.
+Judges need to know **exactly** what data is real and what is simulated. A transparent mock strategy with documented assumptions is more credible than hiding behind vague "API integration" claims. This folder proves we know the difference and designed the system to work with either real or mock data sources. Every API is mapped to its specific role in trigger validation, anti-spoofing defense, and dashboard context.
