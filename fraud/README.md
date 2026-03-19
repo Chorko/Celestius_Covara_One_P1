@@ -85,7 +85,7 @@ flowchart TD
     style REJECT fill:#e74c3c,color:#fff
 ```
 
-![Fraud Detection Pipeline](../docs/assets/architecture/fraud_detection_pipeline.png)
+
 
 ---
 

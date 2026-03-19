@@ -79,7 +79,7 @@ flowchart TD
     style X fill:#e74c3c,color:#fff
 ```
 
-![Trigger to Claim to Approval](../docs/assets/architecture/trigger_claim_approval_flow.png)
+
 
 ---
 

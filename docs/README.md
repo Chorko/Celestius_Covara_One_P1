@@ -73,7 +73,7 @@ flowchart LR
 
 > **📋 Status:** This diagram represents the **target architecture** for insurer-side operations.
 
-![Insurance Company Operations](../docs/assets/architecture/insurance_company_operations.png)
+
 
 ### Formula & Data-Science Documentation
 
@@ -122,7 +122,7 @@ When visual assets are added to the repository, use these locations:
 
 | Asset type | Destination | Actual files present |
 |-----------|-------------|---------------------|
-| Architecture diagrams (PNG/SVG) | `docs/assets/architecture/` | `unified_system_architecture.png`, `gig_worker_journey.png`, `insurance_company_operations.png`, `trigger_claim_approval_flow.png`, `fraud_detection_pipeline.png` |
+| Architecture diagrams | Inline in READMEs | Mermaid code blocks (GitHub-renderable) — AI-generated PNGs removed |
 | Insurance/formula charts | `docs/assets/insurance/` | `feature_importance.png`, `premium_payout_boxplot.png` |
 | Mermaid source files | `docs/diagrams/` | `overall-system-architecture.mmd`, `worker-journey.mmd`, `insurer-operations.mmd`, `trigger-to-claim-flow.mmd`, `fraud-detection-pipeline.mmd` |
 | Pitch deck | `docs/` | *(not yet added)* |

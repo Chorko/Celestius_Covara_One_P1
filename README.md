@@ -184,7 +184,7 @@ graph TB
 
 > **📋 Status:** This diagram represents the **target architecture**. The repository currently contains the documentation and specification layer; module implementations are planned.
 
-![Unified System Architecture](docs/assets/architecture/unified_system_architecture.png)
+
 
 ---
 
@@ -211,7 +211,7 @@ flowchart LR
     style H fill:#4a9eff,color:#fff
 ```
 
-![Gig Worker Journey](docs/assets/architecture/gig_worker_journey.png)
+
 
 ---
 
