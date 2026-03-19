@@ -22,7 +22,10 @@
 | Fraud scoring engine | ✅ Implemented |
 | Manual claim verifier | ✅ Implemented |
 | Gemini AI claim narrative | ✅ Implemented |
-| EXIF evidence extraction | ✅ Implemented |
+| EXIF evidence extraction (forensic) | ✅ Implemented |
+| Anti-spoofing verification (Layer 3) | ✅ Implemented |
+| Image forensics & AI detection | ✅ Implemented |
+| Region controls & behavioral identity | ✅ Implemented |
 | Supabase SQL schema (14 tables) | ✅ Implemented |
 | Row-Level Security policies | ✅ Implemented |
 | CLI seed system | ✅ Implemented |
@@ -154,12 +157,15 @@ flowchart TD
 
 | Module | File | Responsibility |
 |--------|------|---------------|
-| **Claim Pipeline** | `claim_pipeline.py` | 8-stage orchestration: validation → severity → pricing → fraud → payout → decision |
+| **Claim Pipeline** | `claim_pipeline.py` | 8-stage orchestration: validation → severity → parametric band → anti-spoofing + fraud → decision |
 | **Severity Scoring** | `severity.py` | Compute severity score S from trigger data |
 | **Pricing Engine** | `pricing.py` | Compute B (covered income), E (exposure), C (confidence), premiums and payouts |
-| **Fraud Engine** | `fraud_engine.py` | 4-layer Ghost Shift Detector with fraud bands and holdback |
+| **Fraud Engine** | `fraud_engine.py` | 5-layer Ghost Shift Detector with signal confidence hierarchy, 5-band decisions (`auto_approve`, `needs_review`, `hold_for_fraud`, `batch_hold`, `reject_spoof_risk`), and ML feature vector output |
+| **Anti-Spoofing** | `anti_spoofing.py` | Layer 3: EXIF vs GPS cross-check, timestamp freshness, VPN/datacenter IP detection, device continuity, impossible travel velocity, emulator/root detection |
+| **Image Forensics** | `image_forensics.py` | Evidence integrity: EXIF completeness, software/editor detection, timestamp chain-of-custody, GPS precision, camera-device consistency, AI detection stub (Gemini SynthID) |
+| **Region Controls** | `region_controls.py` | Behavioral identity: zone affinity, pre-trigger presence, dynamic trust penalties, zone volume monitoring, mass-claim throttling |
 | **Manual Verifier** | `manual_claim_verifier.py` | Evidence completeness and geo confidence for manual claims |
-| **Evidence Processing** | `evidence.py` | EXIF metadata extraction from uploaded photos |
+| **Evidence Processing** | `evidence.py` | EXIF metadata extraction (forensic-grade: 10+ fields including Software, DateTimeDigitized, ModifyDate, Make, GPS precision) |
 | **Gemini Analysis** | `gemini_analysis.py` | AI-generated claim narrative for admin review |
 
 ---
