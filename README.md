@@ -1,5 +1,7 @@
 # DEVTrails 2026 — AI-Powered Parametric Income Protection for Gig Workers
 
+**Team Celestius** — Bhrahmesh A · Chorko C · T Dharshini · T Ashwin · Shripriya Sriram
+
 > A hyperlocal, weekly income-protection engine for food-delivery workers that pays only when verified disruption overlaps real earning exposure.
 
 ---
