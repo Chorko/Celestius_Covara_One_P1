@@ -6,6 +6,23 @@
 
 ---
 
+## 📑 Quick Navigation
+
+| Section | What you'll find |
+|---|---|
+| [What This Project Is](#what-this-project-is) | Product pillars, coverage scope, and the core idea |
+| [Implementation Status](#implementation-status) | What's built vs. planned |
+| [Module Deep-Dive](#module-deep-dive) | Links to all 9 sub-module READMEs |
+| [System Architecture](#system-architecture) | Unified architecture + Worker journey diagrams |
+| [End-to-End Logic](#end-to-end-logic) | 8-stage claim pipeline walkthrough |
+| [Parametric Product](#parametric-product--weekly-benefit-plans) | Essential/Plus plans, payout bands |
+| [Trigger Library](#15-trigger-library) | T1–T15 triggers with public thresholds |
+| [Adversarial Defense](#adversarial-defense--anti-spoofing-strategy) | 5-layer anti-spoofing pipeline, fraud vectors, signal hierarchy |
+| [Internal Calibration](#internal-calibration-engine) | Premium formulas, severity scoring |
+| [What ML Does vs. Doesn't](#what-ml-does-vs-what-ml-does-not-do) | ML role boundaries |
+| [Tech Stack](#tech-stack) | Frontend, backend, database, integrations |
+
+
 ## What This Project Is
 
 DEVTrails is an AI-assisted **parametric insurance platform** that protects delivery workers' **weekly income** — not health, life, vehicle repair, or accident damage. The system monitors external disruption signals (heavy rain, severe AQI, heatwaves, outages, closures, traffic collapse), estimates whether a worker's earning ability was genuinely affected during a covered shift, and can automatically initiate claims when conditions are met.
@@ -113,6 +130,23 @@ The DEVTrails 2026 challenge requires:
 **Legend:** ✅ Current Implementation / Design — 📝 Documented Formula / Design Logic — 📋 Planned / Target Architecture
 
 ---
+
+## Module Deep-Dive
+
+Each folder has its own README with detailed inputs, outputs, architecture diagrams, and downstream flows:
+
+| Module | README | What it covers |
+|---|---|---|
+| **Backend** | [backend/README.md](backend/README.md) | FastAPI services, 10-service inventory, endpoint catalog, SQL schema |
+| **Frontend** | [frontend/README.md](frontend/README.md) | Next.js 16 pages, auth flow, API integration map |
+| **Fraud** | [fraud/README.md](fraud/README.md) | 5-layer pipeline, advanced vectors, signal hierarchy, decision bands |
+| **Claim Engine** | [claim-engine/README.md](claim-engine/README.md) | 8-stage pipeline, parametric payout ladder, decision matrix |
+| **ML** | [ml/README.md](ml/README.md) | Data science pipeline, Random Forest baseline, feature importance |
+| **Data** | [data/README.md](data/README.md) | Schemas, seed datasets, variable dictionary, threshold references |
+| **Integrations** | [integrations/README.md](integrations/README.md) | Real vs. mock APIs, OpenWeather/TomTom/NewsAPI, defense mapping |
+| **Caching** | [caching/README.md](caching/README.md) | Cache targets, TTL policies, invalidation rules |
+| **Docs** | [docs/README.md](docs/README.md) | Document registry, asset catalog, reference register |
+
 
 ## System Architecture
 
@@ -270,6 +304,98 @@ The platform uses a **3-tier trigger architecture**: early warning → claim tri
 
 > [!CAUTION]
 > **Market-Shift Context:** A sophisticated syndicate of 500 delivery workers in a tier-1 city has successfully exploited a beta parametric insurance platform using coordinated GPS spoofing via Telegram groups — faking locations in severe weather zones while resting at home, triggering mass false payouts and draining the liquidity pool. Simple GPS verification is officially obsolete. This section documents how DEVTrails defends against this exact attack vector.
+
+```mermaid
+flowchart TD
+    subgraph "CLAIM INTAKE"
+        CS["📋 Claim Submitted<br/>(auto-trigger or manual)"]
+    end
+
+    subgraph "LAYER 1 — Event Truth"
+        L1["🌦️ Trigger Validation<br/>OpenWeather · IMD · CPCB<br/>Does the disruption exist?"]
+    end
+
+    subgraph "LAYER 2 — Worker Truth"
+        L2["👷 Exposure Verification<br/>Shift overlap · Zone match<br/>Route plausibility (TomTom)"]
+    end
+
+    subgraph "LAYER 3 — Anti-Spoofing"
+        direction LR
+        AS1["📍 EXIF vs GPS<br/>cross-check"]
+        AS2["⏱️ Timestamp<br/>freshness"]
+        AS3["🌐 VPN / Datacenter<br/>IP detection"]
+        AS4["📱 Device continuity<br/>& emulator check"]
+        AS5["🚀 Impossible travel<br/>velocity"]
+    end
+
+    subgraph "LAYER 4 — Image Forensics"
+        direction LR
+        IF1["🔍 EXIF integrity<br/>& completeness"]
+        IF2["🤖 AI detection<br/>(SynthID / Gemini)"]
+        IF3["📸 Camera-device<br/>consistency"]
+        IF4["🖼️ ELA & noise<br/>analysis"]
+    end
+
+    subgraph "LAYER 5 — Behavioral & Region"
+        direction LR
+        BR1["📊 Zone affinity<br/>& history"]
+        BR2["⏰ Pre-trigger<br/>presence"]
+        BR3["🔗 Cluster intel<br/>(DBSCAN)"]
+        BR4["📈 Zone claim<br/>volume spike"]
+    end
+
+    subgraph "SCORING ENGINE"
+        SE["⚖️ Signal Confidence<br/>Hierarchy Weighting<br/>9-rank weighted composite"]
+    end
+
+    subgraph "5-BAND DECISION MATRIX"
+        D1["✅ auto_approve<br/>Instant payout"]
+        D2["🔎 needs_review<br/>Human + Gemini AI"]
+        D3["⚠️ hold_for_fraud<br/>Investigation"]
+        D4["🛑 batch_hold<br/>Cluster screening"]
+        D5["❌ reject_spoof_risk<br/>48h appeal window"]
+    end
+
+    subgraph "PROTECTION SYSTEMS"
+        CB["🚨 Circuit Breaker<br/>Mass-claim throttle<br/>Zone payout cap<br/>Payout release gate"]
+        TS["📉 Trust Score<br/>Dynamic penalty<br/>Gradual recovery<br/>Premium adjustment"]
+    end
+
+    CS --> L1
+    L1 --> L2
+    L2 --> L3
+    L3 --- AS1 & AS2 & AS3 & AS4 & AS5
+    AS1 & AS2 & AS3 & AS4 & AS5 --> L4
+    L4 --- IF1 & IF2 & IF3 & IF4
+    IF1 & IF2 & IF3 & IF4 --> L5
+    L5 --- BR1 & BR2 & BR3 & BR4
+    BR1 & BR2 & BR3 & BR4 --> SE
+
+    SE --> D1
+    SE --> D2
+    SE --> D3
+    SE --> D4
+    SE --> D5
+
+    BR4 --> CB
+    D3 --> TS
+    D5 --> TS
+    TS -.->|"future claims<br/>default to review"| SE
+
+    style CS fill:#4a9eff,color:#fff
+    style L1 fill:#2ecc71,color:#fff
+    style L2 fill:#2ecc71,color:#fff
+    style SE fill:#9b59b6,color:#fff
+    style D1 fill:#27ae60,color:#fff
+    style D2 fill:#f39c12,color:#fff
+    style D3 fill:#e67e22,color:#fff
+    style D4 fill:#e74c3c,color:#fff
+    style D5 fill:#c0392b,color:#fff
+    style CB fill:#e74c3c,color:#fff
+    style TS fill:#ff8c42,color:#fff
+```
+
+> **How to read this diagram:** A claim enters at the top and passes through 5 verification layers. Each layer produces weighted signals that feed the scoring engine. The scoring engine maps the composite fraud score to one of 5 decision bands. Circuit-breakers protect the liquidity pool during mass-attack scenarios, and trust score penalties feed back into future claim evaluations.
 
 ### 1. The Differentiation: Genuine Worker vs. Bad Actor
 
