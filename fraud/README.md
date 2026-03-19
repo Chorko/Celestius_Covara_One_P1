@@ -148,17 +148,23 @@ flowchart TD
 | Network clustering | ASN and IP subnet clustering identifies co-located claimants |
 | Evidence variety | Low evidence type diversity scoring per claimant suggests templated submissions |
 
-### Layer 5 — Behavioral Anomaly Detection
-**Question:** Does the worker's historical behavior look suspicious?
+### Layer 5 — Behavioral Anomaly & Identity Verification
+**Question:** Does the worker's historical behavior and identity context look suspicious?
 
 | Check | Method |
 |-------|--------|
 | GPS spoofing patterns | Detect inconsistent or improbable GPS traces across claim history |
-| Impossible movement | Flag impossible travel speeds between locations |
+| Impossible travel (velocity check) | Flag impossible travel speeds between locations — e.g., appearing 50 km away within 5 minutes |
+| Historical zone affinity | Flag first-ever appearance in a red-alert zone precisely during a trigger event |
+| Pre-trigger presence | Worker must show presence or work activity in/near the zone *before* the trigger window opened |
 | Claim timing anomalies | Detect claims filed suspiciously close to trigger onset |
 | Repeated abnormal claims | Flag workers with statistically unusual claim frequency |
 | Outlier payout ratio | Workers with payout/premium ratios far above peers |
 | Prior suspicious claim rate | Bayesian prior weighting based on historical fraud flags |
+| VPN / datacenter IP detection | Claims from known VPN endpoints, TOR exit nodes, or cloud datacenter IPs (AWS, Azure, GCP) flagged as supporting signals |
+| Device-account binding | New-device login during red-alert triggers liveness check; multiple devices per account flagged |
+| Emulator / root detection | Detect rooted devices, emulator fingerprints, mock-location permission enabled, developer-mode active, sensor inconsistency |
+| Dynamic trust score feedback | Accumulated anomalies feed back into worker's `trust_score` — lowered trust increases premium at renewal and defaults claims to `needs_review` |
 
 ---
 
@@ -181,6 +187,11 @@ Beyond rule-based checks, these features are engineered for ML-assisted spoof de
 | `prior_suspicious_rate` | Historical rate of flagged/held claims for this worker | Low-risk: < 0.05. High-risk: > 0.20 |
 | `device_account_ratio` | Devices per account and accounts per device | Normal: 1:1. Suspicious: many:1 |
 | `network_cluster_size` | Number of claimants on same IP/ASN in same window | Normal: < 3. Ring: > 10 |
+| `vpn_datacenter_flag` | Claim IP is a known VPN / TOR / datacenter IP | Normal: 0. Suspicious: 1 |
+| `impossible_travel_flag` | Worker appeared in two distant zones within impossible timeframe | Normal: 0. Fraud: 1 |
+| `zone_affinity_score` | Fraction of historical deliveries in the claimed zone | Genuine: > 0.3. Weather chaser: < 0.01 |
+| `pre_trigger_presence` | Activity in/near the zone before the trigger window | Genuine: present. Suspicious: first-time appearance |
+| `emulator_root_flag` | Device shows emulator or root/dev signals | Normal: 0. Suspicious: 1 |
 
 ### Model output labels
 
@@ -189,7 +200,29 @@ Beyond rule-based checks, these features are engineered for ML-assisted spoof de
 | `auto_approve` | All signals pass — route to automatic payout |
 | `needs_review` | Moderate uncertainty — route to human-assisted review |
 | `hold_for_fraud` | Spoofing indicators + cluster anomaly — hold pending investigation |
+| `batch_hold` | Mass cluster anomaly — hold entire batch for cluster-level screening |
 | `reject_spoof_risk` | No valid trigger + high spoof confidence + fraud-ring pattern — reject with appeal |
+
+### Advanced Fraud Vectors
+
+Beyond individual signal analysis, the fraud engine defends against these tiered attack vectors:
+
+#### Tier 1 — Direct Spoofing
+- GPS spoofing apps → EXIF cross-check + Snap-to-Roads + movement plausibility
+- VPN / proxy routing → Carrier-IP expectation + datacenter IP detection (supporting signal, not standalone rejection)
+- Emulator / app hooking → Root/emulator detection + sensor inconsistency + developer-mode flag
+
+#### Tier 2 — Identity Misuse
+- Buddy login (account handoff) → Device fingerprint history + session continuity + zone affinity + liveness check on high-risk escalation
+- Account sharing ring → Multi-device per account detection + IP/ASN clustering
+- Credential farming → KYC gap detection + low-activity anomaly + rapid account-to-first-claim interval
+
+#### Tier 3 — Coordinated / Systemic Abuse
+- Weather chaser (zone squatting) → Pre-trigger presence + zone affinity + work-intent evidence
+- Activity continuity anomaly → Order completion gap analysis + shift-activity mismatch
+- Fraud ring cluster → DBSCAN + circuit-breaker controls + cluster screening
+
+> For full details on each vector and defense, see the [Adversarial Defense section](../README.md#1b-advanced-fraud-vectors--threat-model) in the root README.
 
 ---
 
@@ -225,11 +258,12 @@ The effective confidence score `C` and fraud holdback `FH` feed into the interna
 
 ## Decision Bands
 
-| Band | Outcome | Conditions | Impact |
+| Band | Outcome | Signal pattern | Impact |
 |------|---------|------------|--------|
-| **Low** | `auto_approve` | Trigger present + exposure match + anti-spoofing pass + low fraud score | Instant payout via parametric ladder |
-| **Uncertain** | `needs_review` | Manual claim OR missing EXIF OR moderate uncertainty OR weak trigger match | Queued for human-assisted review — no penalty |
-| **Suspicious** | `hold_for_fraud` | Spoof indicators + cluster anomaly + evidence mismatch | Held pending investigation — worker notified |
+| **Low** | `auto_approve` | Trigger match + shift continuity + zone match + anti-spoofing pass + low fraud | Instant payout via parametric ladder |
+| **Uncertain** | `needs_review` | Trigger match + missing EXIF + moderate uncertainty; OR missing trigger + weak continuity + moderate spoof signals | Human-assisted review — no penalty |
+| **Suspicious** | `hold_for_fraud` | New device + red-alert + zone anomaly + VPN; OR spoof indicators + cluster anomaly + evidence mismatch | Held pending investigation — liveness check triggered on escalation |
+| **Cluster** | `batch_hold` | Mass identical claims + weak activity continuity + high spoof-risk cluster | Entire cluster held — individual claims reviewed separately |
 | **Ring match** | `reject_spoof_risk` | No valid trigger + high spoof confidence + strong fraud-ring pattern | Rejected — 48-hour appeal/resubmit window |
 
 ---
@@ -241,6 +275,8 @@ The effective confidence score `C` and fraud holdback `FH` feed into the interna
 | **Mass-claim throttling** | > 50 claims from a single zone within 1 hour | All new claims enter `needs_review` |
 | **Batch hold on anomaly spike** | Cluster analysis detects coordinated submission pattern | Entire batch held for cluster-level screening |
 | **Payout release gate** | Extreme events (Band 3 severity in 3+ zones) | Payouts released only after fraud screening |
+| **Post-trigger fraud-ring screening** | Any bulk payout release from a single trigger event | Cluster-level review before funds leave the pool |
+| **Spoof-risk payout throttling** | Zone-level spoof-risk score rises sharply | Payout velocity reduced; high-confidence pass, uncertain queued |
 | **Emergency admin override** | Manual insurer/admin intervention | Admin can freeze, release, or escalate any batch |
 | **Daily zone payout cap** | Cumulative payouts exceed 3× historical daily average | Remaining claims queued for next-day review |
 

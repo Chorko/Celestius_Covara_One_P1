@@ -344,6 +344,70 @@ The image forensics layer produces a composite **evidence integrity score** that
 > [!NOTE]
 > Workers who submit photos via WhatsApp or Telegram may have EXIF data stripped automatically by the messaging platform. This is **not treated as fraud** — it reduces the evidence integrity score to Medium and routes the claim to `needs_review`, where a human reviewer evaluates the claim using other available signals. The system never auto-rejects based on EXIF absence alone.
 
+### 1b. Advanced Fraud Vectors & Threat Model
+
+GPS spoofing is only one attack surface. DEVTrails defends against a full spectrum of fraud vectors, classified by severity and sophistication:
+
+#### Tier 1 — Direct Spoofing (Technology-Based)
+
+| Vector | How the attack works | DEVTrails defense |
+|---|---|---|
+| **GPS spoofing apps** | Worker uses a mock-location app (e.g., Fake GPS, iSpoofer) to fake device coordinates in a red-alert zone | EXIF cross-check, TomTom Snap-to-Roads plausibility, movement plausibility over time, impossible-travel velocity checks |
+| **VPN / proxy routing** | Worker routes traffic through a VPN server or proxy located in the disruption zone, masking their real IP | VPN / datacenter / TOR IP detection against known ranges; carrier-IP expectation (Jio, Airtel, Vi); **treated as a supporting fraud signal, not a standalone rejection trigger** |
+| **Emulator / app hooking** | Worker runs the app inside an Android emulator (BlueStacks, Nox) or hooks the app to inject fake sensor data | Rooted-device detection, emulator fingerprint markers, mock-location permission enabled flag, sensor inconsistency (accelerometer/gyroscope absent or static), developer-mode detection |
+
+#### Tier 2 — Identity Misuse (Social-Based)
+
+| Vector | How the attack works | DEVTrails defense |
+|---|---|---|
+| **Buddy login (account handoff)** | Worker A (safe zone) shares OTP/password with Worker B (red-alert zone); Worker B logs into Worker A's app and files a claim using real local conditions | First-login-on-new-device during red-alert triggers liveness check (selfie); device fingerprint history mismatch; session continuity break detection; historical zone affinity — Worker A never operated in this zone before |
+| **Account sharing ring** | Multiple people rotate one account to file claims from different zones | Device-account binding detects multiple unique device fingerprints per account; IP/ASN pattern clustering reveals multi-location access |
+| **Credential farming** | Fraudsters create bulk accounts using purchased identities and file claims across many accounts | KYC verification gaps flagged; unusually low historical activity on account; bank verification anomaly; rapid account-to-first-claim interval |
+
+#### Tier 3 — Coordinated / Systemic Abuse
+
+| Vector | How the attack works | DEVTrails defense |
+|---|---|---|
+| **Weather chaser (pre-emptive zone squatting)** | Worker sees a red-alert forecast, travels to the zone without working, waits in a café during the storm, and claims "stranded on delivery" | Pre-trigger presence requirement: must show work activity in/near the zone before or during the trigger window; historical zone affinity check; evidence of active work intent, not just physical presence |
+| **Activity continuity anomaly (operational mismatch)** | Suspicious claims tied to weak or absent activity continuity — worker claims stranding but has no verifiable pre-disruption delivery trail, or shows unusual acceptance/delivery patterns inconsistent with genuine work | Historical order completion cross-check; shift-activity gap analysis; repeated localized claim bursts with low operational evidence |
+| **Fraud ring cluster behavior** | 50–500+ workers coordinate via Telegram to submit synchronized claims from near-identical coordinates during a trigger event | DBSCAN clustering on timestamps + coordinates; shared payout destinations; evidence similarity scoring; network/IP clustering; circuit-breaker controls |
+
+### 1c. Signal Confidence Hierarchy
+
+Not all verification signals are equally trustworthy. DEVTrails evaluates claims using a **weighted signal hierarchy** — higher-trust signals carry more weight in the fraud decision:
+
+| Rank | Signal | Trust level | Rationale |
+|:---:|---|---|---|
+| 1 | **Verified trigger event** | Highest | External source (OpenWeather, IMD, CPCB) — cannot be spoofed by the worker |
+| 2 | **Historical work pattern** | High | Long-term behavioral baseline — extremely difficult to fabricate |
+| 3 | **Shift / order continuity** | High | Platform-verified delivery activity before disruption — requires real work |
+| 4 | **Pre-trigger presence** | High | Worker must show presence in/near the zone before the trigger window opened |
+| 5 | **Device continuity** | Medium-High | Hardware-bound — harder to spoof than software signals |
+| 6 | **EXIF evidence integrity** | Medium | Strong when present, but can be stripped by messaging apps — absence ≠ fraud |
+| 7 | **AI image detection** | Medium | Catches AI-generated evidence, but sophisticated fakes evolve rapidly |
+| 8 | **Browser / device GPS** | Medium-Low | Easily spoofed by mock-location apps — never trusted alone |
+| 9 | **IP / network context** | Low | Supporting signal only — VPN use increases suspicion but mobile networks can produce unusual IPs |
+
+**Why this hierarchy matters:** If GPS (rank 8) is spoofed but the verified trigger event (rank 1), historical work pattern (rank 2), and shift continuity (rank 3) all fail, the system has strong grounds for fraud detection. Conversely, a worker with intact high-trust signals but missing EXIF (rank 6) is routed to review, not rejected.
+
+### 1d. Behavioral Identity & Region Controls
+
+These controls detect fraud that bypasses location spoofing by targeting identity, behavior, and regional anomalies:
+
+| Control | What it detects | How it works |
+|---|---|---|
+| **Impossible travel (velocity check)** | Worker appearance in two distant locations within an impossible timeframe | If Worker A completes an order in Zone 1 at 10:00 AM and files a claim from Zone 2 (50 km away) at 10:05 AM, the system flags mathematically impossible travel speed |
+| **Historical zone affinity** | First-ever appearance in a red-alert zone exactly during a trigger event | If 99% of a worker's deliveries are in South City, and their first-ever login in North City coincides with a flood warning, the claim is held — genuine workers don't randomly switch zones during storms |
+| **Pre-trigger presence requirement** | Sudden appearance at exactly the moment a trigger fires | Worker must demonstrate presence or work continuity in/near the affected zone *before or during* the trigger window — a sudden first appearance exactly at event time is treated as suspicious |
+| **VPN / datacenter IP detection** | Claims routed through non-mobile IP infrastructure | Real gig workers use mobile carrier IPs (Jio, Airtel, Vi). Claims from known VPN endpoints, TOR exit nodes, or cloud datacenter IPs (AWS, Azure, GCP) are flagged as supporting fraud signals |
+| **Device-account binding** | Login from an unregistered device during a trigger event | App bonds to a primary hardware ID. New-device login during a red-alert event triggers biometric liveness check (selfie) — only for high-risk escalated cases, not for all claims |
+| **Emulator / root detection** | App running in a simulated or compromised environment | Detect rooted devices, emulator fingerprints (BlueStacks, Nox), mock-location permission enabled, developer-mode active, and sensor inconsistency (no accelerometer/gyroscope data) |
+| **Dynamic trust score penalties** | Accumulated behavioral anomalies across claims | Sudden IP switches, improbable zone hops, VPN usage, and failed liveness checks feed back into the worker's `trust_score` — lowered trust increases premium at renewal and defaults future claims to `needs_review` |
+| **Region-based claim volume monitoring** | Abnormal claim spikes from specific geographic zones | Per-zone real-time claim rate tracking with dynamic thresholds based on historical patterns and current trigger severity |
+
+> [!IMPORTANT]
+> **Biometric / selfie liveness checks are triggered only for high-risk escalated cases** (new device + red-alert zone + zone affinity mismatch). They are NOT required for normal claims. This prevents unnecessary friction for honest workers.
+
 ### 2. The Data: Detecting Coordinated Fraud Rings
 
 Beyond individual spoof detection, DEVTrails analyzes **cross-claimant patterns** to identify organized fraud rings:
@@ -365,24 +429,37 @@ Beyond individual spoof detection, DEVTrails analyzes **cross-claimant patterns*
 
 Anti-spoofing must not punish honest gig workers who experience genuine disruptions with poor network conditions, stripped photo metadata, or imperfect GPS signals.
 
-**Core principle:** The system escalates only when **multiple signals align**. A single weak signal (e.g., missing EXIF data) triggers review, not rejection.
+**Core principle:** No single anomaly auto-rejects a claim unless it is extremely high-confidence fraud. Most signals increase review severity rather than immediately denying a claim.
 
-#### Decision Matrix
+#### Fraud Decision Matrix
 
-| Outcome | Conditions | Worker impact |
+| Signal pattern | Outcome | Action |
 |---|---|---|
-| **`auto_approve`** | Trigger present + exposure match + anti-spoofing pass + low fraud score | Instant payout — fastest path |
-| **`needs_review`** | Manual claim OR missing EXIF OR moderate uncertainty OR weak trigger match | Queued for human-assisted review (with Gemini AI explanation) — no penalty |
-| **`hold_for_fraud`** | Spoof indicators + cluster anomaly detected + evidence mismatch | Held pending investigation — worker notified with reason |
-| **`reject_spoof_risk`** | No valid trigger + high spoof confidence + strong fraud-ring pattern match | Rejected — worker can appeal and resubmit evidence within a 48-hour grace window |
+| Trigger match + shift continuity + zone match + anti-spoofing pass + low fraud | **`auto_approve`** | Instant payout via parametric ladder |
+| Trigger match + missing EXIF + moderate geo uncertainty | **`needs_review`** | Human-assisted review (Gemini AI explanation) — no penalty |
+| Missing trigger match + weak activity continuity + moderate spoof signals | **`needs_review`** | Extended review with additional evidence request |
+| New device + red-alert login + zone anomaly + VPN detected | **`hold_for_fraud`** | Held pending investigation — liveness check triggered |
+| Spoof indicators + cluster anomaly + evidence mismatch | **`hold_for_fraud`** | Held with cluster-level screening |
+| Mass identical claims + weak activity continuity + high spoof-risk cluster | **`batch_hold`** | Entire cluster held — individual claims reviewed separately |
+| No valid trigger + high spoof confidence + strong fraud-ring pattern | **`reject_spoof_risk`** | Rejected — 48-hour appeal/resubmit window |
 
-#### Fairness safeguards
+#### False-Positive / Honest Worker Protection
 
-- Workers with **missing EXIF metadata** are **never auto-rejected** — they are routed to `needs_review` where a human reviewer (aided by Gemini AI) evaluates the claim holistically
-- **Bad weather and network drops** can cause GPS inconsistencies and stripped metadata — the system recognizes this pattern and does not treat it as spoofing
+| Scenario that catches honest workers | Why it happens | How DEVTrails protects them |
+|---|---|---|
+| **New device** | Worker upgraded their phone or factory-reset | New device alone only triggers review, not rejection; liveness check only during red-alert coincidence |
+| **Missing EXIF metadata** | Photo sent via WhatsApp/Telegram, which strip metadata | Never auto-rejected — routed to `needs_review` with other signals evaluated |
+| **GPS inconsistency** | Bad weather and network drops cause GPS drift/jumps | System recognizes weather-correlated network degradation — not treated as spoofing |
+| **IP range anomaly** | Mobile carrier uses unusual or dynamic IP ranges | IP is a low-trust supporting signal only — never standalone rejection |
+| **City switch** | Worker reassigned to a new zone by platform | If delivery platform data confirms reassignment, zone affinity check is overridden |
+| **Cluster proximity** | Worker happens to be near a fraud ring cluster during a real event | Individual multi-signal evaluation separates genuine from fraudulent within the batch |
+
+**Fairness guarantees:**
 - **Escalation requires convergence**: at least 3+ independent signals must align before a claim is held for fraud
 - Workers can **appeal and resubmit** evidence within a 48-hour grace window from the worker dashboard
-- The system tracks **false-positive rates** and adjusts thresholds to minimize honest-worker friction
+- The system tracks **false-positive rates** per zone and adjusts thresholds to minimize honest-worker friction
+- Biometric / selfie checks are triggered **only for high-risk escalated cases**, not normal claims
+- Trust score penalties are **gradual and reversible** — clean claim history restores the score over time
 
 ### 4. Liquidity Protection & Circuit-Breaker Controls
 
@@ -393,8 +470,10 @@ The 500-worker syndicate attack is fundamentally a **liquidity drain** attack. D
 | **Mass-claim throttling** | > 50 claims from a single zone within 1 hour | All new claims from that zone enter `needs_review` automatically |
 | **Batch hold on anomaly spike** | Cluster analysis detects coordinated submission pattern | Entire batch held pending cluster-level fraud screening |
 | **Payout release gate** | Extreme events (Band 3 severity in 3+ zones simultaneously) | Payouts released only after cluster-level fraud screening completes |
+| **Post-trigger fraud-ring screening** | Any bulk payout release from a single trigger event | Cluster-level review before funds leave the pool |
 | **Emergency admin override** | Manual insurer/admin intervention | Admin can freeze, release, or escalate any claim batch from the operations dashboard |
 | **Daily zone payout cap** | Cumulative zone payouts exceed 3× historical daily average | Remaining claims queued for next-day release after review |
+| **Spoof-risk payout throttling** | Zone-level spoof-risk score rises sharply | Payout velocity reduced; high-confidence claims still release, uncertain ones queued |
 
 These controls protect the liquidity pool without blocking legitimate claims — genuine mass-disruption events (e.g., city-wide flooding) are still processed, but with an additional verification layer.
 
