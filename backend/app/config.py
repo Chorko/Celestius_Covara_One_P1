@@ -22,6 +22,11 @@ class Settings:
     # Gemini (backend-only)
     gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
 
+    # External APIs (anti-spoofing & trigger validation)
+    openweather_api_key: str = os.getenv("OPENWEATHER_API_KEY", "")
+    tomtom_api_key: str = os.getenv("TOMTOM_API_KEY", "")
+    news_api_key: str = os.getenv("NEWS_API_KEY", "")
+
     # App
     app_env: str = os.getenv("APP_ENV", "development")
     cors_origins: list[str] = None  # type: ignore[assignment]
