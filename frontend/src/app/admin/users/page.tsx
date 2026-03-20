@@ -136,7 +136,7 @@ export default function AdminUsers() {
   }
 
   return (
-    <div className="p-8 max-w-6xl mx-auto gradient-mesh-admin min-h-screen">
+    <div className="p-6 md:p-8 pb-28 max-w-6xl mx-auto gradient-mesh-admin min-h-screen">
       {/* Header */}
       <div className="mb-8 animate-fade-in-up">
         <div className="flex items-center gap-3 mb-2">

@@ -189,7 +189,7 @@ export default function WorkerClaims() {
 
   return (
     <div className="min-h-screen gradient-mesh">
-      <div className="p-6 md:p-10 pb-24 max-w-6xl mx-auto space-y-8">
+      <div className="p-6 md:p-10 pb-28 max-w-6xl mx-auto space-y-8">
 
         {/* ===== PAGE HEADER ===== */}
         <section className="animate-fade-in-up">

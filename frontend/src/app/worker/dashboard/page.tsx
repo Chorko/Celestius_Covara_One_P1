@@ -190,7 +190,7 @@ export default function WorkerDashboard() {
 
   return (
     <div className="min-h-screen gradient-mesh">
-      <div className="p-6 md:p-10 pb-24 max-w-7xl mx-auto space-y-8">
+      <div className="p-6 md:p-10 pb-28 max-w-7xl mx-auto space-y-8">
 
         {/* ===== HEADER SECTION ===== */}
         <section className="animate-fade-in-up">
