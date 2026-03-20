@@ -238,7 +238,7 @@ export default function WorkerPricing() {
   }
 
   return (
-    <div className="p-8 max-w-6xl mx-auto gradient-mesh min-h-screen">
+    <div className="p-6 md:p-8 pb-28 max-w-6xl mx-auto gradient-mesh min-h-screen">
       {/* Header */}
       <div className="text-center mb-8 animate-fade-in-up">
         <h1 className="text-4xl font-bold mb-3">Choose Your Coverage</h1>
