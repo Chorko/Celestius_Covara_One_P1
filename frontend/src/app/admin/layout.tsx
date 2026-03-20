@@ -49,7 +49,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   return (
-    <div className="min-h-screen flex" style={{ background: '#050510' }}>
+    <div className="layout-root min-h-screen flex overflow-x-hidden" style={{ background: '#050510' }}>
       {/* ─── Desktop Sidebar ─── */}
       <aside className="desktop-sidebar w-[280px] min-h-screen glass-strong flex flex-col relative" style={{ borderRight: '1px solid rgba(255, 255, 255, 0.06)' }}>
         <div className="absolute top-0 left-0 w-full h-32 pointer-events-none" style={{ background: 'linear-gradient(180deg, rgba(59, 130, 246, 0.06) 0%, transparent 100%)' }} />
