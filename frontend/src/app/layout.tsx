@@ -13,11 +13,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "DEVTrails — Parametric Income Protection",
+  title: "Covara One — Parametric Income Protection",
   description: "AI-powered parametric income-protection platform for gig workers",
 };
 
 import { Analytics } from "@vercel/analytics/next";
+import { PreloadWrapper } from "./PreloadWrapper";
 
 export default function RootLayout({
   children,
@@ -29,7 +30,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
+        <PreloadWrapper>{children}</PreloadWrapper>
         <Analytics />
       </body>
     </html>
