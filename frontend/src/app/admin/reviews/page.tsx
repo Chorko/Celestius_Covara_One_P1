@@ -174,7 +174,7 @@ export default function AdminReviews() {
   const isFraud = (pr?.fraud_holdback_fh ?? 0) > 0.30
 
   return (
-    <div className="p-6 h-full flex flex-col md:flex-row gap-6 gradient-mesh-admin min-h-screen animate-fade-in-up">
+    <div className="p-4 md:p-6 pb-28 h-full flex flex-col md:flex-row gap-6 gradient-mesh-admin min-h-screen animate-fade-in-up">
       {/* Left Panel - Queue */}
       <div className="w-full md:w-[360px] shrink-0 glass-card flex flex-col overflow-hidden">
         <div className="p-5 border-b border-white/[0.06]">
