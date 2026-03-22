@@ -105,7 +105,7 @@ def check_exif_timestamp_freshness(
     stale_evidence = []
     freshness_scores = []
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     claim_dt = None
     if claim_timestamp:
         try:
@@ -123,7 +123,7 @@ def check_exif_timestamp_freshness(
 
         try:
             dt_str = exif_ts.replace(":", "-", 2)
-            exif_dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
+            exif_dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
             ref_dt = claim_dt or now
             lag_hours = abs((ref_dt - exif_dt).total_seconds()) / 3600
 
@@ -279,7 +279,7 @@ def check_movement_plausibility(
         else:
             last_dt = last_ts  # type: ignore
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         if claim_timestamp:
             try:
                 claim_dt = datetime.fromisoformat(

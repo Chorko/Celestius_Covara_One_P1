@@ -92,7 +92,7 @@ def evaluate_manual_claim(
                 dt_str = exif_ts.replace(":", "-", 2)
                 exif_dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
                 # Ensure it wasn't taken weeks ago
-                delta_days = (datetime.now() - exif_dt).days
+                delta_days = (datetime.now(timezone.utc) - exif_dt).days
                 if delta_days > 3:
                     hold_reasons.append(
                         f"Photo EXIF timestamp is {delta_days} days old."
