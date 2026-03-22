@@ -41,6 +41,43 @@ comment on column public.validated_regional_incidents.cluster_spike_detected is
   'If true, fast-lane auto-release is paused and cluster-level validation '
   'is required to protect the liquidity pool.';
 
+-- Enforce RLS for region validation cache
+alter table public.validated_regional_incidents enable row level security;
+
+drop policy if exists "ValidatedIncidents: Admins can read all"
+  on public.validated_regional_incidents;
+drop policy if exists "ValidatedIncidents: Admins can insert"
+  on public.validated_regional_incidents;
+drop policy if exists "ValidatedIncidents: Admins can update"
+  on public.validated_regional_incidents;
+drop policy if exists "ValidatedIncidents: Admins can delete"
+  on public.validated_regional_incidents;
+
+create policy "ValidatedIncidents: Admins can read all"
+on public.validated_regional_incidents
+for select
+to authenticated
+using (public.current_user_role() = 'insurer_admin');
+
+create policy "ValidatedIncidents: Admins can insert"
+on public.validated_regional_incidents
+for insert
+to authenticated
+with check (public.current_user_role() = 'insurer_admin');
+
+create policy "ValidatedIncidents: Admins can update"
+on public.validated_regional_incidents
+for update
+to authenticated
+using (public.current_user_role() = 'insurer_admin')
+with check (public.current_user_role() = 'insurer_admin');
+
+create policy "ValidatedIncidents: Admins can delete"
+on public.validated_regional_incidents
+for delete
+to authenticated
+using (public.current_user_role() = 'insurer_admin');
+
 -- Grant access
 grant select, insert, update, delete
   on public.validated_regional_incidents to authenticated;

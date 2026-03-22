@@ -29,15 +29,54 @@ comment on column public.disruption_events.event_id is
   'Deterministic unique identifier: prevents the same disruption window '
   'from generating multiple event records.';
 
+-- Enforce RLS for new event identity table
+alter table public.disruption_events enable row level security;
+
+drop policy if exists "DisruptionEvents: Admins can read all"
+  on public.disruption_events;
+drop policy if exists "DisruptionEvents: Admins can insert"
+  on public.disruption_events;
+drop policy if exists "DisruptionEvents: Admins can update"
+  on public.disruption_events;
+drop policy if exists "DisruptionEvents: Admins can delete"
+  on public.disruption_events;
+
+create policy "DisruptionEvents: Admins can read all"
+on public.disruption_events
+for select
+to authenticated
+using (public.current_user_role() = 'insurer_admin');
+
+create policy "DisruptionEvents: Admins can insert"
+on public.disruption_events
+for insert
+to authenticated
+with check (public.current_user_role() = 'insurer_admin');
+
+create policy "DisruptionEvents: Admins can update"
+on public.disruption_events
+for update
+to authenticated
+using (public.current_user_role() = 'insurer_admin')
+with check (public.current_user_role() = 'insurer_admin');
+
+create policy "DisruptionEvents: Admins can delete"
+on public.disruption_events
+for delete
+to authenticated
+using (public.current_user_role() = 'insurer_admin');
+
 -- 2. Worker-event uniqueness: one approved/paid payout per worker per event
 --    This is a partial unique index: only enforced for successful claim states.
 create unique index if not exists idx_unique_worker_event
     on public.manual_claims(worker_profile_id, trigger_event_id)
-    where claim_status in ('approved', 'paid', 'auto_approved');
+    where claim_mode = 'trigger_auto'
+      and trigger_event_id is not null
+      and claim_status in ('approved', 'paid', 'auto_approved');
 
 comment on index public.idx_unique_worker_event is
-  'Ensures one payout per worker per trigger event. '
-  'Only applies to approved/paid/auto_approved claims.';
+  'Ensures one payout per worker + trigger-auto event. '
+  'Partial index covers approved/paid/auto_approved states.';
 
 -- 3. Grant access to new table
 grant select, insert, update, delete
