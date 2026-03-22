@@ -161,7 +161,9 @@ async def submit_claim(
         "payout_cap": cal["payout_cap"],
         "expected_payout": cal["expected_payout"],
         "gross_premium": cal["gross_premium"],
-        "recommended_payout": cal["recommended_payout_internal"],
+        "recommended_payout": cal.get(
+            "recommended_payout_internal", cal.get("recommended_payout")
+        ),
         "explanation_json": pipeline_result,
     }
     sb.table("payout_recommendations").insert(payout_ins).execute()
