@@ -11,6 +11,7 @@ probability scoring as an extension of the existing Gemini pipeline.
 from datetime import datetime
 
 try:
+    from PIL import Image
     HAS_PIL = True
 except ImportError:
     HAS_PIL = False
