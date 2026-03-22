@@ -1,0 +1,67 @@
+-- ══════════════════════════════════════════════════════════════════════
+-- DEVTrails — Region Validation Cache / Fast-Lane (Gap §4.3)
+-- ══════════════════════════════════════════════════════════════════════
+-- Purpose:
+--   Cache validated regional incidents so that claims in the same
+--   zone/trigger/window can skip repeated manual review.
+--   Individual fraud checks are NEVER bypassed by fast-lane.
+--
+-- WARNING: Do NOT apply this file if you have already applied
+--   13_unified_extensions.sql. That file supersedes this script and
+--   running both will cause duplicate-object errors.
+--
+--   Liquidity protection: if an extreme spike of same-zone claims
+--   appears, the platform switches to cluster-level validation,
+--   protecting the liquidity pool before mass payouts are executed.
+-- ══════════════════════════════════════════════════════════════════════
+
+create table if not exists public.validated_regional_incidents (
+    id uuid primary key default gen_random_uuid(),
+    zone_id uuid not null references public.zones(id),
+    trigger_family text not null,
+    incident_start timestamptz not null,
+    incident_end timestamptz,
+    -- How the incident was validated:
+    -- 'trusted_workers' = 3+ high-trust workers confirm same trigger
+    -- 'admin'           = insurer admin confirms via dashboard
+    -- 'news_feed'       = external news API corroboration
+    -- 'public_api'      = official gov/weather data confirms
+    validation_source text not null check (
+        validation_source in ('trusted_workers', 'admin', 'news_feed', 'public_api')
+    ),
+    -- How many workers confirmed this incident
+    confirming_worker_count integer not null default 0,
+    -- Cluster spike flag: if set, fast-lane auto-release is paused
+    cluster_spike_detected boolean not null default false,
+    validated_at timestamptz not null default now(),
+    unique(zone_id, trigger_family, incident_start)
+);
+
+comment on table public.validated_regional_incidents is
+  'Cache of validated regional incidents for fast-lane claim processing. '
+  'Fast-lane reduces manual review but never bypasses individual fraud checks.';
+
+comment on column public.validated_regional_incidents.cluster_spike_detected is
+  'If true, fast-lane auto-release is paused and cluster-level validation '
+  'is required to protect the liquidity pool.';
+
+-- Enable RLS and add least-privilege policies
+alter table public.validated_regional_incidents enable row level security;
+
+-- Workers may read validated incidents to understand their zone's history
+create policy "Workers can view validated incidents" on public.validated_regional_incidents
+  for select to authenticated
+  using (true);
+
+-- Only the backend service role can validate/write incidents
+create policy "Service role can manage validated incidents" on public.validated_regional_incidents
+  for all to service_role
+  using (true)
+  with check (true);
+
+-- Remove the broad grants that were applied before
+revoke insert, update, delete on public.validated_regional_incidents from authenticated;
+revoke all on public.validated_regional_incidents from anon;
+
+-- Reload PostgREST schema cache
+notify pgrst, 'reload schema';

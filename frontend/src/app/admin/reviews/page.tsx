@@ -117,7 +117,9 @@ export default function AdminReviews() {
     try {
       const newStatus =
         decision === 'approve' ? 'approved' :
-        decision === 'reject'  ? 'rejected' : 'held'
+        decision === 'reject'  ? 'rejected' :
+        decision === 'flag_post_approval' ? 'post_approval_flagged' :
+        decision === 'escalate' ? 'fraud_escalated_review' : 'soft_hold_verification'
 
       const { error: reviewError } = await supabase.from('claim_reviews').insert({
         claim_id: claimId,
@@ -156,11 +158,17 @@ export default function AdminReviews() {
   const statusBadge = (status: string) => {
     switch (status) {
       case 'approved':
+      case 'auto_approved':
+      case 'paid':
         return 'badge-emerald'
-      case 'held':
+      case 'soft_hold_verification':
+        return 'badge-blue'
+      case 'fraud_escalated_review':
+        return 'badge-purple'
       case 'submitted':
         return 'badge-amber'
       case 'rejected':
+      case 'post_approval_flagged':
         return 'badge-red'
       default:
         return 'badge-blue'
@@ -213,7 +221,16 @@ export default function AdminReviews() {
                       </span>
                     )}
                     <span className={`badge ${statusBadge(c.claim_status)} shrink-0`}>
-                      {c.claim_status}
+                      {({
+                        auto_approved: 'Auto-Approved',
+                        approved: 'Approved',
+                        paid: 'Paid',
+                        submitted: 'Submitted',
+                        soft_hold_verification: 'Verification',
+                        fraud_escalated_review: 'Fraud Review',
+                        rejected: 'Rejected',
+                        post_approval_flagged: 'Flagged',
+                      } as Record<string, string>)[c.claim_status] || c.claim_status}
                     </span>
                   </div>
                 </div>
@@ -526,7 +543,7 @@ export default function AdminReviews() {
             )}
 
             {/* Actions */}
-            {(claim?.claim_status === 'held' || claim?.claim_status === 'submitted') ? (
+            {(['submitted', 'soft_hold_verification', 'fraud_escalated_review', 'held'].includes(claim?.claim_status || '')) ? (
               <div className="border-t border-white/[0.06] pt-6 space-y-4">
                 {actionError && (
                   <div className="p-3 rounded-xl text-sm" style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', color: '#fca5a5' }}>

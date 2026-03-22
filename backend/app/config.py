@@ -15,8 +15,12 @@ class Settings:
     """Immutable application settings loaded from environment."""
 
     # Supabase
-    supabase_url: str = os.getenv("SUPABASE_URL", os.getenv("NEXT_PUBLIC_SUPABASE_URL", ""))
-    supabase_anon_key: str = os.getenv("SUPABASE_ANON_KEY", os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY", ""))
+    supabase_url: str = os.getenv(
+        "SUPABASE_URL", os.getenv("NEXT_PUBLIC_SUPABASE_URL", "")
+    )
+    supabase_anon_key: str = os.getenv(
+        "SUPABASE_ANON_KEY", os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "")
+    )
     supabase_service_role_key: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
 
     # Gemini (backend-only)

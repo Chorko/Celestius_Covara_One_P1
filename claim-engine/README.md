@@ -8,12 +8,16 @@
 
 | Component | Status |
 |-----------|--------|
-| 8-stage pipeline definition | 📝 Documented |
-| Trigger threshold integration (T1–T15) | 📝 Documented |
-| Severity calculation logic | 📝 Documented |
-| Payout formula integration | 📝 Documented |
-| Audit event emission | 📋 Planned |
-| Claim orchestration service | 📋 Planned |
+| 8-stage pipeline definition | ✅ Implemented |
+| Trigger threshold integration (T1–T15) | ✅ Implemented |
+| Severity calculation logic | ✅ Implemented |
+| Payout formula integration | ✅ Implemented |
+| Claim state machine (8 states) | ✅ Implemented |
+| Payout safety (event-ID, worker-event uniqueness) | ✅ Implemented |
+| Region validation cache (fast-lane) | ✅ Implemented |
+| Post-approval fraud controls | ✅ Implemented |
+| Audit event emission | ✅ Implemented |
+| Claim orchestration service | ✅ Implemented |
 | Sample claim JSON | ✅ Present | See [`examples/sample_claim.json`](examples/sample_claim.json) |
 | Claim JSON Schema | ✅ Present | See [`examples/sample_claim.schema.json`](examples/sample_claim.schema.json) |
 
@@ -136,10 +140,12 @@ Based on the multi-signal verification result:
 
 | Outcome | Conditions | Action |
 |---|---|---|
-| **`auto_approve`** | Trigger present + exposure match + anti-spoofing pass + low fraud score | Payout released via parametric ladder |
-| **`needs_review`** | Manual claim OR missing EXIF OR moderate uncertainty OR weak trigger match | Queued for human-assisted review — no penalty to worker |
-| **`hold_for_fraud`** | Spoof indicators + cluster anomaly + evidence mismatch | Held pending investigation — worker notified with reason |
-| **`reject_spoof_risk`** | No valid trigger + high spoof confidence + fraud-ring pattern | Rejected — 48-hour appeal/resubmit window |
+| **`auto_approve`** | Trigger present + exposure match + anti-spoofing pass + low fraud score | Payout released via parametric ladder → claim status: `auto_approved` |
+| **`needs_review`** | Manual claim OR missing EXIF OR moderate uncertainty OR weak trigger match | Queued for human-assisted review → claim status: `soft_hold_verification` |
+| **`hold_for_fraud`** | Spoof indicators + cluster anomaly + evidence mismatch | Held pending investigation → claim status: `fraud_escalated_review` |
+| **`reject_spoof_risk`** | No valid trigger + high spoof confidence + fraud-ring pattern | Rejected — 48-hour appeal/resubmit window → claim status: `rejected` |
+
+> **Fraud engine output → claim status mapping:** The fraud engine produces 5 decision bands (`auto_approve`, `needs_review`, `hold_for_fraud`, `batch_hold`, `reject_spoof_risk`). The claim pipeline maps these to 8 claim states: `auto_approved`, `soft_hold_verification`, `fraud_escalated_review`, `approved`, `rejected`, `paid`, `submitted`, `post_approval_flagged`. This separation keeps the fraud engine's vocabulary clean while giving the claim lifecycle richer state tracking.
 
 > [!NOTE]
 > **Basis-risk acknowledgment:** A trigger may fire but not every worker suffers equally. A worker may suffer disruption even when the trigger is borderline. The system mitigates this through tiered thresholds, exposure matching, anti-spoofing verification, and review routing for uncertain cases.
@@ -164,7 +170,7 @@ Every stage emits a timestamped audit event so the full claim can be reconstruct
 
 | Output | Consumer |
 |--------|----------|
-| Claim decision (approved / review / hold) | Worker dashboard, insurer dashboard |
+| Claim decision (auto_approved / soft_hold / fraud_escalated / rejected / paid) | Worker dashboard, insurer dashboard |
 | Payout amount | Payout orchestration (Zero-Touch Payout) |
 | Review requirement | Insurer review queue |
 | Audit event log | Claim analytics dashboard, insurer dashboard |

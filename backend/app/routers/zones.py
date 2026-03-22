@@ -5,7 +5,7 @@ Provides zone listing for city selection during onboarding,
 claim zone matching, and trigger zone display.
 """
 
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, HTTPException
 from backend.app.supabase_client import get_supabase_admin
 
 router = APIRouter(prefix="/zones", tags=["Zones"])
@@ -19,7 +19,9 @@ async def list_zones(city: str | None = None):
     Polygon GeoJSON is excluded from list view for performance.
     """
     sb = get_supabase_admin()
-    query = sb.table("zones").select("id, city, zone_name, center_lat, center_lng")
+    query = sb.table("zones").select(
+        "id, city, zone_name, center_lat, center_lng"
+    )
 
     if city:
         query = query.eq("city", city)
@@ -39,9 +41,9 @@ async def get_zone_detail(zone_id: str):
         .maybe_single()
         .execute()
     )
-    if not resp.data:
+    if not resp.data:  # type: ignore
         raise HTTPException(status_code=404, detail="Zone not found")
-    return resp.data
+    return resp.data  # type: ignore
 
 
 @router.get("/cities/list")
