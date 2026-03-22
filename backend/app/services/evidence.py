@@ -12,7 +12,6 @@ and EXIF thumbnail for the image_forensics service.
 from io import BytesIO
 from PIL import Image, ExifTags
 
-
 # Full set of EXIF tags we extract for forensics
 FORENSIC_TAGS = {
     "DateTimeOriginal": "exif_timestamp",
@@ -58,7 +57,7 @@ def extract_exif_metadata(file_bytes: bytes) -> dict:
 
     try:
         img = Image.open(BytesIO(file_bytes))
-        exif_data = img._getexif()
+        exif_data = img._getexif()  # type: ignore
 
         if not exif_data:
             return metadata
@@ -69,8 +68,10 @@ def extract_exif_metadata(file_bytes: bytes) -> dict:
             minutes = dms[1]
             seconds = dms[2]
 
-            decimal = float(degrees) + float(minutes) / 60 + float(seconds) / 3600
-            if ref in ['S', 'W']:
+            decimal = (
+                float(degrees) + float(minutes) / 60 + float(seconds) / 3600
+            )
+            if ref in ["S", "W"]:
                 decimal = -decimal
             return round(decimal, 6)
 
@@ -83,7 +84,7 @@ def extract_exif_metadata(file_bytes: bytes) -> dict:
             # Map known forensic tags
             if tag in FORENSIC_TAGS:
                 key = FORENSIC_TAGS[tag]
-                metadata[key] = str(value) if value is not None else None
+                metadata[key] = str(value) if value is not None else None  # type: ignore
                 field_count += 1
 
             if tag == "GPSInfo":
@@ -98,27 +99,42 @@ def extract_exif_metadata(file_bytes: bytes) -> dict:
                 g_tag = ExifTags.GPSTAGS.get(t, t)
                 gps_tags[g_tag] = gps_info[t]
 
-            if ("GPSLatitude" in gps_tags and "GPSLatitudeRef" in gps_tags and
-                    "GPSLongitude" in gps_tags and "GPSLongitudeRef" in gps_tags):
+            if (
+                "GPSLatitude" in gps_tags
+                and "GPSLatitudeRef" in gps_tags
+                and "GPSLongitude" in gps_tags
+                and "GPSLongitudeRef" in gps_tags
+            ):
                 try:
-                    lat = get_decimal_from_dms(gps_tags["GPSLatitude"], gps_tags["GPSLatitudeRef"])
-                    lng = get_decimal_from_dms(gps_tags["GPSLongitude"], gps_tags["GPSLongitudeRef"])
+                    lat = get_decimal_from_dms(
+                        gps_tags["GPSLatitude"], gps_tags["GPSLatitudeRef"]
+                    )
+                    lng = get_decimal_from_dms(
+                        gps_tags["GPSLongitude"], gps_tags["GPSLongitudeRef"]
+                    )
                     metadata["exif_lat"] = lat
                     metadata["exif_lng"] = lng
 
                     # GPS precision analysis: count decimal places
                     lat_str = f"{lat:.10f}".rstrip("0")
                     lng_str = f"{lng:.10f}".rstrip("0")
-                    lat_decimals = len(lat_str.split(".")[-1]) if "." in lat_str else 0
-                    lng_decimals = len(lng_str.split(".")[-1]) if "." in lng_str else 0
-                    metadata["gps_decimal_places"] = min(lat_decimals, lng_decimals)
+                    lat_decimals = (
+                        len(lat_str.split(".")[-1]) if "." in lat_str else 0
+                    )
+                    lng_decimals = (
+                        len(lng_str.split(".")[-1]) if "." in lng_str else 0
+                    )
+                    metadata["gps_decimal_places"] = min(
+                        lat_decimals, lng_decimals
+                    )
                 except Exception:
                     pass
 
         # Check for embedded thumbnail
         try:
-            if hasattr(img, '_getexif') and exif_data:
-                # EXIF tag 513 = JPEGThumbnailOffset (thumbnail presence indicator)
+            if hasattr(img, "_getexif") and exif_data:
+                # EXIF tag 513 = JPEGThumbnailOffset (thumbnail presence
+                # indicator)
                 if 513 in exif_data or 514 in exif_data:
                     metadata["has_thumbnail"] = True
         except Exception:

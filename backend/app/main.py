@@ -18,11 +18,19 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.app.config import settings
 from backend.app.dependencies import require_insurer_admin
-from backend.app.routers import auth, workers, zones, claims, triggers, policies, analytics
+from backend.app.routers import (
+    auth,
+    workers,
+    zones,
+    claims,
+    triggers,
+    policies,
+    analytics,
+)
 from backend.app.seed import seed_all
 
-
 # ── Lifespan (startup validation) ─────────────────────────────────
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -72,6 +80,7 @@ app.include_router(analytics.router)
 
 # ── Root & Health ─────────────────────────────────────────────────
 
+
 @app.get("/", tags=["System"])
 def root():
     """API root — returns basic info."""
@@ -98,7 +107,12 @@ def health_check():
 
 # ── Admin Seed Endpoint ──────────────────────────────────────────
 
-@app.post("/admin/seed", tags=["Admin"], dependencies=[Depends(require_insurer_admin)])
+
+@app.post(
+    "/admin/seed",
+    tags=["Admin"],
+    dependencies=[Depends(require_insurer_admin)],
+)
 async def run_seed():
     """Run the seed data loader. Insurer/admin only.
 

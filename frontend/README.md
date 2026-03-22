@@ -54,14 +54,15 @@ Then open http://localhost:3000
 | Login/Home | `/` | Google OAuth + email login, role detection, auto-redirect | ✅ Implemented |
 | OAuth Callback | `/auth/callback` | Exchange auth code for session, error handling | ✅ Implemented |
 | Worker Dashboard | `/worker/dashboard` | Profile summary, 14-day earnings chart, zone trigger alerts, policy quote with activation | ✅ Implemented |
-| Worker Claims | `/worker/claims` | Claim submission form (GPS + photo evidence upload), claim history list | ✅ Implemented |
+| Worker Claims | `/worker/claims` | Claim submission form (GPS + photo evidence upload), claim history with 8 status states | ✅ Implemented |
+| Pricing & Plans | `/worker/pricing` | Essential (₹3,000/week) / Plus (₹4,500/week) plan comparison, weekly premium calculation, plan activation | ✅ Implemented |
 
 ### Admin/Insurer Side
 
 | Page | Route | What it shows | Status |
 |------|-------|--------------|--------|
 | Admin Dashboard | `/admin/dashboard` | KPI cards (total claims, avg payout, fraud rate), trigger mix pie chart | ✅ Implemented |
-| Review Queue | `/admin/reviews` | Claim list, claim detail panel with payout recommendation, fraud scores, Gemini AI summary, approve/hold/reject actions | ✅ Implemented |
+| Review Queue | `/admin/reviews` | Claim list, claim detail panel with payout recommendation, fraud scores, Gemini AI summary, approve/hold/reject/flag actions, 8 claim states | ✅ Implemented |
 | Trigger Engine | `/admin/triggers` | Live trigger feed, mock trigger injection for testing | ✅ Implemented |
 
 ---
@@ -106,5 +107,6 @@ const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/endpoint`, {
 | Admin claim list | `GET /claims` |
 | Claim detail + AI summary | `GET /claims/{id}` |
 | Review action | `POST /claims/{id}/review` |
+| Post-approval fraud flag | `POST /claims/{id}/flag` |
 | Live trigger feed | `GET /triggers/live` |
 | Mock trigger injection | `POST /triggers/inject` |
