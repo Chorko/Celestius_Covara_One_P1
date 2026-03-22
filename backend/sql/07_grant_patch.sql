@@ -1,6 +1,6 @@
 -- ============================================================
 -- 07_grant_patch.sql
--- DEVTrails — Schema permission grants + PostgREST cache reload
+-- Covara One — Schema permission grants + PostgREST cache reload
 --
 -- Run this in the Supabase SQL Editor if you get:
 --   "Database error querying schema"

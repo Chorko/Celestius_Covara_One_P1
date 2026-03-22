@@ -1,5 +1,5 @@
 -- ══════════════════════════════════════════════════════════════════════
--- DEVTrails — Unified Extensions Migration (v13)
+-- Covara One — Unified Extensions Migration (v13)
 -- ══════════════════════════════════════════════════════════════════════
 -- This migration consolidates all post-launch schema extensions into
 -- a single, idempotent script with proper RLS from the start.

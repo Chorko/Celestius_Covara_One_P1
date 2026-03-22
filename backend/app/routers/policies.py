@@ -1,5 +1,5 @@
 """
-DEVTrails — Policies & Premium Router
+Covara One — Policies & Premium Router
 
 Handles dynamic premium quotes and policy activation.
 Supports exactly two plans: Essential and Plus.

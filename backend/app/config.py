@@ -1,5 +1,5 @@
 """
-DEVTrails — Application Configuration
+Covara One — Application Configuration
 Loads environment variables for Supabase, Gemini, and app settings.
 """
 
@@ -26,10 +26,39 @@ class Settings:
     # Gemini (backend-only)
     gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
 
-    # External APIs (anti-spoofing & trigger validation)
+    # External APIs (legacy single-key names — still supported)
     openweather_api_key: str = os.getenv("OPENWEATHER_API_KEY", "")
     tomtom_api_key: str = os.getenv("TOMTOM_API_KEY", "")
     news_api_key: str = os.getenv("NEWS_API_KEY", "")
+
+    # ── Dynamic API Key Discovery ──
+    # Instead of hardcoding N key fields, we scan env vars at runtime.
+    # Just add WEATHER_API_KEY_1, WEATHER_API_KEY_2, ... to .env
+    # and the system auto-discovers them. Works for any N.
+
+    @staticmethod
+    def get_api_keys(prefix: str) -> dict[str, str]:
+        """
+        Auto-discover all API keys matching {PREFIX}_API_KEY_* from env vars.
+
+        Example:
+            get_api_keys("WEATHER") → {"1": "abc123", "2": "def456"}
+
+        This means you never need to touch config.py to add a new provider.
+        Just add WEATHER_API_KEY_4=xxx to .env and it's discovered.
+        """
+        keys = {}
+        prefix_pattern = f"{prefix}_API_KEY_"
+        for env_name, env_value in os.environ.items():
+            if env_name.startswith(prefix_pattern) and env_value:
+                slot = env_name[len(prefix_pattern):]  # e.g. "1", "2", "myapi"
+                keys[slot] = env_value
+        return keys
+
+    @staticmethod
+    def get_api_key(prefix: str, slot: str) -> str:
+        """Get a single API key by prefix and slot. Returns '' if not found."""
+        return os.getenv(f"{prefix}_API_KEY_{slot}", "")
 
     # App
     app_env: str = os.getenv("APP_ENV", "development")

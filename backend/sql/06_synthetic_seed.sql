@@ -1,8 +1,10 @@
 -- ============================================================
 -- 06_synthetic_seed.sql
--- DEVTrails — Synthetic Seed Data
+-- Covara One — Synthetic Seed Data
 --
--- Run AFTER 01–04 have been applied.
+-- Run AFTER 01–04 AND either 11_claim_states.sql or 13_unified_extensions.sql
+-- have been applied.  The seed uses expanded claim states (auto_approved,
+-- soft_hold_verification) that do not exist in the original 01 constraint.
 -- Seeds realistic demo data based on the DEVTrails_Synthetic_Seed_Pack.
 -- Safe to re-run (uses ON CONFLICT / upserts).
 -- ============================================================
@@ -512,7 +514,7 @@ ON CONFLICT (id) DO NOTHING;
 -- 7 workers (incl. demo), 3 admins (incl. demo), 8 zones,
 -- 12 triggers, 10 claims (incl. 1 fraud), 13 evidence records,
 -- 10 payout recommendations, 5 reviews (incl. 1 fraud reject),
--- 14 audit events, 56 daily stats, 10 order events.
+-- 13 audit events, 56 daily stats, 10 order events.
 -- ============================================================
 
 -- Force PostgREST to reload its schema cache.

@@ -1,5 +1,5 @@
 """
-DEVTrails — Supabase Client Initialization
+Covara One — Supabase Client Initialization
 
 Two clients are provided:
 - supabase_anon: uses anon key — safe for operations that respect RLS.

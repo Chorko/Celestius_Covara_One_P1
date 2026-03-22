@@ -1,4 +1,4 @@
-# DEVTrails — Python Dependencies
+# Covara One — Python Dependencies
 # fastapi, uvicorn, supabase are actively used by the backend scaffold.
 # Remaining dependencies declare the target stack for future services.
 

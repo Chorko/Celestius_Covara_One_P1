@@ -46,7 +46,7 @@ def force_sync_users():
             else:
                 sb.table("insurer_profiles").upsert({
                     "profile_id": uid,
-                    "company_name": "DEVTrails Inc",
+                    "company_name": "Covara One Inc",
                     "job_title": "Risk Admin"
                 }).execute()
                 

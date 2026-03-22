@@ -1,5 +1,5 @@
 """
-DEVTrails — Evidence Processing Service
+Covara One — Evidence Processing Service
 
 Handles extraction of EXIF metadata (geo-location, timestamp, camera info,
 software, modification dates) from uploaded evidence photos.
