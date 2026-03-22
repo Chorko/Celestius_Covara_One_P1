@@ -124,11 +124,16 @@ export default function AdminUsers() {
   const statusBadge = (status: string) => {
     switch (status) {
       case 'approved':
+      case 'auto_approved':
+      case 'paid':
         return 'badge-emerald'
-      case 'held':
       case 'submitted':
+      case 'soft_hold_verification':
         return 'badge-amber'
+      case 'fraud_escalated_review':
+        return 'badge-purple'
       case 'rejected':
+      case 'post_approval_flagged':
         return 'badge-red'
       default:
         return 'badge-blue'
@@ -445,7 +450,16 @@ export default function AdminUsers() {
                                   </p>
                                 </div>
                                 <span className={`badge ${statusBadge(claim.claim_status)} shrink-0 ml-3`}>
-                                  {claim.claim_status}
+                                  {({
+                                    auto_approved: 'Auto-Approved',
+                                    approved: 'Approved',
+                                    paid: 'Paid',
+                                    submitted: 'Submitted',
+                                    soft_hold_verification: 'Verification',
+                                    fraud_escalated_review: 'Fraud Review',
+                                    rejected: 'Rejected',
+                                    post_approval_flagged: 'Flagged',
+                                  } as Record<string, string>)[claim.claim_status] || claim.claim_status}
                                 </span>
                               </div>
                             ))}
@@ -470,7 +484,9 @@ export default function AdminUsers() {
                         <div className="glass-card p-4 text-center">
                           <CheckCircle size={16} className="text-emerald-400 mx-auto mb-2" />
                           <p className="text-lg font-bold">
-                            {claims.filter((c) => c.claim_status === 'approved').length}
+                            {claims.filter(
+                              (c) => ['approved', 'auto_approved', 'paid'].includes(c.claim_status)
+                            ).length}
                           </p>
                           <p className="text-[10px] text-neutral-500 uppercase tracking-wider">
                             Approved
@@ -480,7 +496,7 @@ export default function AdminUsers() {
                           <Shield size={16} className="text-amber-400 mx-auto mb-2" />
                           <p className="text-lg font-bold">
                             {claims.filter(
-                              (c) => c.claim_status === 'held' || c.claim_status === 'submitted'
+                              (c) => ['submitted', 'soft_hold_verification', 'fraud_escalated_review'].includes(c.claim_status)
                             ).length}
                           </p>
                           <p className="text-[10px] text-neutral-500 uppercase tracking-wider">

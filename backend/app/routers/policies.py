@@ -2,73 +2,139 @@
 DEVTrails — Policies & Premium Router
 
 Handles dynamic premium quotes and policy activation.
+Supports exactly two plans: Essential and Plus.
 """
 
-from fastapi import APIRouter, Depends, HTTPException
-from backend.app.dependencies import get_current_user, require_worker
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
+from backend.app.dependencies import require_worker
 from backend.app.supabase_client import get_supabase_admin
-from backend.app.services.pricing import calculate_policy_metrics, calculate_payout
+from backend.app.services.pricing import (
+    calculate_policy_metrics,
+    calculate_payout,
+)
+from backend.app.services.claim_pipeline import (
+    PLAN_WEEKLY_BENEFITS,
+    PAYOUT_BANDS,
+)
 
 router = APIRouter(prefix="/policies", tags=["Policies"])
 
+# ── Two plans only ────────────────────────────────────────────────────────
+VALID_PLANS = ("essential", "plus")
+
+
+class ActivatePolicyRequest(BaseModel):
+    plan: str = "essential"  # "essential" or "plus"
+
+
 @router.get("/quote")
-async def get_premium_quote(user: dict = Depends(require_worker)):
+async def get_premium_quote(
+    plan: str = Query("essential", description="Plan: 'essential' or 'plus'"),
+    user: dict = Depends(require_worker),
+):
     """
-    Computes and returns the weekly premium quote and payout cap for the worker.
+    Computes and returns the weekly premium quote with parametric
+    payout bands for the selected plan.
     """
+    if plan not in VALID_PLANS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid plan '{plan}'. Must be 'essential' or 'plus'.",
+        )
+
     sb = get_supabase_admin()
-    
+
     # Load worker context to compute B, E, C
-    worker_resp = sb.table("worker_profiles").select("*").eq("profile_id", user["id"]).maybe_single().execute()
-    if not worker_resp.data:
-        raise HTTPException(status_code=400, detail="Worker profile required for a quote.")
-        
-    worker_context = worker_resp.data
-    
-    # We assume average shift length of 9 hours mostly if not provided (though daily stats has it).
-    # Since we don't have shift_hours on worker_profile directly, we default it to 9 for the quote.
-    worker_context["shift_hours"] = 9.0
-    worker_context["trust_score"] = worker_context.get("trust_score", 0.8)
-    # Mock gps and acc for quote
-    worker_context["gps_consistency_score"] = 0.9
-    worker_context["accessibility_score"] = 1.0 
-    
-    base_metrics = calculate_policy_metrics(worker_context)
-    
-    # Compute an expected payout/premium using a baseline severe scenario (S=1.0) and p=0.15
-    # to show the worker what their coverage looks like.
+    worker_resp = (
+        sb.table("worker_profiles")
+        .select("*")
+        .eq("profile_id", user["id"])
+        .maybe_single()
+        .execute()
+    )
+    if not worker_resp.data:  # type: ignore
+        raise HTTPException(
+            status_code=400, detail="Worker profile required for a quote."
+        )
+
+    worker_context = worker_resp.data  # type: ignore
+
+    # Default shift_hours and signal scores for quote
+    worker_context["shift_hours"] = 9.0  # type: ignore
+    worker_context["trust_score"] = worker_context.get("trust_score", 0.8)  # type: ignore
+    worker_context["gps_consistency_score"] = 0.9  # type: ignore
+    worker_context["accessibility_score"] = 1.0  # type: ignore
+
+    base_metrics = calculate_policy_metrics(worker_context)  # type: ignore
+
+    # Compute an expected payout/premium using a baseline severe scenario
+    # (S=1.0) and p=0.15 to show the worker what their coverage looks like.
     quote = calculate_payout(
         covered_income_b=base_metrics["covered_income_b"],
-        severity_s=1.0, # quoting worst-case for max payout info
+        severity_s=1.0,  # quoting worst-case for max payout info
         exposure_e=base_metrics["exposure_e"],
         confidence_base=base_metrics["confidence_base"],
-        fraud_penalty=0.0, # zero fraud initially
-        claim_probability_p=0.15
+        fraud_penalty=0.0,  # zero fraud initially
+        claim_probability_p=0.15,
     )
-    
+
+    # ── Parametric payout ladder for selected plan ─────────────────────
+    weekly_benefit = PLAN_WEEKLY_BENEFITS[plan]
+    payout_bands = []
+    for band_num, band_info in sorted(PAYOUT_BANDS.items()):
+        payout_bands.append(
+            {
+                "band": band_num,
+                "label": band_info["label"],
+                "description": band_info["description"],
+                "multiplier": band_info["multiplier"],
+                "payout_amount": round(
+                    weekly_benefit * band_info["multiplier"], 2  # type: ignore
+                ),
+            }
+        )
+
     return {
+        "plan": plan,
+        "weekly_benefit_w": weekly_benefit,
+        "payout_bands": payout_bands,
         "covered_weekly_income": base_metrics["covered_income_b"],
         "weekly_premium_inr": quote["gross_premium"],
         "max_payout_cap_inr": quote["payout_cap"],
         "exposure_multiplier": base_metrics["exposure_e"],
-        "confidence_multiplier": base_metrics["confidence_base"]
+        "confidence_multiplier": base_metrics["confidence_base"],
     }
 
+
 @router.post("/activate")
-async def activate_policy(user: dict = Depends(require_worker)):
+async def activate_policy(
+    body: ActivatePolicyRequest,
+    user: dict = Depends(require_worker),
+):
     """
-    Mocks activating a weekly policy. 
+    Activates a weekly policy for the selected plan.
     In a full DB, this would write to a 'policies' table.
-    For this early scaffold, we simply return a success token.
+    For this scaffold, we return a success token with plan details.
     """
+    if body.plan not in VALID_PLANS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid plan '{body.plan}'. Must be 'essential' or 'plus'.",
+        )
+
     import datetime
+
     now = datetime.datetime.utcnow()
     valid_until = now + datetime.timedelta(days=7)
-    
+    weekly_benefit = PLAN_WEEKLY_BENEFITS[body.plan]
+
     return {
         "status": "active",
-        "message": "Weekly coverage activated.",
+        "message": f"{body.plan.capitalize()} weekly coverage activated.",
+        "plan": body.plan,
+        "weekly_benefit_w": weekly_benefit,
         "activated_at": now.isoformat() + "Z",
         "valid_until": valid_until.isoformat() + "Z",
-        "policy_id": f"POL-{user['id'][:8]}-{now.strftime('%Y%m%d')}"
+        "policy_id": f"POL-{user['id'][:8]}-{now.strftime('%Y%m%d')}",
     }

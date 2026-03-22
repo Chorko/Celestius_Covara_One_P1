@@ -165,10 +165,30 @@ export default function WorkerClaims() {
   }
 
   const statusConfig: Record<string, { icon: React.ReactNode; badge: string; label: string }> = {
+    auto_approved: {
+      icon: <CheckCircle size={16} className="text-emerald-400" />,
+      badge: 'badge-emerald',
+      label: 'Auto-Approved',
+    },
     approved: {
       icon: <CheckCircle size={16} className="text-emerald-400" />,
       badge: 'badge-emerald',
       label: 'Approved',
+    },
+    paid: {
+      icon: <CheckCircle size={16} className="text-emerald-400" />,
+      badge: 'badge-emerald',
+      label: 'Paid',
+    },
+    soft_hold_verification: {
+      icon: <Clock size={16} className="text-blue-400" />,
+      badge: 'badge-blue',
+      label: 'Verification',
+    },
+    fraud_escalated_review: {
+      icon: <AlertCircle size={16} className="text-amber-400" />,
+      badge: 'badge-amber',
+      label: 'Under Review',
     },
     held: {
       icon: <Clock size={16} className="text-amber-400" />,
@@ -184,6 +204,11 @@ export default function WorkerClaims() {
       icon: <XCircle size={16} className="text-red-400" />,
       badge: 'badge-red',
       label: 'Rejected',
+    },
+    post_approval_flagged: {
+      icon: <XCircle size={16} className="text-red-400" />,
+      badge: 'badge-red',
+      label: 'Flagged',
     },
   }
 

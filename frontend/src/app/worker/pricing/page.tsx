@@ -4,83 +4,76 @@ import { useEffect, useState, useCallback } from 'react'
 import { useUserStore } from '@/store'
 import { createClient } from '@/lib/supabase'
 import {
-  ShieldCheck, Shield, ShieldAlert, Clock,
+  Shield, ShieldCheck, Clock,
   CheckCircle, CreditCard, X, Sparkles, IndianRupee, Lock, Brain,
   RefreshCw, TrendingUp, AlertTriangle, Activity
 } from 'lucide-react'
 
+// ── Two Plans Only: Essential & Plus ─────────────────────────────────────
 interface PlanTier {
+  id: 'essential' | 'plus'
   name: string
-  multiplier: number
+  weeklyBenefit: number
   icon: React.ReactNode
   popular: boolean
   features: string[]
-  processing: string
+  target: string
   color: string
   accentBorder: string
   accentBg: string
   accentText: string
 }
 
-const TIERS: PlanTier[] = [
+const PLANS: PlanTier[] = [
   {
-    name: 'Basic Shield',
-    multiplier: 1,
+    id: 'essential',
+    name: 'Essential',
+    weeklyBenefit: 3000,
     icon: <Shield size={28} />,
     popular: false,
     features: [
-      'Core disruption coverage (rain, AQI, heat)',
-      'Standard payout cap',
-      'Basic fraud protection',
+      'Weekly income protection (₹3,000 basis)',
+      '15-trigger coverage (rain, AQI, heat, closures)',
+      'Pre-agreed parametric payout bands',
+      'AI-powered fraud verification',
       'Weekly auto-renewal option',
     ],
-    processing: '48h claim processing',
+    target: 'Lower premium · wider adoption · cost-sensitive workers',
     color: 'blue',
     accentBorder: 'border-blue-500/30',
     accentBg: 'from-blue-500/10 to-blue-900/10',
     accentText: 'text-blue-400',
   },
   {
-    name: 'Pro Guard',
-    multiplier: 1.5,
+    id: 'plus',
+    name: 'Plus',
+    weeklyBenefit: 4500,
     icon: <ShieldCheck size={28} />,
     popular: true,
     features: [
-      'All disruption types + operational triggers',
-      '1.5x payout cap',
-      'Advanced AI fraud detection',
-      'Gemini AI narrative reports',
-      'Priority support queue',
+      'Weekly income protection (₹4,500 basis)',
+      '15-trigger coverage + composite disruption events',
+      'Pre-agreed parametric payout bands',
+      'Advanced Ghost Shift Detector protection',
+      'Gemini AI claim narrative reports',
+      'Priority review queue',
     ],
-    processing: '24h priority processing',
+    target: 'Higher protection · experienced workers · tougher zones',
     color: 'emerald',
     accentBorder: 'border-emerald-500/30',
     accentBg: 'from-emerald-500/10 to-emerald-900/10',
     accentText: 'text-emerald-400',
   },
-  {
-    name: 'Elite Cover',
-    multiplier: 2.5,
-    icon: <ShieldAlert size={28} />,
-    popular: false,
-    features: [
-      'All triggers + composite events',
-      '2.5x payout cap',
-      'Dedicated claim adjuster',
-      'Full Income Twin analytics',
-      'Zero-Touch instant payouts',
-      'Multi-zone coverage',
-    ],
-    processing: 'Instant processing',
-    color: 'purple',
-    accentBorder: 'border-purple-500/30',
-    accentBg: 'from-purple-500/10 to-purple-900/10',
-    accentText: 'text-purple-400',
-  },
 ]
 
-// Simulated weekly zone risk factor — in production this comes from
-// the trigger-event frequency / weather-forecast pipeline each Monday.
+// ── Parametric Payout Bands ──────────────────────────────────────────────
+const PAYOUT_BANDS = [
+  { band: 1, label: 'Band 1 — Watch',      multiplier: 0.25, description: 'Moderate disruption with partial exposure' },
+  { band: 2, label: 'Band 2 — Claim',      multiplier: 0.50, description: 'Major disruption with strong exposure' },
+  { band: 3, label: 'Band 3 — Escalation', multiplier: 1.00, description: 'Severe disruption with full exposure match' },
+]
+
+// Simulated weekly zone risk factor
 function getWeeklyRiskFactor(city: string): { factor: number; label: string; trend: 'up' | 'down' | 'stable' } {
   const factors: Record<string, { factor: number; label: string; trend: 'up' | 'down' | 'stable' }> = {
     Mumbai:    { factor: 1.15, label: 'Elevated — pre-monsoon rainfall risk', trend: 'up' },
@@ -149,7 +142,6 @@ export default function WorkerPricing() {
         const B = Math.round(weekly_gross * 0.70)
         // Payout cap = 75% of covered weekly income
         const raw_cap = Math.round(B * 0.75)
-        // Sanity guard: cap at ₹10,000 for demo/synthetic flows
         const payout_cap = Math.min(raw_cap, 10000)
 
         // Weekly zone risk factor
@@ -185,13 +177,12 @@ export default function WorkerPricing() {
 
   useEffect(() => {
     if (!profile) return
-    // Wrap in IIFE to avoid eslint set-state-in-effect
     void fetchQuote()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.id])
 
-  const handleChoosePlan = (tier: PlanTier) => {
-    setSelectedPlan(tier)
+  const handleChoosePlan = (plan: PlanTier) => {
+    setSelectedPlan(plan)
     setPaymentSuccess(false)
     setPaying(false)
     setShowModal(true)
@@ -211,24 +202,21 @@ export default function WorkerPricing() {
     setPaymentSuccess(false)
   }
 
-  const getPremium = (multiplier: number) => {
+  // Premium scaling: Plus ≈ 1.40× Essential baseline
+  const getPremium = (plan: PlanTier) => {
     if (!quote) return 0
-    return Math.round(quote.weekly_premium_inr * multiplier)
-  }
-
-  const getCap = (multiplier: number) => {
-    if (!quote) return 0
-    return Math.round(quote.max_payout_cap_inr * multiplier)
+    const scale = plan.id === 'plus' ? 1.40 : 1.0
+    return Math.round(quote.weekly_premium_inr * scale)
   }
 
   if (loading) {
     return (
-      <div className="p-8 max-w-6xl mx-auto">
+      <div className="p-8 max-w-5xl mx-auto">
         <div className="animate-pulse space-y-6">
           <div className="h-10 w-72 rounded-lg bg-white/5" />
           <div className="h-5 w-96 rounded bg-white/5" />
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
-            {[1, 2, 3].map((i) => (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+            {[1, 2].map((i) => (
               <div key={i} className="glass-card p-8 h-96 rounded-2xl" />
             ))}
           </div>
@@ -238,13 +226,13 @@ export default function WorkerPricing() {
   }
 
   return (
-    <div className="p-6 md:p-8 pb-28 max-w-6xl mx-auto gradient-mesh min-h-screen">
+    <div className="p-6 md:p-8 pb-28 max-w-5xl mx-auto gradient-mesh min-h-screen">
       {/* Header */}
       <div className="text-center mb-8 animate-fade-in-up">
         <h1 className="text-4xl font-bold mb-3">Choose Your Coverage</h1>
         <p className="text-neutral-400 max-w-xl mx-auto">
-          Parametric income protection tailored to your delivery schedule.
-          All plans include automated claim triggers and AI-powered verification.
+          Parametric income protection with pre-agreed payout bands.
+          Two plans maximize conversion clarity — choose affordability or stronger cover.
         </p>
         {quote && (
           <div className="mt-4 inline-flex items-center gap-2 badge badge-emerald text-xs">
@@ -328,62 +316,72 @@ export default function WorkerPricing() {
         </div>
       )}
 
-      {/* Pricing Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-        {TIERS.map((tier, idx) => {
-          const premium = getPremium(tier.multiplier)
-          const cap = getCap(tier.multiplier)
+      {/* ── Plan Cards (2 only: Essential & Plus) ─────────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        {PLANS.map((plan, idx) => {
+          const premium = getPremium(plan)
 
           return (
             <div
-              key={tier.name}
+              key={plan.id}
               className={`glass-card p-8 relative flex flex-col animate-fade-in-up ${
-                tier.popular ? `${tier.accentBorder} glow-emerald` : ''
+                plan.popular ? `${plan.accentBorder} glow-emerald` : ''
               }`}
               style={{ animationDelay: `${(idx + 1) * 100}ms` }}
             >
               {/* Popular badge */}
-              {tier.popular && (
+              {plan.popular && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                   <span className="badge badge-emerald px-4 py-1 text-xs font-bold">
-                    MOST POPULAR
+                    RECOMMENDED
                   </span>
                 </div>
               )}
 
               {/* Plan Header */}
               <div className="mb-6">
-                <div className={`${tier.accentText} mb-3`}>{tier.icon}</div>
-                <h2 className="text-xl font-bold mb-1">{tier.name}</h2>
-                <p className="text-xs text-neutral-500 uppercase tracking-wider">
-                  {tier.multiplier}x coverage multiplier
+                <div className={`${plan.accentText} mb-3`}>{plan.icon}</div>
+                <h2 className="text-xl font-bold mb-1">{plan.name}</h2>
+                <p className="text-xs text-neutral-500">
+                  {plan.target}
                 </p>
               </div>
 
               {/* Price */}
-              <div className="mb-6">
+              <div className="mb-4">
                 <div className="flex items-baseline gap-1">
                   <span className="text-sm text-neutral-400">₹</span>
                   <span className="text-4xl font-bold">{premium || '—'}</span>
                   <span className="text-sm text-neutral-500">/week</span>
                 </div>
                 <p className="text-xs text-neutral-500 mt-2">
-                  Weekly payout cap up to{' '}
-                  <span className={`${tier.accentText} font-semibold`}>₹{cap?.toLocaleString('en-IN') || '—'}</span>
+                  Weekly benefit basis:{' '}
+                  <span className={`${plan.accentText} font-semibold`}>₹{plan.weeklyBenefit.toLocaleString('en-IN')}</span>
                 </p>
               </div>
 
-              {/* Processing */}
-              <div className="flex items-center gap-2 mb-5 text-sm text-neutral-400">
-                <Clock size={14} />
-                <span>{tier.processing}</span>
+              {/* Parametric Payout Bands */}
+              <div className="mb-5 p-3 rounded-xl bg-white/[0.02] border border-white/[0.06]">
+                <p className="text-[10px] text-neutral-500 uppercase tracking-wider mb-2 font-semibold">
+                  Pre-Agreed Payout Bands
+                </p>
+                <div className="space-y-1.5">
+                  {PAYOUT_BANDS.map((b) => (
+                    <div key={b.band} className="flex justify-between items-center text-sm">
+                      <span className="text-neutral-400 text-xs">{b.label}</span>
+                      <span className={`font-semibold ${plan.accentText}`}>
+                        ₹{Math.round(plan.weeklyBenefit * b.multiplier).toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               {/* Features */}
               <ul className="space-y-3 mb-8 flex-1">
-                {tier.features.map((feature) => (
+                {plan.features.map((feature) => (
                   <li key={feature} className="flex items-start gap-2 text-sm text-neutral-300">
-                    <CheckCircle size={16} className={`${tier.accentText} mt-0.5 shrink-0`} />
+                    <CheckCircle size={16} className={`${plan.accentText} mt-0.5 shrink-0`} />
                     <span>{feature}</span>
                   </li>
                 ))}
@@ -391,19 +389,33 @@ export default function WorkerPricing() {
 
               {/* CTA Button */}
               <button
-                onClick={() => handleChoosePlan(tier)}
+                onClick={() => handleChoosePlan(plan)}
                 disabled={!quote}
                 className={`w-full py-3 rounded-xl font-semibold text-sm transition-all ${
-                  tier.popular
+                  plan.popular
                     ? 'btn-primary'
                     : 'btn-secondary hover:border-white/20'
                 }`}
               >
-                Choose {tier.name}
+                Choose {plan.name}
               </button>
             </div>
           )
         })}
+      </div>
+
+      {/* Basis Risk Acknowledgment */}
+      <div className="glass-card p-4 mb-8 animate-fade-in-up delay-300">
+        <div className="flex items-start gap-3">
+          <AlertTriangle size={16} className="text-amber-400/60 mt-0.5 shrink-0" />
+          <div className="text-xs text-neutral-500 leading-relaxed">
+            <span className="text-neutral-400 font-semibold">Basis risk note:</span>{' '}
+            Because this is a parametric product, payouts are based on pre-agreed trigger bands,
+            not actual individual loss. A trigger may occur without equal impact for every worker,
+            and some workers may suffer loss without a clean trigger match. To reduce basis risk,
+            the system combines trigger thresholds, exposure matching, fraud controls, and review routing.
+          </div>
+        </div>
       </div>
 
       {/* Formula Breakdown */}
@@ -470,13 +482,13 @@ export default function WorkerPricing() {
                 <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-emerald-500/20 flex items-center justify-center glow-emerald">
                   <CheckCircle size={40} className="text-emerald-400" />
                 </div>
-                <h3 className="text-2xl font-bold mb-2">Coverage Activated!</h3>
+                <h3 className="text-2xl font-bold mb-2">{selectedPlan.name} Activated!</h3>
                 <p className="text-neutral-400 mb-2">
-                  {selectedPlan.name} plan is now active.
+                  Your weekly income protection is now active.
                 </p>
                 <p className="text-sm text-neutral-500 mb-4">
-                  Your weekly premium of ₹{getPremium(selectedPlan.multiplier)} is set.
-                  Parametric triggers are now monitoring your zone.
+                  Weekly benefit: ₹{selectedPlan.weeklyBenefit.toLocaleString('en-IN')} ·
+                  Parametric triggers are monitoring your zone.
                 </p>
                 <div className="flex items-center justify-center gap-3 mb-6">
                   <div className="badge badge-emerald text-xs">
@@ -514,10 +526,12 @@ export default function WorkerPricing() {
                       <p className={`font-semibold ${selectedPlan.accentText}`}>
                         {selectedPlan.name}
                       </p>
-                      <p className="text-xs text-neutral-400">Weekly coverage plan</p>
+                      <p className="text-xs text-neutral-400">
+                        ₹{selectedPlan.weeklyBenefit.toLocaleString('en-IN')}/week benefit basis
+                      </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-2xl font-bold">₹{getPremium(selectedPlan.multiplier)}</p>
+                      <p className="text-2xl font-bold">₹{getPremium(selectedPlan)}</p>
                       <p className="text-xs text-neutral-500">/week</p>
                     </div>
                   </div>
@@ -619,7 +633,7 @@ export default function WorkerPricing() {
                   ) : (
                     <>
                       <IndianRupee size={16} />
-                      Pay ₹{getPremium(selectedPlan.multiplier)} / week
+                      Pay ₹{getPremium(selectedPlan)} / week
                     </>
                   )}
                 </button>

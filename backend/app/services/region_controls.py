@@ -6,13 +6,14 @@ to detect fraud that bypasses location spoofing by targeting identity,
 behavior, and regional anomalies.
 """
 
-from datetime import datetime, timedelta
-from backend.app.services.geo_verification import calculate_distance_km
-
+from datetime import datetime
 
 # ── Historical Zone Affinity ─────────────────────────────────────────────
 
-def check_zone_affinity(worker_context: dict, claim_zone_id: str = None) -> dict:
+
+def check_zone_affinity(
+    worker_context: dict, claim_zone_id: str = None
+) -> dict:
     """
     Check what fraction of a worker's historical deliveries are in the
     claimed zone. A first-ever appearance in a red-alert zone precisely
@@ -27,10 +28,12 @@ def check_zone_affinity(worker_context: dict, claim_zone_id: str = None) -> dict
             "total_deliveries": 0,
             "zone_deliveries": 0,
             "first_time_in_zone": True,
-            "risk_level": "elevated"
+            "risk_level": "elevated",
         }
 
-    zone_deliveries = zone_history.get(claim_zone_id, 0) if claim_zone_id else 0
+    zone_deliveries = (
+        zone_history.get(claim_zone_id, 0) if claim_zone_id else 0
+    )
     affinity = zone_deliveries / total_deliveries
 
     first_time = zone_deliveries == 0
@@ -49,16 +52,17 @@ def check_zone_affinity(worker_context: dict, claim_zone_id: str = None) -> dict
         "total_deliveries": total_deliveries,
         "zone_deliveries": zone_deliveries,
         "first_time_in_zone": first_time,
-        "risk_level": risk_level
+        "risk_level": risk_level,
     }
 
 
 # ── Pre-Trigger Presence Requirement ─────────────────────────────────────
 
+
 def check_pre_trigger_presence(
     worker_context: dict,
     trigger_context: dict = None,
-    claim_zone_id: str = None
+    claim_zone_id: str = None,
 ) -> dict:
     """
     Worker must demonstrate presence or work continuity in/near the
@@ -67,10 +71,14 @@ def check_pre_trigger_presence(
     """
     trigger_start = None
     if trigger_context:
-        ts = trigger_context.get("started_at") or trigger_context.get("trigger_start")
+        ts = trigger_context.get("started_at") or trigger_context.get(
+            "trigger_start"
+        )
         if ts:
             try:
-                trigger_start = datetime.fromisoformat(str(ts).replace("Z", "+00:00")).replace(tzinfo=None)
+                trigger_start = datetime.fromisoformat(
+                    str(ts).replace("Z", "+00:00")
+                ).replace(tzinfo=None)
             except Exception:
                 pass
 
@@ -82,34 +90,43 @@ def check_pre_trigger_presence(
         return {
             "pre_trigger_present": False,
             "reason": "no_activity_history",
-            "risk_level": "elevated"
+            "risk_level": "elevated",
         }
 
     try:
         if isinstance(last_activity_ts, str):
-            activity_dt = datetime.fromisoformat(last_activity_ts.replace("Z", "+00:00")).replace(tzinfo=None)
+            activity_dt = datetime.fromisoformat(
+                last_activity_ts.replace("Z", "+00:00")
+            ).replace(tzinfo=None)
         else:
             activity_dt = last_activity_ts
     except Exception:
         return {
             "pre_trigger_present": False,
             "reason": "unparseable_activity_timestamp",
-            "risk_level": "uncertain"
+            "risk_level": "uncertain",
         }
 
-    same_zone = (last_activity_zone == claim_zone_id) if claim_zone_id and last_activity_zone else None
+    same_zone = (
+        (last_activity_zone == claim_zone_id)
+        if claim_zone_id and last_activity_zone
+        else None
+    )
 
     # If we know the trigger start time, check if activity was before it
     if trigger_start:
-        hours_before_trigger = (trigger_start - activity_dt).total_seconds() / 3600
-        was_present_before = 0 <= hours_before_trigger <= 4  # Active within 4h before trigger
+        hours_before_trigger = (
+            trigger_start - activity_dt
+        ).total_seconds() / 3600
+        # Active within 4h before trigger
+        was_present_before = 0 <= hours_before_trigger <= 4
 
         if was_present_before and same_zone is not False:
             return {
                 "pre_trigger_present": True,
                 "hours_before_trigger": round(hours_before_trigger, 2),
                 "same_zone": same_zone,
-                "risk_level": "low"
+                "risk_level": "low",
             }
         elif hours_before_trigger < 0:
             # Activity was AFTER trigger — could be legitimate real-time
@@ -117,14 +134,16 @@ def check_pre_trigger_presence(
                 "pre_trigger_present": True,
                 "hours_before_trigger": round(hours_before_trigger, 2),
                 "same_zone": same_zone,
-                "risk_level": "low"
+                "risk_level": "low",
             }
         else:
             return {
                 "pre_trigger_present": False,
                 "hours_before_trigger": round(hours_before_trigger, 2),
                 "same_zone": same_zone,
-                "risk_level": "high" if hours_before_trigger > 12 else "medium"
+                "risk_level": (
+                    "high" if hours_before_trigger > 12 else "medium"
+                ),
             }
 
     # No trigger start time — just check recency of activity
@@ -133,16 +152,21 @@ def check_pre_trigger_presence(
         "pre_trigger_present": hours_since <= 4,
         "hours_since_activity": round(hours_since, 2),
         "same_zone": same_zone,
-        "risk_level": "low" if hours_since <= 4 else ("medium" if hours_since <= 12 else "high")
+        "risk_level": (
+            "low"
+            if hours_since <= 4
+            else ("medium" if hours_since <= 12 else "high")
+        ),
     }
 
 
 # ── Dynamic Trust Score Penalties ────────────────────────────────────────
 
+
 def calculate_trust_penalty(
     worker_context: dict,
     anti_spoof_flags: list[str] = None,
-    evidence_flags: list[str] = None
+    evidence_flags: list[str] = None,
 ) -> dict:
     """
     Accumulated behavioral anomalies feed back into the worker's trust_score.
@@ -189,13 +213,16 @@ def calculate_trust_penalty(
         "total_penalty": round(total_penalty, 4),
         "new_trust_score": round(new_trust, 4),
         "applied_penalties": applied_penalties,
-        "trust_degraded": total_penalty > 0
+        "trust_degraded": total_penalty > 0,
     }
 
 
 # ── Region-Based Claim Volume Monitoring ─────────────────────────────────
 
-def check_zone_claim_volume(zone_claims_last_hour: int, zone_avg_hourly: float = 5.0) -> dict:
+
+def check_zone_claim_volume(
+    zone_claims_last_hour: int, zone_avg_hourly: float = 5.0
+) -> dict:
     """
     Per-zone real-time claim rate tracking. Flags abnormal spikes.
     Mass-claim throttling: >50 claims from a single zone within 1 hour.
@@ -212,7 +239,7 @@ def check_zone_claim_volume(zone_claims_last_hour: int, zone_avg_hourly: float =
             "zone_avg_hourly": zone_avg_hourly,
             "ratio": round(ratio, 2),
             "action": "mass_claim_throttling",
-            "risk_level": "critical"
+            "risk_level": "critical",
         }
     elif ratio > 3.0:
         return {
@@ -221,7 +248,7 @@ def check_zone_claim_volume(zone_claims_last_hour: int, zone_avg_hourly: float =
             "zone_avg_hourly": zone_avg_hourly,
             "ratio": round(ratio, 2),
             "action": "elevated_review",
-            "risk_level": "high"
+            "risk_level": "high",
         }
     else:
         return {
@@ -230,18 +257,19 @@ def check_zone_claim_volume(zone_claims_last_hour: int, zone_avg_hourly: float =
             "zone_avg_hourly": zone_avg_hourly,
             "ratio": round(ratio, 2),
             "action": "normal",
-            "risk_level": "low"
+            "risk_level": "low",
         }
 
 
 # ── Composite Region Controls Evaluation ─────────────────────────────────
+
 
 def evaluate_region_controls(
     claim_data: dict,
     worker_context: dict,
     trigger_context: dict = None,
     zone_claims_last_hour: int = 0,
-    zone_avg_hourly: float = 5.0
+    zone_avg_hourly: float = 5.0,
 ) -> dict:
     """
     Runs all behavioral identity & region control checks.
@@ -251,8 +279,12 @@ def evaluate_region_controls(
 
     # Run all checks
     zone_affinity = check_zone_affinity(worker_context, claim_zone_id)
-    pre_trigger = check_pre_trigger_presence(worker_context, trigger_context, claim_zone_id)
-    zone_volume = check_zone_claim_volume(zone_claims_last_hour, zone_avg_hourly)
+    pre_trigger = check_pre_trigger_presence(
+        worker_context, trigger_context, claim_zone_id
+    )
+    zone_volume = check_zone_claim_volume(
+        zone_claims_last_hour, zone_avg_hourly
+    )
 
     # Collect risk signals
     risk_signals = []
@@ -267,12 +299,25 @@ def evaluate_region_controls(
 
     # Composite region risk score (0 = safe, 1 = high risk)
     risk_scores = {
-        "low": 0.0, "medium": 0.3, "elevated": 0.5, "high": 0.7, "critical": 1.0, "uncertain": 0.4
+        "low": 0.0,
+        "medium": 0.3,
+        "elevated": 0.5,
+        "high": 0.7,
+        "critical": 1.0,
+        "uncertain": 0.4,
     }
 
     components = [
-        ("zone_affinity", risk_scores.get(zone_affinity["risk_level"], 0.3), 0.35),
-        ("pre_trigger_presence", risk_scores.get(pre_trigger["risk_level"], 0.3), 0.35),
+        (
+            "zone_affinity",
+            risk_scores.get(zone_affinity["risk_level"], 0.3),
+            0.35,
+        ),
+        (
+            "pre_trigger_presence",
+            risk_scores.get(pre_trigger["risk_level"], 0.3),
+            0.35,
+        ),
         ("zone_volume", risk_scores.get(zone_volume["risk_level"], 0.0), 0.30),
     ]
 
@@ -288,5 +333,6 @@ def evaluate_region_controls(
             "pre_trigger_presence": pre_trigger,
             "zone_volume": zone_volume,
         },
-        "requires_throttling": zone_volume.get("action") == "mass_claim_throttling"
+        "requires_throttling": zone_volume.get("action")
+        == "mass_claim_throttling",
     }

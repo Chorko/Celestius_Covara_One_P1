@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useUserStore } from '@/store'
 import { createClient } from '@/lib/supabase'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import {
   ShieldCheck,
   CloudRain,
@@ -28,6 +28,7 @@ export default function WorkerDashboard() {
   const [stats, setStats] = useState<any[]>([])
   const [activeTriggers, setActiveTriggers] = useState<any[]>([])
   const [policyQuote, setPolicyQuote] = useState<any>(null)
+  const [claimCounts, setClaimCounts] = useState<{ pending: number; approved: number; rejected: number; total: number }>({ pending: 0, approved: 0, rejected: 0, total: 0 })
   /* eslint-enable @typescript-eslint/no-explicit-any */
   const [activating, setActivating] = useState(false)
   const [activationMsg, setActivationMsg] = useState<string | null>(null)
@@ -92,6 +93,20 @@ export default function WorkerDashboard() {
          .limit(5)
        setActiveTriggers(tData || [])
     }
+
+    // Fetch claim counts
+    try {
+      const { data: claimData } = await supabase
+        .from('manual_claims')
+        .select('claim_status')
+        .eq('worker_profile_id', wData.profile_id)
+      if (claimData) {
+        const pending = claimData.filter(c => ['submitted', 'soft_hold_verification', 'fraud_escalated_review'].includes(c.claim_status)).length
+        const approved = claimData.filter(c => ['approved', 'auto_approved', 'paid'].includes(c.claim_status)).length
+        const rejected = claimData.filter(c => ['rejected', 'post_approval_flagged'].includes(c.claim_status)).length
+        setClaimCounts({ pending, approved, rejected, total: claimData.length })
+      }
+    } catch (e) { console.error('Could not load claim counts', e) }
 
     // Compute policy quote inline from worker profile
     // Use actual weekly gross from daily stats if available, else fallback
@@ -262,6 +277,69 @@ export default function WorkerDashboard() {
           ))}
         </section>
 
+        {/* ===== CLAIM STATUS SUMMARY ===== */}
+        {claimCounts.total > 0 && (
+          <section className="animate-fade-in-up delay-200">
+            <div className="glass-card p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider flex items-center gap-2">
+                  <ClipboardList size={16} /> My Claims Summary
+                </h2>
+                <span className="text-xs text-neutral-500">{claimCounts.total} total</span>
+              </div>
+              <div className="flex items-center gap-3">
+                {/* Status segments */}
+                <div className="flex-1 flex rounded-lg overflow-hidden h-3">
+                  {claimCounts.approved > 0 && (
+                    <div
+                      className="h-full transition-all"
+                      style={{
+                        width: `${(claimCounts.approved / claimCounts.total) * 100}%`,
+                        background: 'linear-gradient(90deg, #10b981, #34d399)',
+                      }}
+                    />
+                  )}
+                  {claimCounts.pending > 0 && (
+                    <div
+                      className="h-full transition-all"
+                      style={{
+                        width: `${(claimCounts.pending / claimCounts.total) * 100}%`,
+                        background: 'linear-gradient(90deg, #f59e0b, #fbbf24)',
+                      }}
+                    />
+                  )}
+                  {claimCounts.rejected > 0 && (
+                    <div
+                      className="h-full transition-all"
+                      style={{
+                        width: `${(claimCounts.rejected / claimCounts.total) * 100}%`,
+                        background: 'linear-gradient(90deg, #ef4444, #f87171)',
+                      }}
+                    />
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-4 mt-3 text-xs">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                  <span className="text-neutral-400">Approved</span>
+                  <span className="font-semibold text-white">{claimCounts.approved}</span>
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-amber-400" />
+                  <span className="text-neutral-400">Pending</span>
+                  <span className="font-semibold text-white">{claimCounts.pending}</span>
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-red-400" />
+                  <span className="text-neutral-400">Rejected</span>
+                  <span className="font-semibold text-white">{claimCounts.rejected}</span>
+                </span>
+              </div>
+            </div>
+          </section>
+        )}
+
         {/* ===== COVERAGE QUOTE CARD ===== */}
         {policyQuote && (
           <section className="animate-fade-in-up delay-200">
@@ -343,10 +421,11 @@ export default function WorkerDashboard() {
             </div>
             <div className="h-72 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={stats}>
+                <AreaChart data={stats}>
                   <defs>
                     <linearGradient id="earningsGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#10b981" stopOpacity={0.4} />
+                      <stop offset="0%" stopColor="#10b981" stopOpacity={0.3} />
+                      <stop offset="50%" stopColor="#10b981" stopOpacity={0.1} />
                       <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
                     </linearGradient>
                   </defs>
@@ -368,25 +447,27 @@ export default function WorkerDashboard() {
                   />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: 'rgba(10,10,10,0.85)',
-                      backdropFilter: 'blur(12px)',
-                      borderColor: 'rgba(255,255,255,0.1)',
+                      backgroundColor: 'rgba(10,10,10,0.92)',
+                      backdropFilter: 'blur(16px)',
+                      borderColor: 'rgba(16,185,129,0.2)',
                       borderRadius: '12px',
                       color: '#fff',
+                      boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
                     }}
                     itemStyle={{ color: '#10b981' }}
                     labelFormatter={(label) => `Date: ${label}`}
                   />
-                  <Line
+                  <Area
                     type="monotone"
                     dataKey="gross_earnings_inr"
                     name="Gross (INR)"
                     stroke="#10b981"
                     strokeWidth={2.5}
+                    fill="url(#earningsGradient)"
                     dot={{ r: 3.5, fill: '#10b981', strokeWidth: 0 }}
                     activeDot={{ r: 6, stroke: '#10b981', strokeWidth: 2, fill: '#0a0a0a' }}
                   />
-                </LineChart>
+                </AreaChart>
               </ResponsiveContainer>
             </div>
           </div>
