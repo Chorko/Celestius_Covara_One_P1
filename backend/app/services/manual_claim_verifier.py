@@ -73,13 +73,13 @@ def evaluate_manual_claim(
             if zone_res["match_level"] == "outside_zone":
                 geo_score = 0.0
                 hold_reasons.append(
-                    f"Location is too far ({
-                        zone_res['distance_km']}km) from assigned zone center."
+                    f"Location is too far ({zone_res['distance_km']}km) from assigned zone center."
                 )
             elif zone_res["match_level"] == "near_zone_boundary":
                 geo_score -= 0.2
-                hold_reasons.append(f"Location is at edge of zone ({
-                        zone_res['distance_km']}km).")
+                hold_reasons.append(
+                    f"Location is at edge of zone ({zone_res['distance_km']}km)."
+                )
 
     # 3. Timestamp Consistency Check
     # If photo claims to be now, but EXIF timestamp is wildly off
