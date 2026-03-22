@@ -169,46 +169,46 @@ Each folder has its own README with detailed inputs, outputs, architecture diagr
 
 ```mermaid
 graph TB
-    subgraph "🌐 External Signal Sources"
-        WX["☁️ Weather / Rain<br/>(IMD / OpenWeather)"]
-        AQ["🌫️ Air Quality<br/>(CPCB / OGD)"]
-        HT["🌡️ Heat / Temp<br/>(IMD / NDMA)"]
-        TR["🚦 Traffic<br/>(TomTom / Proxy)"]
-        PL["📱 Platform Data<br/>(Order density / Outage)"]
-        NW["📰 News / Civic<br/>(NewsAPI / Social)"]
+    subgraph SIG ["🌐 External Signal Sources"]
+        WX(["☁️ Weather / Rain<br/>(IMD / OpenWeather)"])
+        AQ(["🌫️ Air Quality<br/>(CPCB / OGD)"])
+        HT(["🌡️ Heat / Temp<br/>(IMD / NDMA)"])
+        TR(["🚦 Traffic<br/>(TomTom)"])
+        PL(["📱 Platform Data<br/>(Orders / Outage)"])
+        NW(["📰 News / Civic<br/>(GDELT / Social)"])
     end
 
-    subgraph "👤 Worker Experience"
-        WO["Onboarding<br/>+ Progressive KYC"]
-        WD["Worker Dashboard<br/>(Earnings · Alerts · Status)"]
-        WP["Plan Selection<br/>(Essential / Plus)"]
-        WC["Claim Status<br/>(8-state tracking)"]
+    subgraph WRK ["👤 Worker Experience"]
+        WO(["Onboarding<br/>+ Progressive KYC"])
+        WD(["Worker Dashboard<br/>(Earnings · Alerts · Status)"])
+        WP(["Plan Selection<br/>(Essential / Plus)"])
+        WC(["Claim Status<br/>(8-state tracking)"])
     end
 
-    subgraph "⚙️ Core Engine"
-        SI["Signal Ingestion<br/>& Normalization"]
-        TE["Trigger Engine<br/>(T1–T15 · 3-tier)"]
-        CE["Claim Engine<br/>(8-Stage Pipeline)"]
-        RC["Region Validation<br/>Cache (Fast-Lane)"]
-        PE["Premium Engine<br/>(Weekly Risk Pricing)"]
+    subgraph ENG ["⚙️ Core Engine"]
+        SI(["Signal Ingestion<br/>& Normalization"])
+        TE(["Trigger Engine<br/>(T1–T15 · 3-tier)"])
+        CE(["Claim Engine<br/>(8-Stage Pipeline)"])
+        RC(["Region Validation<br/>Cache (Fast-Lane)"])
+        PE(["Premium Engine<br/>(Weekly Risk Pricing)"])
     end
 
-    subgraph "🛡️ Fraud & Safety"
-        FE["Ghost Shift Detector<br/>(5-Layer Pipeline)"]
-        PS["Payout Safety Layer<br/>(Event-ID · Uniqueness)"]
-        PO["Zero-Touch Payout<br/>(Idempotent · Atomic)"]
+    subgraph FRD ["🛡️ Fraud & Safety"]
+        FE(["Ghost Shift Detector<br/>(5-Layer Pipeline)"])
+        PS(["Payout Safety Layer<br/>(Event-ID · Uniqueness)"])
+        PO(["Zero-Touch Payout<br/>(Idempotent · Atomic)"])
     end
 
-    subgraph "📊 Data & Intelligence"
+    subgraph DAT ["📊 Data & Intelligence"]
         DL[("Supabase PostgreSQL<br/>(14 tables · RLS)")]
-        ML["ML Layer<br/>(Random Forest · Feature Eng)"]
-        AN["Analytics Engine"]
+        ML(["ML Layer<br/>(Random Forest · Feature Eng)"])
+        AN(["Analytics Engine"])
     end
 
-    subgraph "🏢 Insurer Operations"
-        ID["Insurer Dashboard<br/>(KPIs · Triggers · Search)"]
-        RQ["Review Queue<br/>(AI-Assisted Decisions)"]
-        FR["Fraud Review Panel<br/>(Flag · Escalate)"]
+    subgraph INS ["🏢 Insurer Operations"]
+        ID(["Insurer Dashboard<br/>(KPIs · Triggers · Search)"])
+        RQ(["Review Queue<br/>(AI-Assisted Decisions)"])
+        FR(["Fraud Review Panel<br/>(Flag · Escalate)"])
     end
 
     WX & AQ & HT & TR & PL & NW --> SI
@@ -233,24 +233,30 @@ graph TB
     TE --> DL
     CE --> DL
 
-    style WO fill:#3b82f6,color:#fff
-    style WD fill:#3b82f6,color:#fff
-    style WP fill:#3b82f6,color:#fff
-    style WC fill:#3b82f6,color:#fff
-    style SI fill:#10b981,color:#fff
-    style TE fill:#10b981,color:#fff
-    style CE fill:#10b981,color:#fff
-    style RC fill:#10b981,color:#fff
-    style PE fill:#10b981,color:#fff
-    style FE fill:#8b5cf6,color:#fff
-    style PS fill:#8b5cf6,color:#fff
-    style PO fill:#8b5cf6,color:#fff
-    style ID fill:#f59e0b,color:#fff
-    style RQ fill:#f59e0b,color:#fff
-    style FR fill:#f59e0b,color:#fff
-    style DL fill:#6366f1,color:#fff
-    style ML fill:#6366f1,color:#fff
-    style AN fill:#6366f1,color:#fff
+    style WX fill:#7C3AED,color:#fff,stroke:#7C3AED,stroke-width:2px
+    style AQ fill:#7C3AED,color:#fff,stroke:#7C3AED,stroke-width:2px
+    style HT fill:#7C3AED,color:#fff,stroke:#7C3AED,stroke-width:2px
+    style TR fill:#7C3AED,color:#fff,stroke:#7C3AED,stroke-width:2px
+    style PL fill:#7C3AED,color:#fff,stroke:#7C3AED,stroke-width:2px
+    style NW fill:#7C3AED,color:#fff,stroke:#7C3AED,stroke-width:2px
+    style WO fill:#1D4ED8,color:#fff,stroke:#1D4ED8,stroke-width:2px
+    style WD fill:#1D4ED8,color:#fff,stroke:#1D4ED8,stroke-width:2px
+    style WP fill:#1D4ED8,color:#fff,stroke:#1D4ED8,stroke-width:2px
+    style WC fill:#1D4ED8,color:#fff,stroke:#1D4ED8,stroke-width:2px
+    style SI fill:#059669,color:#fff,stroke:#059669,stroke-width:2px
+    style TE fill:#059669,color:#fff,stroke:#059669,stroke-width:2px
+    style CE fill:#059669,color:#fff,stroke:#059669,stroke-width:2px
+    style RC fill:#059669,color:#fff,stroke:#059669,stroke-width:2px
+    style PE fill:#059669,color:#fff,stroke:#059669,stroke-width:2px
+    style FE fill:#9333EA,color:#fff,stroke:#9333EA,stroke-width:2px
+    style PS fill:#9333EA,color:#fff,stroke:#9333EA,stroke-width:2px
+    style PO fill:#9333EA,color:#fff,stroke:#9333EA,stroke-width:2px
+    style DL fill:#4F46E5,color:#fff,stroke:#4F46E5,stroke-width:2px
+    style ML fill:#4F46E5,color:#fff,stroke:#4F46E5,stroke-width:2px
+    style AN fill:#4F46E5,color:#fff,stroke:#4F46E5,stroke-width:2px
+    style ID fill:#B45309,color:#fff,stroke:#B45309,stroke-width:2px
+    style RQ fill:#B45309,color:#fff,stroke:#B45309,stroke-width:2px
+    style FR fill:#B45309,color:#fff,stroke:#B45309,stroke-width:2px
 ```
 
 > **📋 Architecture status:** The core platform (Trigger Engine, Claim Engine, Fraud Engine, Premium Engine, Payout Safety, Region Cache) and both dashboards are **implemented**. ML training pipeline and external API live connectors are **planned** — mock data is used for demo.
@@ -263,23 +269,23 @@ graph TB
 
 ```mermaid
 flowchart LR
-    A["📝 Sign Up<br/>Zone, shift, earnings"] --> B["💰 Get Weekly<br/>Premium Quote"]
-    B --> C["✅ Activate<br/>Weekly Cover"]
-    C --> D["⚠️ Receive<br/>Disruption Alert"]
-    D --> E["📋 Auto-Claim<br/>Initiated"]
-    E --> F["🔍 Fraud Check<br/>& Verification"]
-    F --> G["💸 Payout<br/>Notification"]
-    G --> H["📊 Trust Score<br/>Updated"]
+    A(["📝 Sign Up<br/>Zone, shift, earnings"]) --> B(["💰 Get Weekly<br/>Premium Quote"])
+    B --> C(["✅ Activate<br/>Weekly Cover"])
+    C --> D(["⚠️ Disruption<br/>Alert Received"])
+    D --> E(["📋 Auto-Claim<br/>Initiated"])
+    E --> F(["🔍 Fraud Check<br/>& Verification"])
+    F --> G(["💸 Payout<br/>Notification"])
+    G --> H(["📊 Trust Score<br/>Updated"])
     H --> B
 
-    style A fill:#4a9eff,color:#fff
-    style B fill:#4a9eff,color:#fff
-    style C fill:#2ecc71,color:#fff
-    style D fill:#f39c12,color:#fff
-    style E fill:#e74c3c,color:#fff
-    style F fill:#9b59b6,color:#fff
-    style G fill:#2ecc71,color:#fff
-    style H fill:#4a9eff,color:#fff
+    style A fill:#7C3AED,color:#fff,stroke:#7C3AED,stroke-width:2px
+    style B fill:#1D4ED8,color:#fff,stroke:#1D4ED8,stroke-width:2px
+    style C fill:#059669,color:#fff,stroke:#059669,stroke-width:2px
+    style D fill:#B45309,color:#fff,stroke:#B45309,stroke-width:2px
+    style E fill:#DC2626,color:#fff,stroke:#DC2626,stroke-width:2px
+    style F fill:#9333EA,color:#fff,stroke:#9333EA,stroke-width:2px
+    style G fill:#16A34A,color:#fff,stroke:#16A34A,stroke-width:2px
+    style H fill:#0F766E,color:#fff,stroke:#0F766E,stroke-width:2px
 ```
 
 
@@ -470,69 +476,53 @@ The platform uses a **3-tier trigger architecture**: early warning → claim tri
 
 ```mermaid
 flowchart TD
-    subgraph "CLAIM INTAKE"
-        CS["📋 Claim Submitted<br/>(auto-trigger or manual)"]
-    end
+    CS(["📋 Claim Submitted<br/>(auto-trigger or manual)"])
 
-    subgraph "LAYER 1 — Event Truth"
-        L1["🌦️ Trigger Validation<br/>OpenWeather · IMD · CPCB<br/>Does the disruption exist?"]
-    end
+    L1(["🌦️ LAYER 1 — Event Truth<br/>OpenWeather · IMD · CPCB<br/>Does the disruption exist?"])
+    L2(["👷 LAYER 2 — Worker Truth<br/>Shift overlap · Zone match<br/>Route plausibility (TomTom)"])
 
-    subgraph "LAYER 2 — Worker Truth"
-        L2["👷 Exposure Verification<br/>Shift overlap · Zone match<br/>Route plausibility (TomTom)"]
-    end
-
-    subgraph "LAYER 3 — Anti-Spoofing"
+    subgraph L3G ["LAYER 3 — Anti-Spoofing"]
         direction LR
-        AS1["📍 EXIF vs GPS<br/>cross-check"]
-        AS2["⏱️ Timestamp<br/>freshness"]
-        AS3["🌐 VPN / Datacenter<br/>IP detection"]
-        AS4["📱 Device continuity<br/>& emulator check"]
-        AS5["🚀 Impossible travel<br/>velocity"]
+        AS1(["📍 EXIF vs GPS"])
+        AS2(["⏱️ Timestamp freshness"])
+        AS3(["🌐 VPN / Datacenter IP"])
+        AS4(["📱 Device continuity"])
+        AS5(["🚀 Impossible travel"])
     end
 
-    subgraph "LAYER 4 — Image Forensics"
+    subgraph L4G ["LAYER 4 — Image Forensics"]
         direction LR
-        IF1["🔍 EXIF integrity<br/>& completeness"]
-        IF2["🤖 AI detection<br/>(SynthID / Gemini)"]
-        IF3["📸 Camera-device<br/>consistency"]
-        IF4["🖼️ ELA & noise<br/>analysis"]
+        IF1(["🔍 EXIF integrity"])
+        IF2(["🤖 AI detection (SynthID)"])
+        IF3(["📸 Camera-device match"])
+        IF4(["🖼️ ELA & noise"])
     end
 
-    subgraph "LAYER 5 — Behavioral & Region"
+    subgraph L5G ["LAYER 5 — Behavioral & Region"]
         direction LR
-        BR1["📊 Zone affinity<br/>& history"]
-        BR2["⏰ Pre-trigger<br/>presence"]
-        BR3["🔗 Cluster intel<br/>(DBSCAN)"]
-        BR4["📈 Zone claim<br/>volume spike"]
+        BR1(["📊 Zone affinity"])
+        BR2(["⏰ Pre-trigger presence"])
+        BR3(["🔗 Cluster intel (DBSCAN)"])
+        BR4(["📈 Zone claim spike"])
     end
 
-    subgraph "SCORING ENGINE"
-        SE["⚖️ Signal Confidence<br/>Hierarchy Weighting<br/>9-rank weighted composite"]
-    end
+    SE(["⚖️ Signal Confidence<br/>Hierarchy Weighting<br/>9-rank weighted composite"])
 
-    subgraph "5-BAND DECISION MATRIX"
-        D1["✅ auto_approve<br/>Instant payout"]
-        D2["🔎 needs_review<br/>Human + Gemini AI"]
-        D3["⚠️ hold_for_fraud<br/>Investigation"]
-        D4["🛑 batch_hold<br/>Cluster screening"]
-        D5["❌ reject_spoof_risk<br/>48h appeal window"]
-    end
+    D1(["✅ auto_approve<br/>Instant payout"])
+    D2(["🔎 needs_review<br/>Human + Gemini AI"])
+    D3(["⚠️ hold_for_fraud<br/>Investigation"])
+    D4(["🛑 batch_hold<br/>Cluster screening"])
+    D5(["❌ reject_spoof_risk<br/>48h appeal window"])
 
-    subgraph "PROTECTION SYSTEMS"
-        CB["🚨 Circuit Breaker<br/>Mass-claim throttle<br/>Zone payout cap<br/>Payout release gate"]
-        TS["📉 Trust Score<br/>Dynamic penalty<br/>Gradual recovery<br/>Premium adjustment"]
-    end
+    CB(["🚨 Circuit Breaker<br/>Mass-claim throttle<br/>Zone payout cap"])
+    TS(["📉 Trust Score<br/>Dynamic penalty<br/>Premium adjustment"])
 
     CS --> L1
     L1 --> L2
-    L2 --> L3
-    L3 --- AS1 & AS2 & AS3 & AS4 & AS5
-    AS1 & AS2 & AS3 & AS4 & AS5 --> L4
-    L4 --- IF1 & IF2 & IF3 & IF4
-    IF1 & IF2 & IF3 & IF4 --> L5
-    L5 --- BR1 & BR2 & BR3 & BR4
-    BR1 & BR2 & BR3 & BR4 --> SE
+    L2 --> L3G
+    L3G --> L4G
+    L4G --> L5G
+    L5G --> SE
 
     SE --> D1
     SE --> D2
@@ -545,17 +535,30 @@ flowchart TD
     D5 --> TS
     TS -.->|"future claims<br/>default to review"| SE
 
-    style CS fill:#4a9eff,color:#fff
-    style L1 fill:#2ecc71,color:#fff
-    style L2 fill:#2ecc71,color:#fff
-    style SE fill:#9b59b6,color:#fff
-    style D1 fill:#27ae60,color:#fff
-    style D2 fill:#f39c12,color:#fff
-    style D3 fill:#e67e22,color:#fff
-    style D4 fill:#e74c3c,color:#fff
-    style D5 fill:#c0392b,color:#fff
-    style CB fill:#e74c3c,color:#fff
-    style TS fill:#ff8c42,color:#fff
+    style CS fill:#1D4ED8,color:#fff,stroke:#1D4ED8,stroke-width:2px
+    style L1 fill:#059669,color:#fff,stroke:#059669,stroke-width:2px
+    style L2 fill:#0F766E,color:#fff,stroke:#0F766E,stroke-width:2px
+    style AS1 fill:#7C3AED,color:#fff,stroke:#7C3AED,stroke-width:2px
+    style AS2 fill:#7C3AED,color:#fff,stroke:#7C3AED,stroke-width:2px
+    style AS3 fill:#7C3AED,color:#fff,stroke:#7C3AED,stroke-width:2px
+    style AS4 fill:#7C3AED,color:#fff,stroke:#7C3AED,stroke-width:2px
+    style AS5 fill:#7C3AED,color:#fff,stroke:#7C3AED,stroke-width:2px
+    style IF1 fill:#9333EA,color:#fff,stroke:#9333EA,stroke-width:2px
+    style IF2 fill:#9333EA,color:#fff,stroke:#9333EA,stroke-width:2px
+    style IF3 fill:#9333EA,color:#fff,stroke:#9333EA,stroke-width:2px
+    style IF4 fill:#9333EA,color:#fff,stroke:#9333EA,stroke-width:2px
+    style BR1 fill:#B45309,color:#fff,stroke:#B45309,stroke-width:2px
+    style BR2 fill:#B45309,color:#fff,stroke:#B45309,stroke-width:2px
+    style BR3 fill:#B45309,color:#fff,stroke:#B45309,stroke-width:2px
+    style BR4 fill:#B45309,color:#fff,stroke:#B45309,stroke-width:2px
+    style SE fill:#7C3AED,color:#fff,stroke:#7C3AED,stroke-width:3px
+    style D1 fill:#16A34A,color:#fff,stroke:#16A34A,stroke-width:2px
+    style D2 fill:#CA8A04,color:#fff,stroke:#CA8A04,stroke-width:2px
+    style D3 fill:#EA580C,color:#fff,stroke:#EA580C,stroke-width:2px
+    style D4 fill:#DC2626,color:#fff,stroke:#DC2626,stroke-width:2px
+    style D5 fill:#991B1B,color:#fff,stroke:#991B1B,stroke-width:2px
+    style CB fill:#DC2626,color:#fff,stroke:#DC2626,stroke-width:2px
+    style TS fill:#EA580C,color:#fff,stroke:#EA580C,stroke-width:2px
 ```
 
 > **How to read this diagram:** A claim enters at the top and passes through 5 verification layers. Each layer produces weighted signals that feed the scoring engine. The scoring engine maps the composite fraud score to one of 5 decision bands. Circuit-breakers protect the liquidity pool during mass-attack scenarios, and trust score penalties feed back into future claim evaluations.
