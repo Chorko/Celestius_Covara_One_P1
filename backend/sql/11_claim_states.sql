@@ -40,7 +40,7 @@ update public.manual_claims
 update public.manual_claims
   set claim_status = 'auto_approved'
   where claim_status = 'approved'
-    and claim_mode = 'auto';
+    and claim_mode = 'trigger_auto';
 
 -- Now add the expanded constraint (all old values are converted)
 alter table public.manual_claims
