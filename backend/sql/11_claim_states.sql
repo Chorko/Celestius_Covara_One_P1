@@ -34,9 +34,13 @@ update public.manual_claims
   set claim_status = 'soft_hold_verification'
   where claim_status = 'held';
 
+-- Only convert 'approved' → 'auto_approved' for trigger-auto claims.
+-- Manually-reviewed approvals (claim_mode = 'manual') remain as 'approved',
+-- preserving the semantic difference between auto-triggered and admin-approved.
 update public.manual_claims
   set claim_status = 'auto_approved'
-  where claim_status = 'approved';
+  where claim_status = 'approved'
+    and claim_mode = 'auto';
 
 -- Now add the expanded constraint (all old values are converted)
 alter table public.manual_claims

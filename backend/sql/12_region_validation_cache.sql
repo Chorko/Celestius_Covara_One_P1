@@ -41,10 +41,23 @@ comment on column public.validated_regional_incidents.cluster_spike_detected is
   'If true, fast-lane auto-release is paused and cluster-level validation '
   'is required to protect the liquidity pool.';
 
--- Grant access
-grant select, insert, update, delete
-  on public.validated_regional_incidents to authenticated;
-grant select on public.validated_regional_incidents to anon;
+-- Enable RLS and add least-privilege policies
+alter table public.validated_regional_incidents enable row level security;
+
+-- Workers may read validated incidents to understand their zone's history
+create policy "Workers can view validated incidents" on public.validated_regional_incidents
+  for select to authenticated
+  using (true);
+
+-- Only the backend service role can validate/write incidents
+create policy "Service role can manage validated incidents" on public.validated_regional_incidents
+  for all to service_role
+  using (true)
+  with check (true);
+
+-- Remove the broad grants that were applied before
+revoke insert, update, delete on public.validated_regional_incidents from authenticated;
+revoke all on public.validated_regional_incidents from anon;
 
 -- Reload PostgREST schema cache
 notify pgrst, 'reload schema';
