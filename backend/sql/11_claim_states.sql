@@ -6,6 +6,10 @@
 --   fraud-escalated review paths. No partial payouts — soft hold
 --   delays money movement until verification finishes.
 --
+-- WARNING: Do NOT apply this file if you have already applied
+--   13_unified_extensions.sql. That file supersedes this script and
+--   running both will cause duplicate-object errors.
+--
 -- New states:
 --   submitted               → initial intake
 --   auto_approved            → parametric auto-approve (low fraud)

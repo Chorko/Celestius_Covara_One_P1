@@ -12,8 +12,22 @@
 --   §5  Validated Regional Incidents (fast-lane cache)
 --   §6  Worker Phone Numbers (contact data)
 --
--- Run this ONCE in Supabase SQL Editor after migrations 01–09.
--- This script replaces migrations 10, 11, 12, and 13 individually.
+-- ┌─────────────────────────────────────────────────────────────────┐
+-- │  MIGRATION PATH — choose ONE of the two options below.         │
+-- │  Running both will cause duplicate-object errors.              │
+-- ├─────────────────────────────────────────────────────────────────┤
+-- │  Option A — Fresh install (recommended for new environments):  │
+-- │    1. Apply migrations 01–09 in order.                         │
+-- │    2. Apply THIS file (13_unified_extensions.sql).             │
+-- │    3. DO NOT apply 10_payout_safety.sql,                       │
+-- │       11_claim_states.sql, or 12_region_validation_cache.sql.  │
+-- │       Those scripts are fully superseded by this file.         │
+-- ├─────────────────────────────────────────────────────────────────┤
+-- │  Option B — Existing environment that already ran 10, 11, 12:  │
+-- │    1. DO NOT apply this file.                                  │
+-- │    2. The individual scripts 10, 11, 12 have already applied   │
+-- │       all equivalent schema changes; this file is redundant.   │
+-- └─────────────────────────────────────────────────────────────────┘
 -- ══════════════════════════════════════════════════════════════════════
 
 -- ┌──────────────────────────────────────────────────────────────────┐
