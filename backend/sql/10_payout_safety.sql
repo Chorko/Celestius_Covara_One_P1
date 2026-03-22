@@ -6,6 +6,10 @@
 --   constraints. Each disruption window gets a deterministic event_id
 --   so that retries and duplicate trigger-firings never produce
 --   repeated payouts for the same worker + event.
+--
+-- WARNING: Do NOT apply this file if you have already applied
+--   13_unified_extensions.sql. That file supersedes this script and
+--   running both will cause duplicate-object errors.
 -- ══════════════════════════════════════════════════════════════════════
 
 -- 1. Disruption event identity table

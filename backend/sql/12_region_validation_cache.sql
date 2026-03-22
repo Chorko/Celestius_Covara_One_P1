@@ -6,6 +6,10 @@
 --   zone/trigger/window can skip repeated manual review.
 --   Individual fraud checks are NEVER bypassed by fast-lane.
 --
+-- WARNING: Do NOT apply this file if you have already applied
+--   13_unified_extensions.sql. That file supersedes this script and
+--   running both will cause duplicate-object errors.
+--
 --   Liquidity protection: if an extreme spike of same-zone claims
 --   appears, the platform switches to cluster-level validation,
 --   protecting the liquidity pool before mass payouts are executed.
