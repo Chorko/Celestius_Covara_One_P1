@@ -57,8 +57,8 @@ def check_exif_gps_mismatch(
         if (
             exif_lat is not None
             and exif_lng is not None
-            and claim_lat
-            and claim_lng
+            and claim_lat is not None
+            and claim_lng is not None
         ):
             dist_km = calculate_distance_km(
                 exif_lat, exif_lng, claim_lat, claim_lng
