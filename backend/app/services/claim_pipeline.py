@@ -102,10 +102,16 @@ def run_claim_pipeline(
 
     # --- 1-3: Validation and Exposure ---
     if trigger_context:
-        add_trace(1, "trigger_event", f"Matched trigger type: {
-                trigger_context.get('trigger_family')}")
-        add_trace(2, "signal_validated", f"Signal source: {
-                trigger_context.get('source_type')}")
+        add_trace(
+            1,
+            "trigger_event",
+            f"Matched trigger type: {trigger_context.get('trigger_family')}",
+        )
+        add_trace(
+            2,
+            "signal_validated",
+            f"Signal source: {trigger_context.get('source_type')}",
+        )
     else:
         add_trace(
             1, "manual_event", "No direct trigger event associated initially."
@@ -139,8 +145,8 @@ def run_claim_pipeline(
         if mv["manual_verification_status"] == "hold":
             manual_held = True
             hold_reasons.extend(mv["hold_reasons"])
-            add_trace(3, "manual_strictness", f"Held: {
-                    ', '.join(hold_reasons)}")
+            held_summary = ", ".join(hold_reasons)
+            add_trace(3, "manual_strictness", f"Held: {held_summary}")
         else:
             add_trace(
                 3,
@@ -162,9 +168,13 @@ def run_claim_pipeline(
     payout_band = map_severity_to_band(severity_s, trigger_band)
     parametric = calculate_parametric_payout(payout_band, plan)
 
-    add_trace(5, "payout_band_mapped", f"Band {payout_band} ({
-            parametric['band_label']}) → ₹{
-            parametric['parametric_payout']}")
+    band_label = parametric["band_label"]
+    parametric_payout = parametric["parametric_payout"]
+    add_trace(
+        5,
+        "payout_band_mapped",
+        f"Band {payout_band} ({band_label}) → ₹{parametric_payout}",
+    )
 
     # --- 6. Anti-Spoofing + Fraud Check (5-Layer Ghost Shift Detector) ---
     fraud_res = evaluate_fraud_risk(
@@ -178,11 +188,15 @@ def run_claim_pipeline(
         zone_avg_hourly=zone_avg_hourly,
     )
 
-    add_trace(6, "anti_spoofing_fraud_check", f"fraud_score={
-            fraud_res['fraud_score']} band={
-            fraud_res['fraud_band']} " f"decision={
-                fraud_res['recommended_action']} flags={
-                    fraud_res['flag_count']}")
+    fraud_score = fraud_res["fraud_score"]
+    fraud_band = fraud_res["fraud_band"]
+    fraud_action = fraud_res["recommended_action"]
+    fraud_flags = fraud_res["flag_count"]
+    add_trace(
+        6,
+        "anti_spoofing_fraud_check",
+        f"fraud_score={fraud_score} band={fraud_band} decision={fraud_action} flags={fraud_flags}",
+    )
 
     # --- Internal calibration (legacy formula, for premium sizing) ---
     base_metrics = calculate_policy_metrics(worker_context)
@@ -211,7 +225,7 @@ def run_claim_pipeline(
         "batch_hold": "fraud_escalated_review",
         "reject_spoof_risk": "rejected",
     }
-    final_status = STATUS_MAP.get(decision_status, "review")
+    final_status = STATUS_MAP.get(decision_status, "soft_hold_verification")
 
     add_trace(
         7, "decision", f"decision = {final_status} (action: {decision_status})"
@@ -245,7 +259,7 @@ def run_claim_pipeline(
             "payout_cap": payout_res["payout_cap"],
             "expected_payout": payout_res["expected_payout"],
             "gross_premium": payout_res["gross_premium"],
-            "recommended_payout_internal": payout_res["recommended_payout"],
+            "recommended_payout": payout_res["recommended_payout"],
         },
         "fraud_analysis": {
             "fraud_score": fraud_res["fraud_score"],

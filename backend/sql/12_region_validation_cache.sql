@@ -41,10 +41,50 @@ comment on column public.validated_regional_incidents.cluster_spike_detected is
   'If true, fast-lane auto-release is paused and cluster-level validation '
   'is required to protect the liquidity pool.';
 
--- Grant access
+-- Enable RLS and add least-privilege policies
+alter table public.validated_regional_incidents enable row level security;
+
+drop policy if exists "RegionalIncidents: Admins can read all" on public.validated_regional_incidents;
+drop policy if exists "RegionalIncidents: Admins can insert" on public.validated_regional_incidents;
+drop policy if exists "RegionalIncidents: Admins can update" on public.validated_regional_incidents;
+drop policy if exists "RegionalIncidents: Admins can delete" on public.validated_regional_incidents;
+drop policy if exists "RegionalIncidents: Authenticated can read" on public.validated_regional_incidents;
+
+-- Only admins can create/modify validated incidents (prevents workers from self-validating claims)
+create policy "RegionalIncidents: Admins can read all"
+on public.validated_regional_incidents
+for select
+to authenticated
+using (public.current_user_role() = 'insurer_admin');
+
+create policy "RegionalIncidents: Admins can insert"
+on public.validated_regional_incidents
+for insert
+to authenticated
+with check (public.current_user_role() = 'insurer_admin');
+
+create policy "RegionalIncidents: Admins can update"
+on public.validated_regional_incidents
+for update
+to authenticated
+using (public.current_user_role() = 'insurer_admin');
+
+create policy "RegionalIncidents: Admins can delete"
+on public.validated_regional_incidents
+for delete
+to authenticated
+using (public.current_user_role() = 'insurer_admin');
+
+-- Workers can read non-spiked validated incidents (for fast-lane eligibility checks)
+create policy "RegionalIncidents: Authenticated can read non-spiked"
+on public.validated_regional_incidents
+for select
+to authenticated
+using (cluster_spike_detected = false);
+
+-- Grant access (RLS enforces row-level restrictions; anon grant removed)
 grant select, insert, update, delete
   on public.validated_regional_incidents to authenticated;
-grant select on public.validated_regional_incidents to anon;
 
 -- Reload PostgREST schema cache
 notify pgrst, 'reload schema';

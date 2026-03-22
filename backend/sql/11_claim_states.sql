@@ -36,7 +36,13 @@ update public.manual_claims
 
 update public.manual_claims
   set claim_status = 'auto_approved'
-  where claim_status = 'approved';
+  where claim_status = 'approved'
+    and claim_mode = 'trigger_auto';
+
+-- Manual-review approvals keep their 'approved' status (human-verified).
+-- Rows with claim_mode = 'manual' and claim_status = 'approved' are
+-- intentionally left as 'approved' to distinguish them from parametric
+-- auto-approvals. The new constraint includes both 'approved' and 'auto_approved'.
 
 -- Now add the expanded constraint (all old values are converted)
 alter table public.manual_claims

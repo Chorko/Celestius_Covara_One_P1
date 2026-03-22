@@ -161,8 +161,8 @@ def run_excel_seed(file_path: str):
         chunk_size = 100
         total_inserted = 0
 
-        print(f"Importing {
-                len(records_to_insert)} records into '{table_name}'...")
+        record_count = len(records_to_insert)
+        print(f"Importing {record_count} records into '{table_name}'...")
         for i in range(0, len(records_to_insert), chunk_size):
             chunk = records_to_insert[i : i + chunk_size]
             try:

@@ -29,10 +29,18 @@ async def get_dashboard_summary():
     pending_claims = sum(
         1
         for c in claims_resp.data
-        if c["claim_status"] in ["submitted", "held"]
+        if c["claim_status"]
+        in [
+            "submitted",
+            "held",
+            "soft_hold_verification",
+            "fraud_escalated_review",
+        ]
     )
     approved_claims = sum(
-        1 for c in claims_resp.data if c["claim_status"] == "approved"
+        1
+        for c in claims_resp.data
+        if c["claim_status"] in ["approved", "auto_approved", "paid"]
     )
 
     # 2. Financials (Payouts)

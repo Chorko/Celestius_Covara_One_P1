@@ -1,11 +1,12 @@
 """
 DEVTrails — Trigger Engine Service
 
-Handles logic related to the 15-trigger library and matching
+Handles logic related to the 16-trigger library and matching
 active disruption events to worker zones/shifts.
 """
 
-# The 15-trigger library (T1-T15) mapped directly from documentation
+# The 16-trigger library (T1-T16) mapped directly from documentation
+# T1-T15: core weather/environment triggers; T16: AQI extreme condition
 TRIGGER_LIBRARY = {
     "RAIN_WATCH": {
         "id": "T1",
