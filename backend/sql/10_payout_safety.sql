@@ -39,10 +39,30 @@ comment on index public.idx_unique_worker_event is
   'Ensures one payout per worker per trigger event. '
   'Only applies to approved/paid/auto_approved claims.';
 
--- 3. Grant access to new table
-grant select, insert, update, delete
-  on public.disruption_events to authenticated;
-grant select on public.disruption_events to anon;
+-- 3. Enable RLS and add least-privilege policies
+alter table public.disruption_events enable row level security;
+
+drop policy if exists "DisruptionEvents: Admins can read all" on public.disruption_events;
+drop policy if exists "DisruptionEvents: Admins can insert" on public.disruption_events;
+drop policy if exists "DisruptionEvents: Authenticated can read" on public.disruption_events;
+
+create policy "DisruptionEvents: Authenticated can read"
+on public.disruption_events
+for select
+to authenticated
+using (true);
+
+create policy "DisruptionEvents: Admins can insert"
+on public.disruption_events
+for insert
+to authenticated
+with check (public.current_user_role() = 'insurer_admin');
+
+create policy "DisruptionEvents: Admins can update"
+on public.disruption_events
+for update
+to authenticated
+using (public.current_user_role() = 'insurer_admin');
 
 -- Reload PostgREST schema cache
 notify pgrst, 'reload schema';

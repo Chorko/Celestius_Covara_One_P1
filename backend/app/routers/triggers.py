@@ -2,7 +2,7 @@
 DEVTrails — Triggers Router
 
 Handles:
-- GET /triggers/library (Static 15-trigger list)
+- GET /triggers/library (Static 16-trigger list)
 - GET /triggers/live (Active triggers filtered by city/zone)
 - POST /triggers/simulate (Admin mock injection)
 """
@@ -31,7 +31,7 @@ class SimulateTriggerRequest(BaseModel):
 
 @router.get("/library")
 async def get_trigger_library():
-    """Returns the static 15-trigger lookup library."""
+    """Returns the static 16-trigger lookup library."""
     return {
         "triggers": list(TRIGGER_LIBRARY.values()),
         "count": len(TRIGGER_LIBRARY),

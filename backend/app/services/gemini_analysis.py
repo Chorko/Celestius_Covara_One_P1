@@ -35,7 +35,6 @@ async def generate_claim_narrative(
         # Safely extract context for the prompt
         reason = claim_record.get("claim_reason", "Not provided")
         mode = claim_record.get("claim_mode", "unknown")
-        pipeline_result.get("payout_recommendation", {})
         review_data = pipeline_result.get("review", {})
 
         fraud_val = review_data.get("fraud_score", "N/A")

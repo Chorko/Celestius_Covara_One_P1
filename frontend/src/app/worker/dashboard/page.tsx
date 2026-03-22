@@ -32,6 +32,7 @@ export default function WorkerDashboard() {
   /* eslint-enable @typescript-eslint/no-explicit-any */
   const [activating, setActivating] = useState(false)
   const [activationMsg, setActivationMsg] = useState<string | null>(null)
+  const [selectedPlan, setSelectedPlan] = useState<'essential' | 'plus'>('essential')
   const [dashboardError, setDashboardError] = useState<string | null>(null)
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -169,7 +170,11 @@ export default function WorkerDashboard() {
       }
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/policies/activate`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${session.session.access_token}` }
+        headers: {
+          'Authorization': `Bearer ${session.session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ plan: selectedPlan }),
       })
       if (res.ok) {
         setActivationMsg("Coverage Active!")
@@ -388,7 +393,22 @@ export default function WorkerDashboard() {
                 </div>
 
                 {/* Right -- CTA */}
-                <div className="md:w-56 flex-shrink-0">
+                <div className="md:w-56 flex-shrink-0 space-y-3">
+                  {/* Plan selector */}
+                  <div className="flex rounded-xl overflow-hidden border border-neutral-700 text-sm">
+                    <button
+                      onClick={() => setSelectedPlan('essential')}
+                      className={`flex-1 py-2 font-medium transition-colors ${selectedPlan === 'essential' ? 'bg-emerald-500 text-white' : 'text-neutral-400 hover:text-white'}`}
+                    >
+                      Essential
+                    </button>
+                    <button
+                      onClick={() => setSelectedPlan('plus')}
+                      className={`flex-1 py-2 font-medium transition-colors ${selectedPlan === 'plus' ? 'bg-emerald-500 text-white' : 'text-neutral-400 hover:text-white'}`}
+                    >
+                      Plus
+                    </button>
+                  </div>
                   {activationMsg ? (
                     <div className="w-full py-3 glass text-emerald-400 text-center font-semibold rounded-xl flex items-center justify-center gap-2 border border-emerald-500/30">
                       <ShieldCheck size={18} /> {activationMsg}
