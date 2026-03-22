@@ -1,5 +1,5 @@
 """
-DEVTrails — Fraud Scoring Engine (5-Layer Ghost Shift Detector)
+Covara One — Fraud Scoring Engine (5-Layer Ghost Shift Detector)
 
 Implements the full 5-layer fraud detection pipeline:
   Layer 1: Event Truth — Did the disruption actually happen?

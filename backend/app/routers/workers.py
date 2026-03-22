@@ -1,5 +1,5 @@
 """
-DEVTrails — Workers Router
+Covara One — Workers Router
 
 CRUD for worker profiles. Used by:
 - Worker app (view/update own profile)

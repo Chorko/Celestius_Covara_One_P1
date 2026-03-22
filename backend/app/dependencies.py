@@ -1,5 +1,5 @@
 """
-DEVTrails — Auth Dependencies & Role Gating
+Covara One — Auth Dependencies & Role Gating
 
 Provides FastAPI dependencies for:
 - Extracting authenticated user from Supabase JWT (via Authorization header)

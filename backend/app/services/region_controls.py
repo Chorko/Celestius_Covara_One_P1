@@ -1,5 +1,5 @@
 """
-DEVTrails — Region Controls & Behavioral Identity Service
+Covara One — Region Controls & Behavioral Identity Service
 
 Behavioral identity, region-based monitoring, and dynamic trust scoring
 to detect fraud that bypasses location spoofing by targeting identity,
@@ -147,7 +147,7 @@ def check_pre_trigger_presence(
             }
 
     # No trigger start time — just check recency of activity
-    hours_since = (datetime.utcnow() - activity_dt).total_seconds() / 3600
+    hours_since = (datetime.now(timezone.utc) - activity_dt).total_seconds() / 3600
     return {
         "pre_trigger_present": hours_since <= 4,
         "hours_since_activity": round(hours_since, 2),

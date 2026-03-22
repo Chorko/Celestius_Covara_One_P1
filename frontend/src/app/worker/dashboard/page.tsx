@@ -18,6 +18,8 @@ import {
   Zap,
   ClipboardList,
 } from 'lucide-react'
+import AnimatedCounter from '@/components/AnimatedCounter'
+import Skeleton from '@/components/Skeleton'
 
 export default function WorkerDashboard() {
   const { profile } = useUserStore()
@@ -194,10 +196,36 @@ export default function WorkerDashboard() {
       )
     }
     return (
-      <div className="min-h-screen gradient-mesh flex items-center justify-center">
-        <div className="glass-card p-8 flex items-center gap-3">
-          <div className="h-5 w-5 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
-          <span className="text-neutral-300">Loading dashboard...</span>
+      <div className="min-h-screen gradient-mesh">
+        <div className="p-6 md:p-10 pb-28 max-w-7xl mx-auto space-y-8">
+          {/* Skeleton header */}
+          <section className="animate-fade-in-up">
+            <Skeleton width="280px" height="2.5rem" className="mb-3" />
+            <Skeleton width="200px" height="0.875rem" />
+          </section>
+          {/* Skeleton KPI cards */}
+          <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {[1,2,3,4].map(i => (
+              <div key={i} className="glass-card p-5 space-y-3">
+                <Skeleton width="40px" height="40px" />
+                <Skeleton width="100px" height="1.75rem" />
+                <Skeleton width="80px" height="0.625rem" />
+              </div>
+            ))}
+          </section>
+          {/* Skeleton chart + triggers */}
+          <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 glass-card p-6">
+              <Skeleton width="160px" height="1.25rem" className="mb-4" />
+              <Skeleton width="100%" height="200px" />
+            </div>
+            <div className="glass-card p-6">
+              <Skeleton width="140px" height="1.25rem" className="mb-4" />
+              <div className="space-y-3">
+                {[1,2,3].map(i => <Skeleton key={i} width="100%" height="70px" />)}
+              </div>
+            </div>
+          </section>
         </div>
       </div>
     )
@@ -243,25 +271,31 @@ export default function WorkerDashboard() {
           {[
             {
               icon: <IndianRupee size={22} className="text-emerald-400" />,
-              value: `₹${totalEarnings.toLocaleString('en-IN')}`,
+              value: totalEarnings,
+              prefix: '₹',
               label: 'Total Earnings (14d)',
               delay: 'delay-100',
             },
             {
               icon: <ClipboardList size={22} className="text-blue-400" />,
               value: avgDailyOrders,
+              prefix: '',
               label: 'Avg Daily Orders',
               delay: 'delay-200',
             },
             {
               icon: <Navigation2 size={22} className="text-purple-400" />,
-              value: avgGpsScore,
+              value: typeof avgGpsScore === 'number' ? avgGpsScore : 0,
+              prefix: '',
+              suffix: '%',
               label: 'GPS Score',
               delay: 'delay-300',
             },
             {
               icon: <Sparkles size={22} className="text-amber-400" />,
-              value: workerDetails.trust_score ?? '--',
+              value: workerDetails.trust_score ? Math.round(workerDetails.trust_score * 100) : 0,
+              prefix: '',
+              suffix: '%',
               label: 'Trust Score',
               delay: 'delay-400',
             },
@@ -271,7 +305,13 @@ export default function WorkerDashboard() {
               className={`glass-card p-5 flex flex-col gap-3 animate-fade-in-up ${card.delay}`}
             >
               <div className="glass p-2 w-fit rounded-lg">{card.icon}</div>
-              <span className="text-2xl font-bold text-white">{card.value}</span>
+              <span className="text-2xl font-bold text-white">
+                <AnimatedCounter
+                  value={card.value}
+                  prefix={card.prefix}
+                  suffix={card.suffix || ''}
+                />
+              </span>
               <span className="text-xs text-neutral-400 uppercase tracking-wider">{card.label}</span>
             </div>
           ))}
@@ -498,17 +538,20 @@ export default function WorkerDashboard() {
                     className="glass p-4 rounded-xl hover:bg-white/[0.04] transition-colors"
                   >
                     <div className="flex justify-between items-start mb-2">
-                      <span
-                        className={
-                          t.severity_band === 'claim'
-                            ? 'badge badge-amber'
-                            : t.severity_band === 'escalation'
-                            ? 'badge badge-red'
-                            : 'badge badge-blue'
-                        }
-                      >
-                        {t.severity_band}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="pulse-live w-3 h-3 inline-block" />
+                        <span
+                          className={
+                            t.severity_band === 'claim'
+                              ? 'badge badge-amber'
+                              : t.severity_band === 'escalation'
+                              ? 'badge badge-red'
+                              : 'badge badge-blue'
+                          }
+                        >
+                          {t.severity_band}
+                        </span>
+                      </div>
                       <span className="text-[11px] text-neutral-500">
                         {new Date(t.started_at).toLocaleDateString()}
                       </span>

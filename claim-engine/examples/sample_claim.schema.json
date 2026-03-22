@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "DEVTrails Claim Object",
+  "title": "Covara One Claim Object",
   "description": "Machine-readable schema for a DEVTrails claim, matching the structure in sample_claim.json. All values are synthetic.",
   "type": "object",
   "required": ["claim_id", "worker_id", "trigger_id", "city", "zone_id", "event_type", "pipeline_stage", "pipeline_trace", "worker_context", "trigger_context", "computed_scores", "payout_calculation", "decision", "audit_trace"],

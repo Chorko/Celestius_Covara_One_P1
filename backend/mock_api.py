@@ -1,5 +1,5 @@
 """
-DEVTrails — Minimal Mock API
+Covara One — Minimal Mock API
 A thin vertical slice proving the documented architecture is runnable.
 This is NOT a production backend — it is a hackathon demo scaffold.
 
@@ -16,7 +16,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(
-    title="DEVTrails Mock API",
+    title="Covara One Mock API",
     description="Minimal runnable slice of the DEVTrails parametric insurance platform.",
     version="0.1.0-scaffold",
 )
@@ -158,7 +158,7 @@ def health_check():
     """Basic health and version check."""
     return {
         "status": "ok",
-        "service": "devtrails-mock-api",
+        "service": "covara-one-mock-api",
         "version": "0.1.0-scaffold",
         "phase": "documentation-first — this is a demo scaffold, not a production backend",
     }

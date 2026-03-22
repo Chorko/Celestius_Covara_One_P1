@@ -1,5 +1,5 @@
 """
-DEVTrails — Auth Router
+Covara One — Auth Router
 
 Handles:
 - POST /auth/signup — register new user (creates profile row)

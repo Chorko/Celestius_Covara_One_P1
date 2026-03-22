@@ -96,7 +96,7 @@ Platform-specific APIs (delivery order volume, outage heartbeats, GPS traces) ar
 | Bangalore | HAL Airport | 43296 | Traffic trigger zone |
 | Hyderabad | Begumpet | 43128 | Multi-trigger zone |
 
-**IMD field → DEVTrails trigger mapping:**
+**IMD field → Covara One trigger mapping:**
 - `Past_24_hrs_Rainfall` ≥ 48mm → T1 (Watch)
 - `Past_24_hrs_Rainfall` ≥ 64.5mm → T2 (Heavy Rain Claim)
 - `Past_24_hrs_Rainfall` ≥ 115.6mm → T3 (Extreme Rain Escalation)
