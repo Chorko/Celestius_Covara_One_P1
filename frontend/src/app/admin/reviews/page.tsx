@@ -164,6 +164,7 @@ export default function AdminReviews() {
       case 'soft_hold_verification':
         return 'badge-blue'
       case 'fraud_escalated_review':
+        return 'badge-purple'
       case 'submitted':
         return 'badge-amber'
       case 'rejected':

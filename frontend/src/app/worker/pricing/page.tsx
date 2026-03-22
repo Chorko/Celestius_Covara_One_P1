@@ -202,10 +202,11 @@ export default function WorkerPricing() {
     setPaymentSuccess(false)
   }
 
-  // Premium scaling: Plus ≈ 1.40× Essential baseline
+  // Premium scaling: derive Plus scale from plan benefit ratio vs Essential
   const getPremium = (plan: PlanTier) => {
     if (!quote) return 0
-    const scale = plan.id === 'plus' ? 1.40 : 1.0
+    const essentialBenefit = PLANS.find(p => p.id === 'essential')?.weeklyBenefit ?? 3000
+    const scale = plan.weeklyBenefit / essentialBenefit
     return Math.round(quote.weekly_premium_inr * scale)
   }
 

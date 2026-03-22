@@ -51,12 +51,22 @@ comment on table public.disruption_events is
   'Unique disruption event identity for idempotent payout execution. '
   'event_id = hash(zone_id + trigger_family + window_start).';
 
--- RLS: workers read-only, service role full access
+-- RLS: workers see events in their preferred zone; admins see all; service role has full access
 alter table public.disruption_events enable row level security;
+
+drop policy if exists "disruption_events_select_authenticated" on public.disruption_events;
+drop policy if exists "disruption_events_manage_service" on public.disruption_events;
 
 create policy "disruption_events_select_authenticated"
   on public.disruption_events for select to authenticated
-  using (true);
+  using (
+    current_user_role() = 'insurer_admin'
+    or zone_id = (
+      select preferred_zone_id
+      from public.worker_profiles
+      where profile_id = auth.uid()
+    )
+  );
 
 create policy "disruption_events_manage_service"
   on public.disruption_events for all to service_role
@@ -170,12 +180,22 @@ comment on column public.validated_regional_incidents.cluster_spike_detected is
   'If true, fast-lane auto-release is paused and cluster-level validation '
   'is required to protect the liquidity pool.';
 
--- RLS: workers read-only, service role full access
+-- RLS: workers see incidents in their preferred zone; admins see all; service role has full access
 alter table public.validated_regional_incidents enable row level security;
+
+drop policy if exists "validated_incidents_select_authenticated" on public.validated_regional_incidents;
+drop policy if exists "validated_incidents_manage_service" on public.validated_regional_incidents;
 
 create policy "validated_incidents_select_authenticated"
   on public.validated_regional_incidents for select to authenticated
-  using (true);
+  using (
+    current_user_role() = 'insurer_admin'
+    or zone_id = (
+      select preferred_zone_id
+      from public.worker_profiles
+      where profile_id = auth.uid()
+    )
+  );
 
 create policy "validated_incidents_manage_service"
   on public.validated_regional_incidents for all to service_role
@@ -196,13 +216,10 @@ alter table public.worker_profiles
 comment on column public.worker_profiles.phone_number is
   'Worker mobile number for contact and WhatsApp notifications.';
 
--- Seed random 10-digit Indian mobile numbers for existing workers
--- who do not already have a phone number set.
-update public.worker_profiles
-  set phone_number = '+91' || (
-    lpad(floor(random() * 10000000000)::bigint::text, 10, '0')
-  )
-  where phone_number is null;
+-- Phone numbers must be set through the application (worker profile update)
+-- or a dedicated, environment-specific seed script.
+-- Do NOT seed random numbers here to avoid fabricating personal contact data
+-- in non-demo environments.
 
 
 -- ══════════════════════════════════════════════════════════════════════
