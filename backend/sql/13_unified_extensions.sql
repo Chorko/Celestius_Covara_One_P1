@@ -87,7 +87,7 @@ update public.manual_claims
 update public.manual_claims
   set claim_status = 'auto_approved'
   where claim_status = 'approved'
-    and claim_mode = 'auto';
+    and claim_mode = 'trigger_auto';
 
 -- Add the expanded 8-state constraint
 alter table public.manual_claims
