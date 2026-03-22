@@ -12,7 +12,7 @@ Orchestrates the entire claim decision process:
 8. Audit logging
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from backend.app.services.severity import calculate_severity
 from backend.app.services.pricing import (
     calculate_policy_metrics,
