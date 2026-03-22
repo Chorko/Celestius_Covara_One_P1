@@ -176,7 +176,26 @@ flowchart TD
     classDef data fill:#4F46E5,color:#fff,stroke:#3730A3,stroke-width:2px;
     classDef admin fill:#B45309,color:#fff,stroke:#92400E,stroke-width:2px;
 
+    %% 1. Core Central Pipeline
+    subgraph CORE ["⚙️ Main Processing Pipeline"]
+        direction TB
+        SI{{Signal Ingestion}}:::engine
+        TE{{Trigger Engine}}:::engine
+        CE{{Claim Engine}}:::engine
+        FE{{Ghost Shift Detector}}:::defense
+        PS{{Payout Safety Layer}}:::defense
+        PO[[Zero-Touch Payout]]:::defense
+        
+        SI --> TE
+        TE --> CE
+        CE --> FE
+        FE --> PS
+        PS --> PO
+    end
+
+    %% 2. Peripheral Systems (Left & Right Flanks)
     subgraph SIG ["🌐 External Signals"]
+        direction TB
         WX[/☁️ Weather API/]:::input
         AQ[/🌫️ Air Quality API/]:::input
         HT[/🌡️ Temp & Heat/]:::input
@@ -186,61 +205,50 @@ flowchart TD
     end
 
     subgraph WRK ["👤 Worker Interface"]
-        WO([Onboarding & KYC]):::ui
-        WD[[Worker Dashboard]]:::ui
+        direction TB
+        WO([Onboarding]):::ui
         WP([Plan Selection]):::ui
+        WD[[Worker Dashboard]]:::ui
         WC([Claim Status]):::ui
     end
 
-    subgraph ENG ["⚙️ Core Engine"]
-        SI{{Signal Ingestion}}:::engine
-        TE{{Trigger Engine}}:::engine
-        CE{{Claim Engine}}:::engine
-        RC[(Region Cache)]:::engine
-        PE{{Premium Engine}}:::engine
-    end
-
-    subgraph FRD ["🛡️ Threat Defense"]
-        FE{{Ghost Shift Detector}}:::defense
-        PS{{Payout Safety Layer}}:::defense
-        PO{{Zero-Touch Payout}}:::defense
-    end
-
-    subgraph DAT ["📊 Data & ML"]
+    subgraph DAT ["📊 Data & Intelligence"]
+        direction TB
         DL[(Supabase Database)]:::data
-        ML{{ML Pipeline}}:::data
         AN{{Analytics Engine}}:::data
+        ML{{ML Pipeline}}:::data
     end
 
-    subgraph INS ["🏢 Insurer Ops"]
+    subgraph INS ["🏢 Insurer Operations"]
+        direction TB
         ID[[Insurer Dashboard]]:::admin
         RQ[[Review Queue]]:::admin
         FR[[Fraud Panel]]:::admin
     end
+    
+    %% Outlier Engines
+    PE{{Premium Engine}}:::engine
+    RC[(Region Cache)]:::engine
 
+    %% Connections
     WX & AQ & HT & TR & PL & NW --> SI
-    SI --> TE
-    TE --> CE
-    CE --> FE
-    CE <--> RC
-    FE --> PS
-    PS --> PO
     
     WO --> PE
     PE --> WP
-    
-    DL <--> ML
     ML --> PE
     ML --> TE
+    DL <--> ML
+    CE <--> RC
     
-    CE --> AN
-    AN --> ID
+    CE -.-> AN
+    CE -.-> DL
+    TE -.-> DL
+    
+    AN -.-> ID
     PO --> WC
     PO --> ID
-    FE --> FR
-    FE --> RQ
-    TE --> DL
-    CE --> DL
+    FE -.-> FR
+    FE -.-> RQ
 ```
 
 > **📋 Architecture status:** The core platform (Trigger Engine, Claim Engine, Fraud Engine, Premium Engine, Payout Safety, Region Cache) and both dashboards are **implemented**. ML training pipeline and external API live connectors are **planned** — mock data is used for demo.
