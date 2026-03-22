@@ -38,4 +38,22 @@ ALTER TABLE public.payout_recommendations DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.trigger_events DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.zones DISABLE ROW LEVEL SECURITY;
 
+-- Tables from extensions (10, 12, 13) — safe even if tables don't exist yet
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'disruption_events') THEN
+    DROP POLICY IF EXISTS "Workers can view disruption_events" ON public.disruption_events;
+    DROP POLICY IF EXISTS "Service role can manage disruption_events" ON public.disruption_events;
+    DROP POLICY IF EXISTS "disruption_events_select_authenticated" ON public.disruption_events;
+    DROP POLICY IF EXISTS "disruption_events_manage_service" ON public.disruption_events;
+    ALTER TABLE public.disruption_events DISABLE ROW LEVEL SECURITY;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'validated_regional_incidents') THEN
+    DROP POLICY IF EXISTS "Workers can view validated incidents" ON public.validated_regional_incidents;
+    DROP POLICY IF EXISTS "Service role can manage validated incidents" ON public.validated_regional_incidents;
+    DROP POLICY IF EXISTS "validated_incidents_select_authenticated" ON public.validated_regional_incidents;
+    DROP POLICY IF EXISTS "validated_incidents_manage_service" ON public.validated_regional_incidents;
+    ALTER TABLE public.validated_regional_incidents DISABLE ROW LEVEL SECURITY;
+  END IF;
+END $$;
+
 DROP FUNCTION IF EXISTS public.current_user_role();

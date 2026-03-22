@@ -10,7 +10,7 @@ Handles:
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 from backend.app.dependencies import require_insurer_admin
 from backend.app.supabase_client import get_supabase_admin

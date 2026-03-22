@@ -121,13 +121,13 @@ BEGIN
      'trigger_auto',
      'Heavy rain in Andheri West caused widespread waterlogging. Roads submerged near Link Road. Could not access pickup locations for 4 hours.',
      19.1365, 72.8288, '2026-03-10T11:00:00+05:30',
-     'cccc0000-0000-0000-0000-000000000011', 'approved'),
+     'cccc0000-0000-0000-0000-000000000011', 'auto_approved'),
     ('11110000-0000-0000-0000-000000000009', new_worker,
      'ffff0000-0000-0000-0000-000000000003',
      'manual',
      'Moderate rain causing slow traffic in Andheri area. Deliveries delayed significantly, multiple orders timed out before pickup.',
      19.1372, 72.8295, '2026-03-14T15:30:00+05:30',
-     'cccc0000-0000-0000-0000-000000000013', 'submitted');
+     'cccc0000-0000-0000-0000-000000000013', 'soft_hold_verification');
 
   -- ── 6. Claim Evidence ──────────────────────────────────────────────────
   DELETE FROM public.claim_evidence
