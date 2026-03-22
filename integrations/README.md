@@ -27,8 +27,8 @@
 | # | Integration | Category | Source | Real / Mock | Why chosen |
 |---|------------|----------|--------|-------------|-----------|
 | 1 | **IMD Rainfall APIs** | Weather | India Meteorological Department | Real (free, official) | Official rain thresholds anchor T1–T3 triggers |
-| 2 | **CPCB AQI API** | Air Quality | Central Pollution Control Board / OGD | Real (free, official) | Official AQI bands anchor T4–T5 triggers |
-| 3 | **IMD Temperature APIs** | Temperature | India Meteorological Department | Real (free, official) | Official heat-wave criteria anchor T6–T8 triggers |
+| 2 | **CPCB AQI API** | Air Quality | Central Pollution Control Board / OGD | Real (free, official) | Official AQI bands anchor T5–T6 triggers |
+| 3 | **IMD Temperature APIs** | Temperature | India Meteorological Department | Real (free, official) | Official heat-wave criteria anchor T7–T9 triggers |
 | 4 | **Traffic Data** | Traffic | TomTom / proxy | Premium (or mock) | Real-time traffic APIs for delay percentages |
 | 5 | **Platform Outage Feed** | Platform | Delivery platform heartbeat | Mock | Platform APIs are unavailable; simulate outage events |
 | 6 | **Demand Drop Signal** | Platform | Delivery platform order volume | Mock | Platform APIs are unavailable; simulate order drops |
@@ -116,7 +116,7 @@ Platform-specific APIs (delivery order volume, outage heartbeats, GPS traces) ar
 - **Official reference:** [CPCB National AQI](https://www.cpcb.nic.in/national-air-quality-index/) | [OGD AQI Dataset](https://www.data.gov.in/resource/real-time-air-quality-index-various-locations)
 - **Data:** AQI value by city/station (PM2.5, PM10, SO2, NO2, O3, CO)
 - **Thresholds used:** 201+ (Poor, caution), 301+ (Very Poor, claim), 401+ (Severe, escalation)
-- **Triggers fed:** T4, T5
+- **Triggers fed:** T5, T6, T16
 - **Demo note:** For demo, seed CSVs simulate AQI values matching CPCB category definitions.
 
 ### Heat / Temperature (Real — IMD Current Weather API)
@@ -126,18 +126,18 @@ Platform-specific APIs (delivery order volume, outage heartbeats, GPS traces) ar
 - **Also:** District-wise Warnings API → Warning code `9` = Heat Wave, `10` = Hot Day
 - **Official reference:** [IMD Heat Wave Warning](https://mausam.imd.gov.in/imd_latest/contents/pdf/pubbrochures/Heat%20Wave%20Warning%20Services.pdf) | [NDMA Heat Wave](https://ndma.gov.in/Natural-Hazards/Heat-Wave)
 - **Thresholds used:** 45°C (heat-wave), 47°C (severe heat)
-- **Triggers fed:** T6, T7, T8
+- **Triggers fed:** T7, T8, T9
 
 ### Traffic (Mock — TomTom in production)
 - **Simulated data:** Travel delay percentage (0–100%)
 - **Threshold used:** ≥ 40% delay
-- **Triggers fed:** T9, T10, T11
+- **Triggers fed:** T12
 - **Production API:** TomTom Traffic Flow API (paid per 1000 requests)
 
 ### Platform Outage / Demand (Mock)
 - **Simulated data:** Outage duration (minutes), order volume drop (%)
 - **Thresholds used:** ≥ 30 min outage, ≥ 35% demand drop
-- **Triggers fed:** T12, T13
+- **Triggers fed:** T13, T14
 - **Assumption:** Based on typical gig-platform disruption patterns
 
 ### Payment Gateway (Mock)
@@ -159,7 +159,7 @@ Platform-specific APIs (delivery order volume, outage heartbeats, GPS traces) ar
 - **Purpose:** Fallback weather feed when IMD IP whitelisting is pending
 - **Data:** Current and forecast weather conditions, rain intensity, temperature
 - **Used for:**
-  - Trigger validation fallback: rain risk (T1–T3), heat signals (T6–T8)
+  - Trigger validation fallback: rain risk (T1–T3), heat signals (T7–T9)
   - Event truth verification (Layer 1 of fraud pipeline)
 - **Note:** IMD is the primary source. OpenWeather fills gaps until IMD access is live.
 - **Consumer:** Trigger engine, fraud engine (event truth layer)
@@ -167,7 +167,7 @@ Platform-specific APIs (delivery order volume, outage heartbeats, GPS traces) ar
 ### TomTom APIs (Real — API Key)
 - **Purpose:** Traffic disruption verification and anti-spoofing location validation
 - **APIs used:**
-  - **Traffic API / Traffic Flow API** — traffic delay percentage for T9–T11 triggers
+  - **Traffic API / Traffic Flow API** — traffic delay percentage for T12 trigger
   - **Traffic Incidents API** — disruption event detection
   - **Geofencing API** — zone boundary validation for anti-spoofing
   - **Routing API** — route plausibility checks
@@ -231,7 +231,7 @@ Platform-specific APIs (delivery order volume, outage heartbeats, GPS traces) ar
 | **IMD Weather** | Hazard trigger validation (rain, heat) | Event truth verification — was the disruption real? | Weather severity feed |
 | **CPCB AQI** | AQI trigger validation | Event truth — was air quality actually bad? | AQI severity display |
 | **OpenWeather** | Fallback weather validation | Secondary event truth | Fallback weather feed |
-| **TomTom Traffic** | Traffic disruption trigger (T9–T11) | Mobility plausibility — was traffic actually disrupted? | Traffic status |
+| **TomTom Traffic** | Traffic disruption trigger (T12) | Mobility plausibility — was traffic actually disrupted? | Traffic status |
 | **TomTom Snap-to-Roads** | — | Route plausibility — was the worker on a real road? | — |
 | **TomTom Geofencing** | Zone boundary definition | Geofence match — was the device in the zone? | Zone boundary |
 | **NewsAPI** | Civic disruption context (T14, T15) | Contextual corroboration for closure/strike claims | News feed |
