@@ -160,10 +160,16 @@ export default function WorkerDashboard() {
   const activatePolicy = async () => {
     setActivating(true)
     try {
-      const { data: session } = await supabase.auth.getSession()
+      const { data: session, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError || !session.session) {
+        // Stale or expired session — sign out and redirect
+        await supabase.auth.signOut()
+        setActivating(false)
+        return
+      }
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/policies/activate`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${session.session?.access_token}` }
+        headers: { 'Authorization': `Bearer ${session.session.access_token}` }
       })
       if (res.ok) {
         setActivationMsg("Coverage Active!")

@@ -30,7 +30,7 @@
 | Payout safety (event-ID, worker-event uniqueness) | ✅ Implemented |
 | Claim state machine (8 states, soft hold) | ✅ Implemented |
 | Post-approval fraud controls | ✅ Implemented |
-| Supabase SQL schema (14 tables + 3 migrations) | ✅ Implemented |
+| Supabase SQL schema (14 tables + 4 migrations) | ✅ Implemented |
 | Row-Level Security policies | ✅ Implemented |
 | CLI seed system | ✅ Implemented |
 | Redis caching layer | 📋 Planned |
