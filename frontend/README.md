@@ -55,14 +55,14 @@ Then open http://localhost:3000
 | OAuth Callback | `/auth/callback` | Exchange auth code for session, error handling | ✅ Implemented |
 | Worker Dashboard | `/worker/dashboard` | Profile summary, 14-day earnings chart, zone trigger alerts, policy quote with activation | ✅ Implemented |
 | Worker Claims | `/worker/claims` | Claim submission form (GPS + photo evidence upload), claim history with 8 status states | ✅ Implemented |
-| Pricing & Plans | `/worker/pricing` | Essential (₹3,000/week) / Plus (₹4,500/week) plan comparison, weekly premium calculation, plan activation | ✅ Implemented |
+| Pricing & Plans | `/worker/pricing` | Essential (₹3,000/week, core parametric cover, 5-layer fraud, standard 24-48h processing) / Plus (₹4,500/week, T15 composite events, Gemini AI reports, priority <12h queue, proportional multi-day, regional fast-lane) plan comparison, weekly premium calculation, plan activation | ✅ Implemented |
 
 ### Admin/Insurer Side
 
 | Page | Route | What it shows | Status |
 |------|-------|--------------|--------|
 | Admin Dashboard | `/admin/dashboard` | KPI cards (total claims, avg payout, fraud rate), trigger mix pie chart | ✅ Implemented |
-| Review Queue | `/admin/reviews` | Claim list, claim detail panel with payout recommendation, fraud scores, Gemini AI summary, approve/hold/reject/flag actions, 8 claim states | ✅ Implemented |
+| Review Queue | `/admin/reviews` | Claim list, worker profile card (name, email, city, platform, trust score), claim detail panel with payout recommendation, fraud scores, Gemini AI summary, approve/hold/reject/escalate actions, post-approval flag with trust penalty (−0.15) and legal escalation (−0.30), 8 claim states | ✅ Implemented |
 | Trigger Engine | `/admin/triggers` | Live trigger feed, mock trigger injection for testing | ✅ Implemented |
 
 ---

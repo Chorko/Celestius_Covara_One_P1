@@ -16,6 +16,7 @@ interface ClaimRecord {
   claim_mode?: string
   claimed_at: string
   worker_profiles?: {
+    profile_id?: string
     platform_name?: string
     city?: string
     trust_score?: number
@@ -142,6 +143,18 @@ export default function AdminReviews() {
         setActionError(updateError.message || 'Status update failed')
         setActionLoading(null)
         return
+      }
+
+      // Apply trust score penalty for post-approval flags
+      if (decision === 'flag_post_approval' && detailData.claim.worker_profiles?.profile_id) {
+        const currentTrust = detailData.claim.worker_profiles?.trust_score ?? 0.8
+        const isLegal = decisionReason.includes('[LEGAL ESCALATION REQUESTED]')
+        const penalty = isLegal ? 0.30 : 0.15
+        const newTrust = Math.max(0.0, Number((currentTrust - penalty).toFixed(2)))
+        await supabase
+          .from('worker_profiles')
+          .update({ trust_score: newTrust })
+          .eq('profile_id', detailData.claim.worker_profiles.profile_id)
       }
     } catch (e: unknown) {
       setActionError(e instanceof Error ? e.message : 'Review action failed')
@@ -396,6 +409,50 @@ export default function AdminReviews() {
             </div>
             )}
 
+            {/* Worker Profile Card */}
+            {claim?.worker_profiles && (
+              <div className="glass-card p-5">
+                <h3 className="text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <Fingerprint size={14} /> Worker Profile
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <p className="text-[10px] text-neutral-600 uppercase tracking-wider">Name</p>
+                    <p className="text-white font-medium mt-0.5">
+                      {claim.worker_profiles?.profiles?.full_name || 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-neutral-600 uppercase tracking-wider">Email</p>
+                    <p className="text-white font-medium mt-0.5 truncate">
+                      {claim.worker_profiles?.profiles?.email || 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-neutral-600 uppercase tracking-wider">City</p>
+                    <p className="text-white font-medium mt-0.5">
+                      {claim.worker_profiles?.city || 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-neutral-600 uppercase tracking-wider">Platform</p>
+                    <p className="text-white font-medium mt-0.5">
+                      {claim.worker_profiles?.platform_name || 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-neutral-600 uppercase tracking-wider">Trust Score</p>
+                    <p className={`font-bold mt-0.5 ${
+                      (claim.worker_profiles?.trust_score ?? 0) >= 0.8 ? 'text-emerald-400' :
+                      (claim.worker_profiles?.trust_score ?? 0) >= 0.5 ? 'text-amber-400' : 'text-red-400'
+                    }`}>
+                      {claim.worker_profiles?.trust_score ?? 'N/A'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Evidence Gallery */}
             {evidence.length > 0 && (
               <div className="glass-card p-5">
@@ -611,11 +668,69 @@ export default function AdminReviews() {
                   </button>
                 </div>
               </div>
+            ) : (['approved', 'auto_approved', 'paid'].includes(claim?.claim_status || '')) ? (
+              <div className="border-t border-white/[0.06] pt-6 space-y-4">
+                <div className="p-4 rounded-xl bg-amber-500/[0.05] border border-amber-500/15">
+                  <p className="text-sm text-amber-300/80 mb-1 font-medium">Post-Approval Controls</p>
+                  <p className="text-xs text-neutral-500">
+                    This claim was <span className="text-emerald-400 font-semibold">{claim?.claim_status === 'auto_approved' ? 'auto-approved' : claim?.claim_status}</span>.
+                    If post-approval evidence reveals fraud, you can flag and penalize.
+                  </p>
+                </div>
+                {actionError && (
+                  <div className="p-3 rounded-xl text-sm" style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', color: '#fca5a5' }}>
+                    {actionError}
+                  </div>
+                )}
+                <div>
+                  <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider block mb-2">
+                    Flag Reason (Required)
+                  </label>
+                  <textarea
+                    value={decisionReason}
+                    onChange={(e) => setDecisionReason(e.target.value)}
+                    placeholder="Describe the post-approval fraud evidence..."
+                    className="glass-input min-h-[80px] resize-none"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => handleReviewAction('flag_post_approval')}
+                    disabled={actionLoading !== null || !decisionReason.trim()}
+                    className="flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-sm transition-all bg-red-500/15 text-red-400 border border-red-500/20 hover:bg-red-500/25 hover:border-red-500/40 disabled:opacity-50"
+                  >
+                    {actionLoading === 'flag_post_approval' ? (
+                      <div className="w-4 h-4 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />
+                    ) : (
+                      <AlertTriangle size={16} />
+                    )}
+                    Flag & Reduce Trust
+                  </button>
+                  <button
+                    onClick={() => {
+                      setDecisionReason(prev => prev + ' [LEGAL ESCALATION REQUESTED]')
+                      handleReviewAction('flag_post_approval')
+                    }}
+                    disabled={actionLoading !== null || !decisionReason.trim()}
+                    className="flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-sm transition-all bg-purple-500/15 text-purple-400 border border-purple-500/20 hover:bg-purple-500/25 hover:border-purple-500/40 disabled:opacity-50"
+                  >
+                    {actionLoading === 'flag_post_approval' ? (
+                      <div className="w-4 h-4 border-2 border-purple-400/30 border-t-purple-400 rounded-full animate-spin" />
+                    ) : (
+                      <ArrowUpCircle size={16} />
+                    )}
+                    Escalate to Legal
+                  </button>
+                </div>
+              </div>
             ) : (
               <div className="border-t border-white/[0.06] pt-6 text-center">
                 <p className="text-neutral-500 text-sm">
-                  This claim has already been{' '}
-                  <span className="font-semibold text-neutral-400">{claim?.claim_status}</span>.
+                  This claim has been{' '}
+                  <span className="font-semibold text-neutral-400">{({
+                    rejected: 'Rejected',
+                    post_approval_flagged: 'Flagged (Post-Approval)',
+                  } as Record<string, string>)[claim?.claim_status || ''] || claim?.claim_status}</span>.
                 </p>
               </div>
             )}

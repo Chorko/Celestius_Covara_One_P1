@@ -43,6 +43,7 @@ DEVTrails is an AI-assisted **parametric insurance platform** that protects deli
 | **Trust Pass** *(optional)* | Loyalty / trust program for premium discounts and fast-lane claim decisions |
 | **Region Validation Cache** | Validated-incident fast-lane for reducing repeated manual reviews |
 | **Payout Safety Layer** | Event-ID idempotency, worker-event uniqueness, duplicate prevention |
+| **Post-Approval Controls** | Flag & trust penalty (−0.15), legal escalation (−0.30) for approved claims with fraud evidence |
 
 ### The Idea Is Simple
 
