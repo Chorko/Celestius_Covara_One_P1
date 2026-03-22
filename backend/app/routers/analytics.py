@@ -26,13 +26,28 @@ async def get_dashboard_summary():
         sb.table("manual_claims").select("id, claim_status").execute()
     )
     total_claims = len(claims_resp.data)
+
+    # Group claim statuses according to the new 8-state machine.
+    # Keep legacy statuses for backward compatibility.
+    pending_statuses = {
+        "submitted",
+        "held",  # legacy
+        "soft_hold_verification",
+        "fraud_escalated_review",
+    }
+    approved_statuses = {
+        "approved",
+        "auto_approved",
+        "paid",
+    }
+
     pending_claims = sum(
         1
         for c in claims_resp.data
-        if c["claim_status"] in ["submitted", "held"]
+        if c.get("claim_status") in pending_statuses
     )
     approved_claims = sum(
-        1 for c in claims_resp.data if c["claim_status"] == "approved"
+        1 for c in claims_resp.data if c.get("claim_status") in approved_statuses
     )
 
     # 2. Financials (Payouts)
