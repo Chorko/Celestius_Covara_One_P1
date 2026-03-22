@@ -8,16 +8,18 @@
 
 | Component | Status |
 |-----------|--------|
-| 5-layer framework definition | ✅ Designed |
-| Anti-spoofing verification (Layer 3) | ✅ Designed |
-| Cluster intelligence with ring detection (Layer 4) | ✅ Designed |
-| Fraud formula (confidence, penalty) | 📝 Documented |
-| Decision band logic (4-tier) | 📝 Documented |
-| Anti-spoofing ML feature table | 📝 Documented |
-| Liquidity circuit-breaker controls | 📝 Documented |
+| 5-layer framework definition | ✅ Implemented |
+| Anti-spoofing verification (Layer 3) | ✅ Implemented |
+| Cluster intelligence with ring detection (Layer 4) | ✅ Implemented |
+| Fraud formula (confidence, penalty) | ✅ Implemented |
+| Decision band logic (5-band) | ✅ Implemented |
+| Anti-spoofing ML feature table | ✅ Implemented |
+| Liquidity circuit-breaker controls | ✅ Implemented |
 | Fraud scoring service | ✅ Implemented |
 | Manual claim verifier | ✅ Implemented |
 | Geo-verification module | ✅ Implemented |
+| Post-approval fraud controls | ✅ Implemented |
+| Region validation cache (fast-lane) | ✅ Implemented |
 
 ---
 
@@ -341,4 +343,6 @@ flowchart LR
 
 ## Why This Matters for Judges
 
-This is not just anomaly buzzwords. The fraud layer uses **five progressively deeper validation steps** — from event truth through anti-spoofing to coordinated-ring detection — produces a **quantitative fraud penalty** that directly affects claim routing, and creates **four explainable decision outcomes** that determine whether a claim is auto-approved, reviewed, held, or rejected. Every decision can be traced back through the layers to specific evidence. The liquidity circuit-breaker controls protect the payout pool from mass-claim drain attacks without blocking legitimate claims.
+This is not just anomaly buzzwords. The fraud layer uses **five progressively deeper validation steps** — from event truth through anti-spoofing to coordinated-ring detection — produces a **quantitative fraud penalty** that directly affects claim routing, and creates **five explainable decision outcomes** that determine whether a claim is auto-approved, reviewed, held, batch-held, or rejected. Every decision can be traced back through the layers to specific evidence. The liquidity circuit-breaker controls protect the payout pool from mass-claim drain attacks without blocking legitimate claims.
+
+Fraud detection also extends **after payout** — post-approval flagging, graduated trust score penalties, and legal escalation ensure the system stays accountable even after money has moved.

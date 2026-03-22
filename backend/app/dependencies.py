@@ -98,7 +98,7 @@ def require_role(required_role: str):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"This endpoint requires role '{required_role}'. "
-                       f"Your role: '{user.get('role')}'.",
+                f"Your role: '{user.get('role')}'.",
             )
         return user
 

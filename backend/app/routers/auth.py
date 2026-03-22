@@ -21,9 +21,11 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 
 # ── Request / Response Models ──────────────────────────────────────
 
+
 class SignupRequest(BaseModel):
     """Used only for email/password signup fallback. Google OAuth users
     get their profile created on first /auth/me call if needed."""
+
     full_name: str
     role: str  # 'worker' or 'insurer_admin'
     email: EmailStr
@@ -32,6 +34,7 @@ class SignupRequest(BaseModel):
 
 class OnboardingWorkerRequest(BaseModel):
     """Complete worker profile after Google OAuth signup."""
+
     full_name: str
     platform_name: str  # e.g. Swiggy, Zomato, Zepto
     city: str
@@ -42,12 +45,14 @@ class OnboardingWorkerRequest(BaseModel):
 
 class OnboardingInsurerRequest(BaseModel):
     """Complete insurer/admin profile after Google OAuth signup."""
+
     full_name: str
     company_name: str
     job_title: str | None = None
 
 
 # ── Endpoints ──────────────────────────────────────────────────────
+
 
 @router.get("/me")
 async def get_me(user: dict = Depends(get_current_user)):
@@ -71,30 +76,40 @@ async def complete_worker_onboarding(
     user_id = user["id"]
 
     # Check if profile already exists
-    existing = sb.table("profiles").select("id").eq("id", user_id).maybe_single().execute()
-    if existing.data:
+    existing = (
+        sb.table("profiles")
+        .select("id")
+        .eq("id", user_id)
+        .maybe_single()
+        .execute()
+    )
+    if existing.data:  # type: ignore
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Profile already exists. Use profile update endpoints instead.",
         )
 
     # Create profiles row
-    sb.table("profiles").insert({
-        "id": user_id,
-        "role": "worker",
-        "full_name": body.full_name,
-        "email": user["email"],
-    }).execute()
+    sb.table("profiles").insert(
+        {
+            "id": user_id,
+            "role": "worker",
+            "full_name": body.full_name,
+            "email": user["email"],
+        }
+    ).execute()
 
     # Create worker_profiles row
-    sb.table("worker_profiles").insert({
-        "profile_id": user_id,
-        "platform_name": body.platform_name,
-        "city": body.city,
-        "vehicle_type": body.vehicle_type,
-        "avg_hourly_income_inr": body.avg_hourly_income_inr,
-        "gps_consent": body.gps_consent,
-    }).execute()
+    sb.table("worker_profiles").insert(
+        {
+            "profile_id": user_id,
+            "platform_name": body.platform_name,
+            "city": body.city,
+            "vehicle_type": body.vehicle_type,
+            "avg_hourly_income_inr": body.avg_hourly_income_inr,
+            "gps_consent": body.gps_consent,
+        }
+    ).execute()
 
     return {"status": "onboarding_complete", "role": "worker", "id": user_id}
 
@@ -109,24 +124,38 @@ async def complete_insurer_onboarding(
     sb = get_supabase_admin()
     user_id = user["id"]
 
-    existing = sb.table("profiles").select("id").eq("id", user_id).maybe_single().execute()
-    if existing.data:
+    existing = (
+        sb.table("profiles")
+        .select("id")
+        .eq("id", user_id)
+        .maybe_single()
+        .execute()
+    )
+    if existing.data:  # type: ignore
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Profile already exists.",
         )
 
-    sb.table("profiles").insert({
-        "id": user_id,
+    sb.table("profiles").insert(
+        {
+            "id": user_id,
+            "role": "insurer_admin",
+            "full_name": body.full_name,
+            "email": user["email"],
+        }
+    ).execute()
+
+    sb.table("insurer_profiles").insert(
+        {
+            "profile_id": user_id,
+            "company_name": body.company_name,
+            "job_title": body.job_title,
+        }
+    ).execute()
+
+    return {
+        "status": "onboarding_complete",
         "role": "insurer_admin",
-        "full_name": body.full_name,
-        "email": user["email"],
-    }).execute()
-
-    sb.table("insurer_profiles").insert({
-        "profile_id": user_id,
-        "company_name": body.company_name,
-        "job_title": body.job_title,
-    }).execute()
-
-    return {"status": "onboarding_complete", "role": "insurer_admin", "id": user_id}
+        "id": user_id,
+    }

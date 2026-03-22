@@ -11,14 +11,14 @@
 | Integration inventory | ✅ Documented |
 | Real-vs-mock classification | ✅ Documented |
 | Mock strategy documentation | ✅ Documented |
-| OpenWeather API integration | ✅ Designed (API key available) |
+| IMD Weather APIs (official) | ✅ Designed (exact endpoints mapped) |
+| CPCB AQI API (OGD) | ✅ Designed (registration required) |
+| OpenWeather API (fallback) | ✅ Designed (API key available) |
 | TomTom API integration | ✅ Designed (API key available) |
 | NewsAPI integration | ✅ Designed (API key available) |
 | API-to-Defense mapping | ✅ Documented |
-| Weather API connector (IMD/OGD) | 📋 Planned |
-| AQI API connector (CPCB/OGD) | 📋 Planned |
-| Payment sandbox | 📋 Planned |
 | Gemini API integration | ✅ Implemented |
+| Payment sandbox | 📋 Planned |
 
 ---
 
@@ -26,31 +26,28 @@
 
 | # | Integration | Category | Source | Real / Mock | Why chosen |
 |---|------------|----------|--------|-------------|-----------|
-| 1 | **IMD Rainfall Data** | Weather | India Meteorological Department / OGD | Real (public) | Official rain thresholds anchor T1–T3 triggers |
-| 2 | **CPCB AQI Data** | Air Quality | Central Pollution Control Board / OGD | Real (public) | Official AQI bands anchor T5–T6 triggers |
-| 3 | **IMD/NDMA Heat Data** | Temperature | India Meteorological Department | Real (public) | Official heat-wave criteria anchor T7–T9 triggers |
-| 4 | **Traffic Data** | Traffic | Google Maps API / proxy | Mock | Real-time traffic APIs are expensive; use proxy/mock for delay percentages |
+| 1 | **IMD Rainfall APIs** | Weather | India Meteorological Department | Real (free, official) | Official rain thresholds anchor T1–T3 triggers |
+| 2 | **CPCB AQI API** | Air Quality | Central Pollution Control Board / OGD | Real (free, official) | Official AQI bands anchor T5–T6 triggers |
+| 3 | **IMD Temperature APIs** | Temperature | India Meteorological Department | Real (free, official) | Official heat-wave criteria anchor T7–T9 triggers |
+| 4 | **Traffic Data** | Traffic | TomTom / proxy | Premium (or mock) | Real-time traffic APIs for delay percentages |
 | 5 | **Platform Outage Feed** | Platform | Delivery platform heartbeat | Mock | Platform APIs are unavailable; simulate outage events |
 | 6 | **Demand Drop Signal** | Platform | Delivery platform order volume | Mock | Platform APIs are unavailable; simulate order drops |
 | 7 | **Zone Closure Feed** | Civic | Municipal / police notices | Mock | No real-time API; simulate closure flags |
 | 8 | **Payment Gateway** | Payout | UPI / payment sandbox | Mock | Actual payment integration not required for hackathon demo |
 | 9 | **Bank Verification** | Identity | Banking API | Mock | Simulate bank account verification status |
 | 10 | **Gemini AI** | Risk scoring | Google Gemini API | Real (API key) | AI-assisted risk assessment and claim narrative generation |
-| 11 | **OpenWeather API** | Weather / Trigger | OpenWeather | Real (API key) | Weather severity feed, rain risk, temperature / heat signals for trigger validation |
-| 12 | **TomTom APIs** | Traffic / Anti-Spoofing | TomTom | Real (API key) | Traffic Flow, Incidents, Geofencing, Routing, Snap-to-Roads, Reverse Geocoding for disruption verification and anti-spoofing |
-| 13 | **NewsAPI** | Civic / Context | NewsAPI | Real (API key) | Strike, protest, closure context; narrative intelligence for dashboards; NOT a primary claims source |
-| 14 | **Guidewire Cloud APIs** | Insurer Workflow | Guidewire | Future integration | Organizational reference for policy, claims, billing, and party domain mapping |
+| 11 | **OpenWeather API** | Weather (fallback) | OpenWeather | Real (API key) | Fallback weather feed when IMD IP whitelisting is pending |
+| 12 | **TomTom APIs** | Traffic / Anti-Spoofing | TomTom | Real (API key) | Traffic Flow, Incidents, Geofencing, Routing, Snap-to-Roads |
+| 13 | **NewsAPI** | Civic / Context | NewsAPI | Real (API key) | Strike, protest, closure context; NOT a primary claims source |
 
 ---
 
 ## Data Source Priority
 
-Following the expert-session guidance:
-
 | Priority | Source Type | Examples |
-|----------|-----------|---------|
-| **Primary** | Government public data | IMD weather/rainfall, CPCB AQI, NDMA heat-wave guidance |
-| **Secondary** | Commercial/proxy feeds | Traffic delay proxies, route-time APIs |
+|----------|-----------|---------| 
+| **Primary** | Indian Government official APIs | IMD weather/rainfall, CPCB AQI, NDMA heat-wave guidance |
+| **Secondary** | Commercial/proxy feeds | TomTom traffic, OpenWeather (fallback), NewsAPI context |
 | **Tertiary** | Simulated data | Platform outage, demand collapse, zone closures |
 
 ---
@@ -76,35 +73,66 @@ Platform-specific APIs (delivery order volume, outage heartbeats, GPS traces) ar
 
 ## Integration Details
 
-### Weather / Rainfall (Real — Public)
-- **Source:** IMD operational data via OGD portal
-- **Official reference:** [IMD Rainfall FAQ](https://rsmcnewdelhi.imd.gov.in/images/pdf/faq.pdf) | [IMD Heavy Rainfall Warning](https://mausam.imd.gov.in/imd_latest/contents/pdf/pubbrochures/Heavy%20Rainfall%20Warning%20Services.pdf)
-- **Data:** 24-hour rainfall in mm by city/zone
-- **Thresholds used:** 48mm (watch), 64.5mm (heavy), 115.6mm (very heavy+)
-- **Triggers fed:** T1, T2, T3
-- **Demo-stage note:** Public data is accessible via OGD APIs or downloadable datasets. For demo, seed CSVs simulate realistic rainfall readings within IMD bands.
+### Weather / Rainfall (Real — IMD Official APIs)
+- **Source:** India Meteorological Department — Free, public APIs
+- **IP Whitelisting Required:** Yes — email IMD with your server's public IP
 
-### AQI (Real — Public)
-- **Source:** CPCB National AQI monitoring via OGD repository
-- **Official reference:** [CPCB National AQI](https://www.cpcb.nic.in/national-air-quality-index/) | [OGD AQI Dataset](https://www.data.gov.in/resource/real-time-air-quality-index-various-locations)
-- **Data:** AQI value by city/station
-- **Thresholds used:** 201+ (caution), 301+ (severe), 401+ (extreme)
-- **Triggers fed:** T5, T6
-- **Demo-stage note:** CPCB publishes real-time AQI through its dashboard and OGD. For demo, seed CSVs simulate AQI values matching CPCB category definitions.
+**Exact APIs we use:**
 
-### Heat / Temperature (Real — Public)
-- **Source:** IMD temperature readings, NDMA heat-wave guidance
-- **Official reference:** [IMD Heat Wave Warning](https://mausam.imd.gov.in/imd_latest/contents/pdf/pubbrochures/Heat%20Wave%20Warning%20Services.pdf) | [NDMA Heat Wave](https://ndma.gov.in/Natural-Hazards/Heat-Wave)
-- **Data:** Temperature in °C, heat-wave condition flags
+| API | URL | Our trigger | What we extract |
+|---|---|---|---|
+| **District-wise Rainfall** | `mausam.imd.gov.in/api/districtwise_rainfall_api.php?id={obj_id}` | T1, T2, T3 | `Daily Actual` (mm), `Daily Category` |
+| **District-wise Warnings** | `mausam.imd.gov.in/api/warnings_district_api.php?id={obj_id}` | T1, T2, T3 | Warning code 2=Heavy Rain, 16=Very Heavy, 17=Extremely Heavy; color 🟡🟠🔴 |
+| **Current Weather** | `mausam.imd.gov.in/api/current_wx_api.php?id={station_id}` | T6, T7, T8 | `Temperature` (°C), `Last 24 hrs Rainfall` (mm), `Weather Code` |
+| **City 7-Day Forecast** | `city.imd.gov.in/api/cityweather_loc.php?id={station_id}` | Premium pricing | `Today_Max_temp`, `Past_24_hrs_Rainfall`, 7-day forecast for zone risk |
+| **District Nowcast** | `mausam.imd.gov.in/api/nowcast_district_api.php?id={obj_id}` | T1, T2, T3 | Cat7=Moderate rain, Cat12=Heavy rain, `color` code (1-4) |
+
+**Station IDs for our 4 target cities:**
+
+| City | Station Name | Station ID | Notes |
+|---|---|---|---|
+| Mumbai | Santacruz | 43057 | Primary rain trigger zone |
+| Delhi | Safdarjung | 42182 | AQI + heat trigger zone |
+| Bangalore | HAL Airport | 43296 | Traffic trigger zone |
+| Hyderabad | Begumpet | 43128 | Multi-trigger zone |
+
+**IMD field → DEVTrails trigger mapping:**
+- `Past_24_hrs_Rainfall` ≥ 48mm → T1 (Watch)
+- `Past_24_hrs_Rainfall` ≥ 64.5mm → T2 (Heavy Rain Claim)
+- `Past_24_hrs_Rainfall` ≥ 115.6mm → T3 (Extreme Rain Escalation)
+- Warning code `9` + `Temperature` ≥ 45°C → T6 (Heat Wave)
+- Warning code `9` + `Temperature` ≥ 47°C → T7 (Severe Heat Wave)
+
+**To get access:** Email IMD at their contact page with your server's public IP for whitelisting. Until then, seed CSVs simulate realistic readings within IMD bands.
+
+### AQI (Real — CPCB / OGD API)
+- **Source:** Central Pollution Control Board via Open Government Data portal (`data.gov.in`)
+- **API Key Required:** Yes — free registration at `data.gov.in`
+- **How to get access:**
+  1. Register at `https://data.gov.in`
+  2. Search for **"Real-Time Air Quality Index"**
+  3. Click the dataset → Generate an API Key
+  4. Use the API endpoint with your key
+- **Official reference:** [CPCB National AQI](https://www.cpcb.nic.in/national-air-quality-index/) | [OGD AQI Dataset](https://www.data.gov.in/resource/real-time-air-quality-index-various-locations)
+- **Data:** AQI value by city/station (PM2.5, PM10, SO2, NO2, O3, CO)
+- **Thresholds used:** 201+ (Poor, caution), 301+ (Very Poor, claim), 401+ (Severe, escalation)
+- **Triggers fed:** T5, T6, T16
+- **Demo note:** For demo, seed CSVs simulate AQI values matching CPCB category definitions.
+
+### Heat / Temperature (Real — IMD Current Weather API)
+- **Source:** Same IMD Current Weather API as rainfall
+- **Exact API:** `mausam.imd.gov.in/api/current_wx_api.php?id={station_id}`
+- **Fields used:** `Temperature` (current °C), `Weather Code`
+- **Also:** District-wise Warnings API → Warning code `9` = Heat Wave, `10` = Hot Day
+- **Official reference:** [IMD Heat Wave Warning](https://mausam.imd.gov.in/imd_latest/contents/pdf/pubbrochures/Heat%20Wave%20Warning%20Services.pdf) | [NDMA Heat Wave](https://ndma.gov.in/Natural-Hazards/Heat-Wave)
 - **Thresholds used:** 45°C (heat-wave), 47°C (severe heat)
 - **Triggers fed:** T7, T8, T9
-- **Demo-stage note:** IMD/NDMA publish heat-wave criteria and alerts publicly. Seed CSVs include realistic temp values within IMD classification ranges.
 
-### Traffic (Mock)
+### Traffic (Mock — TomTom in production)
 - **Simulated data:** Travel delay percentage (0–100%)
 - **Threshold used:** ≥ 40% delay
 - **Triggers fed:** T12
-- **Assumption:** Delay percentage models urban congestion patterns during disruption events
+- **Production API:** TomTom Traffic Flow API (paid per 1000 requests)
 
 ### Platform Outage / Demand (Mock)
 - **Simulated data:** Outage duration (minutes), order volume drop (%)
@@ -127,13 +155,13 @@ Platform-specific APIs (delivery order volume, outage heartbeats, GPS traces) ar
 - **Integration:** Google Gemini API with key rotation
 - **Consumer:** Claim pipeline (Gemini narrative stage), insurer review queue
 
-### OpenWeather API (Real — API Key)
-- **Purpose:** Weather severity feed for trigger validation
-- **Data:** Current and forecast weather conditions, rain intensity, temperature, heat signals
+### OpenWeather API (Real — Fallback)
+- **Purpose:** Fallback weather feed when IMD IP whitelisting is pending
+- **Data:** Current and forecast weather conditions, rain intensity, temperature
 - **Used for:**
-  - Trigger validation: rain risk (T1–T3), heat signals (T7–T9)
+  - Trigger validation fallback: rain risk (T1–T3), heat signals (T7–T9)
   - Event truth verification (Layer 1 of fraud pipeline)
-  - Near-real-time disruption monitoring
+- **Note:** IMD is the primary source. OpenWeather fills gaps until IMD access is live.
 - **Consumer:** Trigger engine, fraud engine (event truth layer)
 
 ### TomTom APIs (Real — API Key)
@@ -143,15 +171,8 @@ Platform-specific APIs (delivery order volume, outage heartbeats, GPS traces) ar
   - **Traffic Incidents API** — disruption event detection
   - **Geofencing API** — zone boundary validation for anti-spoofing
   - **Routing API** — route plausibility checks
-  - **Snap-to-Roads API** — verify GPS coordinates map to real roads (anti-spoofing)
+  - **Snap-to-Roads API** — verify GPS coordinates map to real roads
   - **Reverse Geocoding API** — location verification
-  - **Matrix Routing / Waypoint Optimization** — route stress analysis where helpful
-- **Used for:**
-  - Disruption verification (traffic collapse, route inaccessibility)
-  - Zone match confidence
-  - Route accessibility scoring
-  - **Anti-spoofing logic** — confirming claimed location is on a real delivery route
-  - Geofence-based evidence checks
 - **Consumer:** Trigger engine, fraud engine (anti-spoofing layer), exposure matching
 
 ### NewsAPI (Real — API Key)
@@ -159,40 +180,62 @@ Platform-specific APIs (delivery order volume, outage heartbeats, GPS traces) ar
 - **Data:** News articles about strikes, protests, closures, civic disruptions
 - **Used for:**
   - Contextual disruption narrative in the admin dashboard
-  - Trend enrichment for closure/strike triggers (T10, T11)
+  - Trend enrichment for closure/strike triggers (T14, T15)
   - **NOT** a primary claims truth source — context only
 - **Consumer:** Admin dashboard, trigger context enrichment
 
 > [!WARNING]
 > News data should support context and trend dashboards, but should **never** be the sole trigger truth source. All claims are validated against structured trigger data, not news headlines.
 
-### Guidewire Cloud APIs (Future — Organizational Reference)
-- **Purpose:** Future insurer workflow integration
-- **Conceptual mapping:**
-  - Policy / quote / renewal → `backend/app/routers/policies.py`
-  - Claims / FNOL / review → `backend/app/routers/claims.py`
-  - Billing / payout / payment → `backend/app/routers/payouts.py` (planned)
-  - Customer / party / identity → `backend/app/routers/workers.py`
-  - Document / evidence → evidence service
-  - Analytics / event / integration → `backend/app/routers/analytics.py`
-- **Note:** Used only as organizational / future integration guidance, not as proof that DEVTrails is currently running on Guidewire
+---
+
+## Complete API Shopping List
+
+> [!IMPORTANT]
+> This is the exact list of APIs the project needs, organized by cost.
+
+### Free (Indian Government / Open Source)
+
+| API | Provider | Cost | What to do |
+|---|---|---|---|
+| District-wise Rainfall | IMD | Free | Email IMD your public IP for whitelisting |
+| District-wise Warnings | IMD | Free | Same IP whitelisting as above |
+| Current Weather | IMD | Free | Same IP whitelisting as above |
+| City 7-Day Forecast | IMD | Free | Same IP whitelisting as above |
+| District Nowcast | IMD | Free | Same IP whitelisting as above |
+| Real-Time AQI | CPCB / data.gov.in | Free | Register at data.gov.in, generate API key |
+| GDELT (news/events) | GDELT Project | Free | No key needed, open API |
+
+### Free Tier Available
+
+| API | Provider | Free tier | What to do |
+|---|---|---|---|
+| OpenWeather | OpenWeather | 1,000 calls/day free | Sign up at openweathermap.org |
+| NewsAPI | NewsAPI | 100 requests/day free | Sign up at newsapi.org |
+| Gemini AI | Google | Free tier available | Get API key from Google AI Studio |
+
+### Premium (Production Only)
+
+| API | Provider | Cost | When needed |
+|---|---|---|---|
+| TomTom Traffic | TomTom | ~$0.50/1000 requests | Production traffic triggers |
+| WhatsApp Business | Twilio / Gupshup | Per-conversation | Production notifications |
+| DigiLocker / Setu KYC | Government / Setu | Per-verification | KYC Level 4-5 |
 
 ---
 
 ## API-to-Defense Mapping
 
-How each API contributes to the platform's defense layers:
-
 | API | Primary role | Anti-spoofing role | Dashboard role |
 |---|---|---|---|
-| **OpenWeather** | Hazard trigger validation (rain, heat) | Event truth verification — was the disruption real? | Weather severity feed display |
-| **TomTom Traffic / Incidents** | Traffic disruption trigger (T12) | Mobility plausibility — was traffic actually disrupted? | Traffic status in zone view |
+| **IMD Weather** | Hazard trigger validation (rain, heat) | Event truth verification — was the disruption real? | Weather severity feed |
+| **CPCB AQI** | AQI trigger validation | Event truth — was air quality actually bad? | AQI severity display |
+| **OpenWeather** | Fallback weather validation | Secondary event truth | Fallback weather feed |
+| **TomTom Traffic** | Traffic disruption trigger (T12) | Mobility plausibility — was traffic actually disrupted? | Traffic status |
 | **TomTom Snap-to-Roads** | — | Route plausibility — was the worker on a real road? | — |
-| **TomTom Geofencing** | Zone boundary definition | Geofence match — was the device inside the operating zone? | Zone boundary visualization |
-| **TomTom Routing** | Route accessibility scoring | — | Route stress display |
-| **NewsAPI** | Civic disruption context (T10, T11) | Contextual corroboration for closure/strike claims | News feed in admin dashboard |
+| **TomTom Geofencing** | Zone boundary definition | Geofence match — was the device in the zone? | Zone boundary |
+| **NewsAPI** | Civic disruption context (T14, T15) | Contextual corroboration for closure/strike claims | News feed |
 | **Gemini AI** | Claim narrative generation | — | AI explanation in review queue |
-| **Guidewire** | Future insurer workflow integration | — | — |
 
 ---
 

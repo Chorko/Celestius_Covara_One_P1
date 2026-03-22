@@ -11,8 +11,8 @@
 | Service architecture definition | ✅ Implemented |
 | FastAPI app with routers | ✅ Implemented |
 | Auth endpoints (login, signup, profile) | ✅ Implemented |
-| Claims endpoints (submit, list, detail, review) | ✅ Implemented |
-| Policies endpoints (quote, activate) | ✅ Implemented |
+| Claims endpoints (submit, list, detail, review, flag) | ✅ Implemented |
+| Policies endpoints (quote with plan, activate with plan) | ✅ Implemented |
 | Triggers endpoints (live feed, inject) | ✅ Implemented |
 | Workers endpoints (profile, stats) | ✅ Implemented |
 | Zones endpoints (list, detail, cities) | ✅ Implemented |
@@ -26,7 +26,11 @@
 | Anti-spoofing verification (Layer 3) | ✅ Implemented |
 | Image forensics & AI detection | ✅ Implemented |
 | Region controls & behavioral identity | ✅ Implemented |
-| Supabase SQL schema (14 tables) | ✅ Implemented |
+| Region validation cache (fast-lane) | ✅ Implemented |
+| Payout safety (event-ID, worker-event uniqueness) | ✅ Implemented |
+| Claim state machine (8 states, soft hold) | ✅ Implemented |
+| Post-approval fraud controls | ✅ Implemented |
+| Supabase SQL schema (14 tables + 3 migrations) | ✅ Implemented |
 | Row-Level Security policies | ✅ Implemented |
 | CLI seed system | ✅ Implemented |
 | Redis caching layer | 📋 Planned |
@@ -128,8 +132,8 @@ flowchart TD
 
 | Method | Endpoint | Purpose | Status |
 |--------|----------|---------|--------|
-| `GET` | `/policies/quote` | Generate weekly premium quote | ✅ Implemented |
-| `POST` | `/policies/activate` | Activate weekly policy (mock) | ✅ Implemented |
+| `GET` | `/policies/quote` | Generate weekly premium quote (plan-aware: essential/plus) | ✅ Implemented |
+| `POST` | `/policies/activate` | Activate weekly policy with plan selection | ✅ Implemented |
 
 ### Trigger & Claim Endpoints
 
@@ -137,10 +141,11 @@ flowchart TD
 |--------|----------|---------|--------|
 | `GET` | `/triggers/live` | Current active trigger events | ✅ Implemented |
 | `POST` | `/triggers/inject` | Inject mock trigger event (admin) | ✅ Implemented |
-| `POST` | `/claims` | Submit manual claim with evidence | ✅ Implemented |
+| `POST` | `/claims` | Submit manual claim with evidence + plan | ✅ Implemented |
 | `GET` | `/claims` | List claims (worker=own, admin=all) | ✅ Implemented |
 | `GET` | `/claims/{id}` | Get claim detail, evidence, payout | ✅ Implemented |
 | `POST` | `/claims/{id}/review` | Admin review action on claim | ✅ Implemented |
+| `POST` | `/claims/{id}/flag` | Post-approval fraud flag + trust downgrade | ✅ Implemented |
 
 ### Zone & Analytics Endpoints
 
@@ -164,6 +169,7 @@ flowchart TD
 | **Anti-Spoofing** | `anti_spoofing.py` | Layer 3: EXIF vs GPS cross-check, timestamp freshness, VPN/datacenter IP detection, device continuity, impossible travel velocity, emulator/root detection |
 | **Image Forensics** | `image_forensics.py` | Evidence integrity: EXIF completeness, software/editor detection, timestamp chain-of-custody, GPS precision, camera-device consistency, AI detection stub (Gemini SynthID) |
 | **Region Controls** | `region_controls.py` | Behavioral identity: zone affinity, pre-trigger presence, dynamic trust penalties, zone volume monitoring, mass-claim throttling |
+| **Region Validation Cache** | `region_validation_cache.py` | Fast-lane eligibility checks, cluster spike liquidity protection, post-approval trust score penalties |
 | **Manual Verifier** | `manual_claim_verifier.py` | Evidence completeness and geo confidence for manual claims |
 | **Evidence Processing** | `evidence.py` | EXIF metadata extraction (forensic-grade: 10+ fields including Software, DateTimeDigitized, ModifyDate, Make, GPS precision) |
 | **Gemini Analysis** | `gemini_analysis.py` | AI-generated claim narrative for admin review |
@@ -180,3 +186,6 @@ flowchart TD
 | `02_auth_triggers.sql` | Auth event triggers for automatic profile creation |
 | `03_rls_policies.sql` | Row-Level Security policies for all tables |
 | `04_storage_policies.sql` | Storage bucket policies for claim evidence uploads |
+| `10_payout_safety.sql` | Disruption events table + worker-event uniqueness index |
+| `11_claim_states.sql` | Expanded claim state machine (8 states: submitted → auto_approved / soft_hold / fraud_escalated → approved → paid) |
+| `12_region_validation_cache.sql` | Validated regional incidents table with cluster spike detection |

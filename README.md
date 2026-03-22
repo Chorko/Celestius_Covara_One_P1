@@ -2,7 +2,11 @@
 
 **Team Celestius** — Bhrahmesh A · Chorko C · T Dharshini · T Ashwin · Shripriya Sriram
 
+> **Covara One** is a weekly parametric income-protection platform for delivery workers, with insurer-grade fraud controls and admin review orchestration.
+
 > A hyperlocal, weekly income-protection engine for food-delivery workers that pays only when verified disruption overlaps real earning exposure.
+
+📹 **Demo Video:** [Watch the DEVTrails Platform Demo](https://www.youtube.com/watch?v=TB0tV3Kcn80)
 
 ---
 
@@ -37,6 +41,8 @@ DEVTrails is an AI-assisted **parametric insurance platform** that protects deli
 | **Ghost Shift Detector** | Fraud and anomaly detection layer |
 | **Zero-Touch Payout** | Claims and payout orchestration for auto-initiated claims |
 | **Trust Pass** *(optional)* | Loyalty / trust program for premium discounts and fast-lane claim decisions |
+| **Region Validation Cache** | Validated-incident fast-lane for reducing repeated manual reviews |
+| **Payout Safety Layer** | Event-ID idempotency, worker-event uniqueness, duplicate prevention |
 
 ### The Idea Is Simple
 
@@ -81,9 +87,12 @@ The DEVTrails 2026 challenge requires:
 | Gig-worker income protection | Food-delivery workers in urban India, loss-of-income only |
 | Weekly pricing | Dynamic weekly premium based on zone risk, shift exposure, trust score |
 | AI-powered risk assessment | Hybrid rules + Random Forest ML + feedback adaptation |
-| Intelligent fraud detection | 4-layer Ghost Shift Detector pipeline |
+| Intelligent fraud detection | 5-layer Ghost Shift Detector pipeline with signal confidence hierarchy |
 | Parametric trigger automation | 15-trigger library with public-threshold anchoring |
-| Payout processing | Zero-Touch Payout with severity-proportional compensation |
+| Payout processing | Zero-Touch Payout with severity-proportional compensation, event-ID idempotency, and duplicate prevention |
+| Payout safety | Disruption event identity, worker-event uniqueness constraint, soft hold without partial payouts |
+| Post-approval controls | Post-approval fraud flagging, trust score downgrade, legal escalation |
+| Region fast-lane | Validated regional incident cache for reducing repeated manual reviews |
 | Analytics dashboards | Worker dashboard + Insurer dashboard + Claim analytics dashboard |
 
 ---
@@ -114,16 +123,22 @@ The DEVTrails 2026 challenge requires:
 | Product framing & scope boundaries | ✅ Current | Consistent across all documentation |
 | 15-trigger library (thresholds & logic) | ✅ Implemented | Trigger engine with live feed + mock injection |
 | Premium & payout formulas | ✅ Implemented | Internal calibration engine with actuarial formulas |
-| Parametric product (Essential / Plus) | ✅ Designed | Two-plan weekly benefit ladder with pre-agreed payout bands |
+| Parametric product (Essential / Plus) | ✅ Implemented | Two-plan weekly benefit ladder with pre-agreed payout bands |
 | Data schemas & seed dataset | ✅ Present | 14-table Supabase SQL schema with RLS + seed CSVs |
-| Backend API — full services | ✅ Implemented | Auth, claims, policies, triggers, zones, workers, analytics endpoints |
+| Backend API — full services | ✅ Implemented | Auth, claims, policies, triggers, zones, workers, analytics, post-approval flag endpoints |
 | Worker dashboard | ✅ Implemented | Profile, earnings chart, zone alerts, policy quote, claim submission |
 | Insurer dashboard | ✅ Implemented | KPI cards, trigger mix chart, review queue with AI-assisted decisions |
 | Claim pipeline | ✅ Implemented | 8-stage pipeline: severity → pricing → fraud → payout → Gemini AI |
 | Fraud detection engine | ✅ Implemented | 5-layer scoring with anti-spoofing, cluster intelligence, and fraud bands |
 | Adversarial defense & anti-spoofing | ✅ Designed | Multi-signal verification, coordinated-ring detection, liquidity circuit-breaker |
+| Payout safety & idempotency | ✅ Implemented | Event-ID uniqueness, worker-event constraint, duplicate prevention |
+| Claim state machine (soft hold) | ✅ Implemented | 8 states: submitted → auto_approved / soft_hold_verification / fraud_escalated_review → approved → paid |
+| Post-approval fraud controls | ✅ Implemented | Flag endpoint, trust score downgrade, severity-graded penalties |
+| Region validation cache (fast-lane) | ✅ Implemented | Validated-incident fast-lane with cluster spike liquidity protection |
 | Supabase Auth & RLS | ✅ Implemented | Google OAuth, role-based routing, Row-Level Security |
 | Integrations (weather, AQI, traffic) | ✅ Designed | OpenWeather, TomTom, NewsAPI mapped; connectors planned |
+| Progressive KYC | ✅ Designed | Phone OTP → platform ID → bank/UPI → optional DigiLocker ladder |
+| WhatsApp notifications | 📋 Planned | Disruption alerts, claim updates, payout notifications |
 | Caching layer | 📋 Planned | Strategy and TTL policy defined; implementation pending |
 | ML training pipeline | 📋 Planned | Random Forest baseline hardcoded at p=0.15 |
 
@@ -153,72 +168,90 @@ Each folder has its own README with detailed inputs, outputs, architecture diagr
 ### Unified System Architecture
 
 ```mermaid
-graph TB
-    subgraph "External Signals"
-        WX["☁️ Weather / Rain<br/>(IMD / OGD)"]
-        AQ["🌫️ AQI<br/>(CPCB)"]
-        HT["🌡️ Heat / Temp<br/>(IMD / NDMA)"]
-        TR["🚦 Traffic<br/>(Proxy / Mock)"]
-        PL["📱 Platform Signals<br/>(Mock)"]
-        CV["🚧 Closures<br/>(Mock)"]
+flowchart TD
+    classDef input fill:#7C3AED,color:#fff,stroke:#5B21B6,stroke-width:2px;
+    classDef ui fill:#1D4ED8,color:#fff,stroke:#1E3A8A,stroke-width:2px;
+    classDef engine fill:#059669,color:#fff,stroke:#047857,stroke-width:2px;
+    classDef defense fill:#9333EA,color:#fff,stroke:#7E22CE,stroke-width:2px;
+    classDef data fill:#4F46E5,color:#fff,stroke:#3730A3,stroke-width:2px;
+    classDef admin fill:#B45309,color:#fff,stroke:#92400E,stroke-width:2px;
+
+    %% 1. Core Central Pipeline
+    subgraph CORE ["⚙️ Main Processing Pipeline"]
+        direction TB
+        SI{{Signal Ingestion}}:::engine
+        TE{{Trigger Engine}}:::engine
+        CE{{Claim Engine}}:::engine
+        FE{{Ghost Shift Detector}}:::defense
+        PS{{Payout Safety Layer}}:::defense
+        PO[[Zero-Touch Payout]]:::defense
+        
+        SI --> TE
+        TE --> CE
+        CE --> FE
+        FE --> PS
+        PS --> PO
     end
 
-    subgraph "Worker App"
-        WO["Onboarding"]
-        WD["Worker Dashboard"]
-        WP["Weekly Policy View"]
-        WC["Claim Status"]
+    %% 2. Peripheral Systems (Left & Right Flanks)
+    subgraph SIG ["🌐 External Signals"]
+        direction TB
+        WX[/☁️ Weather API/]:::input
+        AQ[/🌫️ Air Quality API/]:::input
+        HT[/🌡️ Temp & Heat/]:::input
+        TR[/🚦 Traffic Data/]:::input
+        PL[/📱 Platform Auth/]:::input
+        NW[/📰 Civic News/]:::input
     end
 
-    subgraph "Core Platform"
-        SI["Signal Ingestion<br/>& Normalization"]
-        TE["Trigger Engine<br/>(15 Triggers, T1–T15)"]
-        CE["Claim Engine<br/>(8-Stage Pipeline)"]
-        FE["Fraud Engine<br/>(Ghost Shift Detector)"]
-        PE["Premium Engine<br/>(Income Twin)"]
-        PO["Payout Orchestration<br/>(Zero-Touch Payout)"]
+    subgraph WRK ["👤 Worker Interface"]
+        direction TB
+        WO([Onboarding]):::ui
+        WP([Plan Selection]):::ui
+        WD[[Worker Dashboard]]:::ui
+        WC([Claim Status]):::ui
     end
 
-    subgraph "Data & Intelligence"
-        DL["Data Layer<br/>(worker_data + trigger_data)"]
-        ML["ML Layer<br/>(Random Forest Baseline)"]
-        AN["Analytics Engine"]
+    subgraph DAT ["📊 Data & Intelligence"]
+        direction TB
+        DL[(Supabase Database)]:::data
+        AN{{Analytics Engine}}:::data
+        ML{{ML Pipeline}}:::data
     end
 
-    subgraph "Insurer Operations"
-        ID["Insurer Dashboard"]
-        AD["Claim Analytics<br/>Dashboard"]
-        FR["Fraud Review Panel"]
+    subgraph INS ["🏢 Insurer Operations"]
+        direction TB
+        ID[[Insurer Dashboard]]:::admin
+        RQ[[Review Queue]]:::admin
+        FR[[Fraud Panel]]:::admin
     end
+    
+    %% Outlier Engines
+    PE{{Premium Engine}}:::engine
+    RC[(Region Cache)]:::engine
 
-    WX & AQ & HT & TR & PL & CV --> SI
-    SI --> TE
-    TE --> CE
-    CE --> FE
-    FE --> PO
+    %% Connections
+    WX & AQ & HT & TR & PL & NW --> SI
+    
     WO --> PE
     PE --> WP
-    DL --> ML
     ML --> PE
     ML --> TE
-    CE --> AN
-    AN --> AD
+    DL <--> ML
+    CE <--> RC
+    
+    CE -.-> AN
+    CE -.-> DL
+    TE -.-> DL
+    
+    AN -.-> ID
     PO --> WC
     PO --> ID
-    FE --> FR
-    TE --> DL
-    CE --> DL
-
-    style WO fill:#4a9eff,color:#fff
-    style WD fill:#4a9eff,color:#fff
-    style WP fill:#4a9eff,color:#fff
-    style WC fill:#4a9eff,color:#fff
-    style ID fill:#ff8c42,color:#fff
-    style AD fill:#ff8c42,color:#fff
-    style FR fill:#ff8c42,color:#fff
+    FE -.-> FR
+    FE -.-> RQ
 ```
 
-> **📋 Status:** This diagram represents the **target architecture**. The repository currently contains the documentation and specification layer; module implementations are planned.
+> **📋 Architecture status:** The core platform (Trigger Engine, Claim Engine, Fraud Engine, Premium Engine, Payout Safety, Region Cache) and both dashboards are **implemented**. ML training pipeline and external API live connectors are **planned** — mock data is used for demo.
 
 
 
@@ -228,23 +261,22 @@ graph TB
 
 ```mermaid
 flowchart LR
-    A["📝 Sign Up<br/>Zone, shift, earnings"] --> B["💰 Get Weekly<br/>Premium Quote"]
-    B --> C["✅ Activate<br/>Weekly Cover"]
-    C --> D["⚠️ Receive<br/>Disruption Alert"]
-    D --> E["📋 Auto-Claim<br/>Initiated"]
-    E --> F["🔍 Fraud Check<br/>& Verification"]
-    F --> G["💸 Payout<br/>Notification"]
-    G --> H["📊 Trust Score<br/>Updated"]
-    H --> B
+    classDef step fill:#7C3AED,color:#fff,stroke:#5B21B6,stroke-width:2px;
+    classDef finance fill:#1D4ED8,color:#fff,stroke:#1E3A8A,stroke-width:2px;
+    classDef alert fill:#B45309,color:#fff,stroke:#92400E,stroke-width:2px;
+    classDef action fill:#DC2626,color:#fff,stroke:#991B1B,stroke-width:2px;
+    classDef engine fill:#9333EA,color:#fff,stroke:#7E22CE,stroke-width:2px;
+    classDef success fill:#059669,color:#fff,stroke:#047857,stroke-width:2px;
+    classDef metric fill:#0F766E,color:#fff,stroke:#115E59,stroke-width:2px;
 
-    style A fill:#4a9eff,color:#fff
-    style B fill:#4a9eff,color:#fff
-    style C fill:#2ecc71,color:#fff
-    style D fill:#f39c12,color:#fff
-    style E fill:#e74c3c,color:#fff
-    style F fill:#9b59b6,color:#fff
-    style G fill:#2ecc71,color:#fff
-    style H fill:#4a9eff,color:#fff
+    A([📝 Sign Up<br/>Zone & Shift]):::step --> B[[💰 Weekly Quote]]:::finance
+    B --> C([✅ Activate Cover]):::success
+    C --> D>⚠️ Disruption Alert]:::alert
+    D --> E{{📋 Auto-Claim}}:::action
+    E --> F{🔍 Fraud Check}:::engine
+    F --> G[(💸 Payout executed)]:::success
+    G --> H([📊 Trust Score]):::metric
+    H --> B
 ```
 
 
@@ -264,6 +296,134 @@ flowchart LR
 | 7. Claim decision | If trigger + exposure + confidence thresholds met → auto-create claim | Explainable decision and payout amount |
 | 8. Payout simulation | Zero-Touch Payout sends simulated UPI / gateway response | Worker sees status; admin sees audit log |
 | 9. Learning loop | Reviewed outcomes feed back into pricing, thresholds, fraud models | Improved accuracy over time |
+
+---
+
+## Payout Safety & Duplicate Prevention
+
+> [!IMPORTANT]
+> Every disruption window gets a **deterministic event ID** (hash of zone + trigger family + window start). The system enforces **one payout per worker per event** — retries and duplicate trigger-firings never produce repeated payouts.
+
+| Safety control | How it works |
+|---|---|
+| **Event-ID idempotency** | Each disruption window is assigned a unique `event_id`. If a trigger fires again for the same zone/family/window, the existing event is matched — no duplicate created. |
+| **Worker-event uniqueness** | A partial unique index ensures that no worker can have more than one approved/paid claim for the same event. Duplicates are rejected at the database level. |
+| **Atomic state transitions** | Claim status transitions are validated against the allowed state machine — invalid transitions are rejected. |
+| **No partial payouts** | Unlike competitors that release 50% provisionally, DEVTrails uses a **soft hold** approach: money never moves until verification completes. This avoids clawback risk, accounting complexity, and trust erosion. |
+| **Retry-safe requests** | Payout execution is idempotent — retrying a payout request for the same event/worker returns the existing result, never creates a second payment. |
+
+> **Defensibility of soft hold over partial payout:** Soft hold protects both liquidity and customer trust by delaying money movement until verification finishes, instead of creating clawback risk through provisional payouts. Once verification completes, the full parametric band amount is released. The worker sees a clear status transition, not a confusing partial-then-maybe-more flow.
+
+---
+
+## Claim State Machine
+
+Claims follow a strict state machine with no partial disbursement. Money only moves after verification is complete.
+
+```mermaid
+stateDiagram-v2
+    [*] --> submitted
+    submitted --> auto_approved : Low fraud + trigger match
+    submitted --> soft_hold_verification : Medium risk / needs silent verification
+    submitted --> fraud_escalated_review : High fraud signals
+    soft_hold_verification --> approved : Verification passes
+    soft_hold_verification --> fraud_escalated_review : Fraud signals emerge
+    fraud_escalated_review --> approved : Admin clears
+    fraud_escalated_review --> rejected : Admin rejects
+    auto_approved --> paid : Payout executed
+    approved --> paid : Payout executed
+    paid --> post_approval_flagged : Later fraud evidence
+    auto_approved --> post_approval_flagged : Later fraud evidence
+    rejected --> [*]
+    post_approval_flagged --> [*]
+```
+
+| State | Meaning | Money movement |
+|---|---|---|
+| `submitted` | Initial intake | ❌ None |
+| `auto_approved` | Parametric auto-approve (low fraud, trigger match) | ✅ Queued for payout |
+| `soft_hold_verification` | Silent verification in progress | ❌ None — no partial payout |
+| `fraud_escalated_review` | Fraud-driven human/AI review | ❌ None |
+| `approved` | Verified and cleared | ✅ Queued for payout |
+| `rejected` | Denied (48h appeal window) | ❌ None |
+| `paid` | Payout executed | ✅ Complete |
+| `post_approval_flagged` | Post-approval fraud evidence | ⚠️ Trust score downgraded |
+
+---
+
+## Region Validation Cache & Fast-Lane Approvals
+
+When a disruption affects many workers in the same zone simultaneously, forcing every claim through manual review is inefficient and delays legitimate payouts.
+
+### How it works
+
+1. The system detects an unusual claim spike in a region/time-window
+2. The regional incident is validated using one or more sources:
+   - **Trusted workers** — 3+ high-trust workers confirm the same trigger
+   - **Admin confirmation** — insurer admin validates from the operations dashboard
+   - **News feed** — external news API corroboration
+   - **Public API** — official government/weather data confirms
+3. The incident is marked as **validated** in the region cache
+4. Later claims from the same zone/trigger/window are fast-tracked — they skip repeated manual review
+5. **Individual anti-fraud checks are never bypassed** — identity continuity, evidence mismatch, spoof-risk markers, and device continuity still apply
+
+> [!WARNING]
+> **Cluster spike liquidity protection:** If an extreme spike of same-zone claims appears (50+ claims/hour from one zone), the platform switches from individual auto-release to **cluster-level validation** — protecting the liquidity pool before mass payouts are executed. Fast-lane auto-release is paused until the cluster is validated.
+
+---
+
+## Post-Approval Fraud Controls
+
+Fraud detection doesn't stop at the approval gate. DEVTrails provides controls for handling fraud evidence that surfaces **after** a claim has been approved or paid.
+
+| Control | Action | Effect |
+|---|---|---|
+| **Post-approval flag** | Admin flags a previously approved/paid claim | Claim status → `post_approval_flagged` |
+| **Trust score downgrade** | Graduated penalty applied to worker's trust score | Future claims default to `soft_hold_verification` |
+| **Legal escalation** | Severe/critical fraud triggers legal escalation flag | Routed to compliance/platform risk team |
+| **Account review** | Critical fraud triggers full account review | Worker suspended pending investigation |
+
+### Trust Score Penalties
+
+| Fraud severity | Trust score penalty | Additional action |
+|---|---:|---|
+| Minor (evidence quality issue) | −0.05 | None |
+| Moderate (timing inconsistency) | −0.15 | Future claims reviewed |
+| Severe (coordinated fraud) | −0.30 | Legal escalation flag |
+| Critical (systematic abuse) | −0.50 | Full account review |
+
+This makes the system look mature **after** payout, not just before payout.
+
+---
+
+## Progressive KYC / Trust Ladder
+
+Full identity verification upfront creates friction that kills conversion. DEVTrails uses a **progressive KYC ladder** — stronger verification is triggered by increasing payout exposure or fraud risk, not required for initial onboarding.
+
+| Level | Verification | When triggered |
+|---|---|---|
+| **Level 1** | Phone OTP | Sign-up |
+| **Level 2** | Partner / platform ID validation | First policy activation |
+| **Level 3** | Bank / UPI ownership match (₹1 penny-drop) | First payout |
+| **Level 4** | Optional DigiLocker-backed identity verification | High-value claims or escalation |
+| **Level 5** | Selfie / document path | Fraud escalation only |
+
+> **Design principle:** DigiLocker is **available**, not mandatory for every user at the start. AA (Account Aggregator) / bank-consent paths are available for higher-confidence income baselines in future phases.
+
+---
+
+## WhatsApp Notifications (Planned)
+
+Dashboard-only communication is unrealistic for delivery workers who are on the road during shifts. DEVTrails plans WhatsApp as a **first-class notification channel**:
+
+| Notification | Channel | Trigger |
+|---|---|---|
+| Disruption alert | WhatsApp + Dashboard | Trigger fires in worker's zone |
+| Claim received | WhatsApp + Dashboard | Claim submitted (auto or manual) |
+| Under-review update | WhatsApp | Claim moved to soft_hold or review |
+| Payout completed | WhatsApp + Dashboard | Payout executed |
+| Document request | WhatsApp | Evidence needed for review |
+| Weekly renewal reminder | WhatsApp | 24h before policy expiry |
 
 ---
 
@@ -307,69 +467,64 @@ The platform uses a **3-tier trigger architecture**: early warning → claim tri
 
 ```mermaid
 flowchart TD
-    subgraph "CLAIM INTAKE"
-        CS["📋 Claim Submitted<br/>(auto-trigger or manual)"]
-    end
+    classDef intake fill:#1D4ED8,color:#fff,stroke:#1E3A8A,stroke-width:2px;
+    classDef truth fill:#059669,color:#fff,stroke:#047857,stroke-width:2px;
+    classDef checks fill:#7C3AED,color:#fff,stroke:#5B21B6,stroke-width:2px;
+    classDef checks2 fill:#9333EA,color:#fff,stroke:#7E22CE,stroke-width:2px;
+    classDef checks3 fill:#B45309,color:#fff,stroke:#92400E,stroke-width:2px;
+    classDef score fill:#4F46E5,color:#fff,stroke:#3730A3,stroke-width:3px;
+    classDef pass fill:#16A34A,color:#fff,stroke:#15803D,stroke-width:2px;
+    classDef warn fill:#CA8A04,color:#fff,stroke:#A16207,stroke-width:2px;
+    classDef hold fill:#EA580C,color:#fff,stroke:#C2410C,stroke-width:2px;
+    classDef fail fill:#DC2626,color:#fff,stroke:#991B1B,stroke-width:2px;
 
-    subgraph "LAYER 1 — Event Truth"
-        L1["🌦️ Trigger Validation<br/>OpenWeather · IMD · CPCB<br/>Does the disruption exist?"]
-    end
+    CS{{📋 Claim Submitted}}:::intake
 
-    subgraph "LAYER 2 — Worker Truth"
-        L2["👷 Exposure Verification<br/>Shift overlap · Zone match<br/>Route plausibility (TomTom)"]
-    end
+    L1[/🌦️ LAYER 1 — Event Truth/]:::truth
+    L2[/👷 LAYER 2 — Worker Truth/]:::truth
 
-    subgraph "LAYER 3 — Anti-Spoofing"
+    subgraph L3G ["LAYER 3 — Anti-Spoofing"]
         direction LR
-        AS1["📍 EXIF vs GPS<br/>cross-check"]
-        AS2["⏱️ Timestamp<br/>freshness"]
-        AS3["🌐 VPN / Datacenter<br/>IP detection"]
-        AS4["📱 Device continuity<br/>& emulator check"]
-        AS5["🚀 Impossible travel<br/>velocity"]
+        AS1([📍 EXIF vs GPS]):::checks
+        AS2([⏱️ Timestamp freshness]):::checks
+        AS3([🌐 VPN / Proxy IP]):::checks
+        AS4([📱 Device continuity]):::checks
+        AS5([🚀 Impossible travel]):::checks
     end
 
-    subgraph "LAYER 4 — Image Forensics"
+    subgraph L4G ["LAYER 4 — Image Forensics"]
         direction LR
-        IF1["🔍 EXIF integrity<br/>& completeness"]
-        IF2["🤖 AI detection<br/>(SynthID / Gemini)"]
-        IF3["📸 Camera-device<br/>consistency"]
-        IF4["🖼️ ELA & noise<br/>analysis"]
+        IF1([🔍 EXIF integrity]):::checks2
+        IF2([🤖 AI detection]):::checks2
+        IF3([📸 Camera match]):::checks2
+        IF4([🖼️ ELA Analysis]):::checks2
     end
 
-    subgraph "LAYER 5 — Behavioral & Region"
+    subgraph L5G ["LAYER 5 — Behav & Region"]
         direction LR
-        BR1["📊 Zone affinity<br/>& history"]
-        BR2["⏰ Pre-trigger<br/>presence"]
-        BR3["🔗 Cluster intel<br/>(DBSCAN)"]
-        BR4["📈 Zone claim<br/>volume spike"]
+        BR1([📊 Zone affinity]):::checks3
+        BR2([⏰ Pre-trigger presence]):::checks3
+        BR3([🔗 Cluster intel]):::checks3
+        BR4([📈 Zone claim spike]):::checks3
     end
 
-    subgraph "SCORING ENGINE"
-        SE["⚖️ Signal Confidence<br/>Hierarchy Weighting<br/>9-rank weighted composite"]
-    end
+    SE{{⚖️ Signal Confidence Scoring}}:::score
 
-    subgraph "5-BAND DECISION MATRIX"
-        D1["✅ auto_approve<br/>Instant payout"]
-        D2["🔎 needs_review<br/>Human + Gemini AI"]
-        D3["⚠️ hold_for_fraud<br/>Investigation"]
-        D4["🛑 batch_hold<br/>Cluster screening"]
-        D5["❌ reject_spoof_risk<br/>48h appeal window"]
-    end
+    D1[[✅ auto_approve]]:::pass
+    D2[[🔎 needs_review]]:::warn
+    D3[[⚠️ hold_for_fraud]]:::hold
+    D4[[🛑 batch_hold]]:::fail
+    D5[[❌ reject_spoof]]:::fail
 
-    subgraph "PROTECTION SYSTEMS"
-        CB["🚨 Circuit Breaker<br/>Mass-claim throttle<br/>Zone payout cap<br/>Payout release gate"]
-        TS["📉 Trust Score<br/>Dynamic penalty<br/>Gradual recovery<br/>Premium adjustment"]
-    end
+    CB>🚨 Circuit Breaker]:::fail
+    TS[(📉 Trust Score)]:::hold
 
     CS --> L1
     L1 --> L2
-    L2 --> L3
-    L3 --- AS1 & AS2 & AS3 & AS4 & AS5
-    AS1 & AS2 & AS3 & AS4 & AS5 --> L4
-    L4 --- IF1 & IF2 & IF3 & IF4
-    IF1 & IF2 & IF3 & IF4 --> L5
-    L5 --- BR1 & BR2 & BR3 & BR4
-    BR1 & BR2 & BR3 & BR4 --> SE
+    L2 --> L3G
+    L3G --> L4G
+    L4G --> L5G
+    L5G --> SE
 
     SE --> D1
     SE --> D2
@@ -380,19 +535,7 @@ flowchart TD
     BR4 --> CB
     D3 --> TS
     D5 --> TS
-    TS -.->|"future claims<br/>default to review"| SE
-
-    style CS fill:#4a9eff,color:#fff
-    style L1 fill:#2ecc71,color:#fff
-    style L2 fill:#2ecc71,color:#fff
-    style SE fill:#9b59b6,color:#fff
-    style D1 fill:#27ae60,color:#fff
-    style D2 fill:#f39c12,color:#fff
-    style D3 fill:#e67e22,color:#fff
-    style D4 fill:#e74c3c,color:#fff
-    style D5 fill:#c0392b,color:#fff
-    style CB fill:#e74c3c,color:#fff
-    style TS fill:#ff8c42,color:#fff
+    TS -.->|"future claims<br/>review default"| SE
 ```
 
 > **How to read this diagram:** A claim enters at the top and passes through 5 verification layers. Each layer produces weighted signals that feed the scoring engine. The scoring engine maps the composite fraud score to one of 5 decision bands. Circuit-breakers protect the liquidity pool during mass-attack scenarios, and trust score penalties feed back into future claim evaluations.
@@ -419,7 +562,10 @@ DEVTrails does **not** trust raw GPS coordinates alone. The platform differentia
 
 A **genuinely stranded worker** will show: pre-disruption delivery activity → trigger event confirmed by external source → GPS trail consistent with operating zone → evidence freshness verified → natural movement pattern → evidence photo taken by real camera with intact metadata. The system scores this as high-confidence and routes to `auto_approve`.
 
-A **spoofing bad actor** will show: no pre-disruption activity → GPS coordinates inconsistent with EXIF and zone history → evidence reused, AI-generated, or modified → movement pattern impossible → network fingerprint shared with other claimants. The system scores this as high-risk and routes to `hold_for_fraud` or `reject_spoof_risk`.
+A **spoofing bad actor** will show: no pre-disruption activity → GPS coordinates inconsistent with EXIF and zone history → evidence reused, AI-generated, or modified → movement pattern impossible → network fingerprint shared with other claimants. The system scores this as high-risk and routes to `fraud_escalated_review` or `reject_spoof_risk`.
+
+> [!IMPORTANT]
+> **Signal hierarchy principle:** No single signal — not GPS, not EXIF, not IP — is sufficient to approve or reject a claim in isolation. The system uses a **multi-signal weighted hierarchy** where higher-trust signals (verified trigger events, historical work patterns) carry more weight than lower-trust signals (GPS, IP context). This prevents both false approvals from spoofed GPS and false rejections from stripped EXIF metadata.
 
 ### 1a. Evidence Integrity & AI Image Detection
 
@@ -570,6 +716,7 @@ Anti-spoofing must not punish honest gig workers who experience genuine disrupti
 | Spoof indicators + cluster anomaly + evidence mismatch | **`hold_for_fraud`** | Held with cluster-level screening |
 | Mass identical claims + weak activity continuity + high spoof-risk cluster | **`batch_hold`** | Entire cluster held — individual claims reviewed separately |
 | No valid trigger + high spoof confidence + strong fraud-ring pattern | **`reject_spoof_risk`** | Rejected — 48-hour appeal/resubmit window |
+| Post-approval fraud evidence surfaces after payout | **`post_approval_flagged`** | Trust score downgraded, potential legal escalation |
 
 #### False-Positive / Honest Worker Protection
 
@@ -810,14 +957,18 @@ Celestius_DEVTrails_P1/
 │   │       ├── fraud_engine.py      ← Ghost Shift Detector
 │   │       ├── evidence.py          ← EXIF metadata extraction
 │   │       ├── manual_claim_verifier.py ← Manual claim validation
-│   │       └── gemini_analysis.py   ← Gemini AI claim narratives
+│   │       ├── gemini_analysis.py   ← Gemini AI claim narratives
+│   │       └── region_validation_cache.py ← Fast-lane + post-approval trust penalties
 │   ├── sql/                         ← Supabase SQL schema
 │   │   ├── 01_supabase_platform_schema.sql ← 14 tables
 │   │   ├── 02_auth_triggers.sql     ← Auth event triggers
 │   │   ├── 03_rls_policies.sql      ← Row-Level Security
 │   │   ├── 04_storage_policies.sql  ← Storage bucket policies
 │   │   ├── 05_rls_rollback.sql      ← RLS cleanup script
-│   │   └── 06_synthetic_seed.sql    ← Demo users + comprehensive seed data
+│   │   ├── 06_synthetic_seed.sql    ← Demo users + comprehensive seed data
+│   │   ├── 10_payout_safety.sql     ← Disruption events + worker-event uniqueness
+│   │   ├── 11_claim_states.sql      ← Expanded claim state machine (8 states)
+│   │   └── 12_region_validation_cache.sql ← Validated regional incidents + cluster spike
 │   ├── mock_api.py                  ← Legacy 3-endpoint demo scaffold
 │   └── openapi.yaml                 ← OpenAPI 3.0 contract
 ├── frontend/
@@ -881,7 +1032,7 @@ Each folder README follows a consistent structure:
 
 ### Why a Web Application Over a Mobile App
 
-We deliberately chose a **responsive web application** over a native mobile app for the following reasons:
+We chose a **web-first / PWA-first** architecture for reach and low friction, with the option for deeper device-assurance signals via mobile/native integrations where available:
 
 1. **Instant accessibility** — Gig workers across India use a wide variety of Android devices with limited storage. A web app requires no install, no app-store approval, and no device-specific builds. Workers can access their dashboard from any browser.
 
@@ -895,7 +1046,9 @@ We deliberately chose a **responsive web application** over a native mobile app 
 
 6. **Progressive enhancement path** — The web app can be wrapped as a PWA (Progressive Web App) later to provide an app-like experience with offline support, push notifications, and home-screen installation — bridging the gap without the overhead of native development.
 
-> **Future consideration:** Once the product reaches scale and requires hardware-level features (background GPS tracking, camera access for evidence capture in offline zones), a React Native or Flutter wrapper around the existing API layer would be the natural next step.
+7. **Optional deeper mobile signals** — Where available, native mobile integrations can provide hardware-level anti-spoofing signals (background GPS, accelerometer/gyroscope sensor data, GNSS C/N0 validation) as **optional supporting signals** in the fraud engine — without requiring a full native app for all workers.
+
+> **Architecture position:** Web-first PWA for onboarding, dashboards, renewals, and communication. Optional deeper device-assurance signals via mobile/native integrations where available. This absorbs the best of both approaches without locking into an artificial web-vs-mobile tradeoff.
 
 ---
 
@@ -906,7 +1059,7 @@ We deliberately chose a **responsive web application** over a native mobile app 
 
 **To see the platform in action:**
 1. Set up your `.env` files (see Supabase & Authentication Setup above)
-2. Run `backend/sql/01` through `06` in your Supabase SQL editor
+2. Run `backend/sql/01` through `06` (plus `10`, `11`, `12` for payout safety, claim states, and region cache) in your Supabase SQL editor
 3. Start the backend: `cd backend && uvicorn app.main:app --reload --port 8000`
 4. Start the frontend: `cd frontend && npm run dev`
 5. Log in with `worker@demo.com` / `demo1234` to see the worker dashboard with pre-seeded earnings, claims, and alerts
@@ -976,6 +1129,49 @@ After running `backend/sql/06_synthetic_seed.sql` in your Supabase SQL editor, t
 
 ---
 
+## What Each Role Sees
+
+| Role | What they access | Key screens |
+|---|---|---|
+| **Worker** | Dashboard → Claims → Pricing | 14-day earnings chart, zone disruption alerts, claim submission with GPS + photo evidence, policy quote with plan comparison, claim history with full status tracking |
+| **Insurer / Admin** | Dashboard → Review Queue → Trigger Engine | KPI cards (total claims, avg payout, fraud rate, needs-review count), trigger distribution chart, claim detail panel with fraud scores + AI narrative, approve/hold/reject/flag actions |
+| **Reviewer** (admin sub-role) | Review Queue → Claim Detail | Payout recommendation breakdown, Ghost Shift Detector scores, Gemini AI claim summary, evidence viewer, post-approval flag button, trust score history |
+
+---
+
+## Worker Lifecycle Story — Ravi in the Mumbai Monsoon
+
+> Meet **Ravi Kumar**, a Swiggy delivery rider in Andheri West, Mumbai. Here's what his experience looks like on DEVTrails.
+
+| Step | What happens | System action |
+|---|---|---|
+| 1. **Onboarding** | Ravi signs up with phone OTP, adds his Swiggy ID and zone preference | Profile created, trust score initialized at 0.86, KYC Level 1 complete |
+| 2. **Plan selection** | Ravi picks **Essential** (₹3,000/week benefit) at ₹105/week | Policy activated, weekly auto-renewal set |
+| 3. **Disruption** | Monday: IMD reports 72mm rainfall in Andheri. T2 (Heavy Rain Claim) trigger fires | WhatsApp alert: "Heavy rain detected in your zone. We're monitoring." |
+| 4. **Auto-claim** | Ravi submits claim with waterlogged road photo from his phone | Claim enters 8-stage pipeline. EXIF GPS matches zone, shift overlap confirmed, anti-spoofing passes |
+| 5. **Decision** | Fraud score: 0.06 (low). Trigger + exposure + evidence align | Status: `auto_approved`. Band 2 → payout: ₹1,500 (0.50 × ₹3,000) |
+| 6. **Payout** | Zero-Touch Payout executes to Ravi's verified UPI handle | WhatsApp: "₹1,500 deposited. Claim #1001 complete." |
+| 7. **Next week** | No disruption. Premium renews at ₹98/week (lower zone risk factor this week) | Trust score increases to 0.88 from clean claim history |
+
+This is the full lifecycle in under 48 hours. No paperwork, no phone calls, no manual adjuster visits.
+
+---
+
+## Why Premium Changes Weekly
+
+Workers see different premiums each Monday because the system re-computes zone risk:
+
+| Factor | Effect on premium | Example |
+|---|---|---|
+| **Zone risk forecast** | Monsoon-season zones cost more | Andheri-W in July: ₹120/week vs January: ₹85/week |
+| **Trust score** | Higher trust → lower premium | Ravi (0.88 trust): ₹105 vs Meena (0.65 trust): ₹135 |
+| **Claim history** | Clean weeks reduce base rate | 4 clean weeks → 5% renewal discount |
+| **Seasonal patterns** | Known weather cycles priced in | Delhi AQI spikes in November factored into October pricing |
+
+> The worker sees a simple price on Monday. The internal engine uses `B × 0.035 × E × C × risk_factor` behind the scenes. Transparency without complexity.
+
+---
+
 ## What Judges Should Immediately Understand
 
 - The project is about **income loss**, not generic insurance
@@ -984,6 +1180,10 @@ After running `backend/sql/06_synthetic_seed.sql` in your Supabase SQL editor, t
 - The claims pipeline is **automated** with multi-layer verification and anti-spoofing
 - The fraud layer uses **real logic** (5-layer Ghost Shift Detector with anti-spoofing and cluster intelligence), not buzzwords
 - The anti-spoofing strategy addresses the **coordinated GPS-spoofing syndicate** attack vector with multi-signal verification, circuit-breakers, and liquidity protection
+- **No single signal** (not GPS, not EXIF, not IP) is sufficient alone — the system uses a weighted signal hierarchy
+- **No partial payouts** — soft hold delays money movement; clawback-free design
+- **Post-approval controls** — fraud flagging, trust downgrade, and legal escalation work after payout
+- **Region fast-lane** — validated incidents reduce repeated manual review without bypassing fraud checks
 - The trigger library has **15 thresholds** anchored to public government data
 - The premium and payout math uses **documented internal calibration** while the public product is a **clean parametric benefit ladder**
 - ML **supports** classification and anomaly detection but does **not** independently authorize payout
@@ -995,6 +1195,16 @@ After running `backend/sql/06_synthetic_seed.sql` in your Supabase SQL editor, t
 ## Business Framing
 
 DEVTrails is positioned as an **insurer-facing platform** or **embedded protection layer** — not as a fully licensed insurer. The product provides the parametric underwriting engine, claims orchestration, and fraud detection that a licensed insurer would embed into their distribution channel for gig-worker income protection.
+
+### Insurer Value Proposition
+
+| Benefit | How DEVTrails delivers it |
+|---|---|
+| **Reduced manual claim handling** | 8-stage automated pipeline + region fast-lane = fewer claims need human review |
+| **Lower Loss Adjustment Expense (LAE)** | Parametric trigger-based decisions replace manual adjuster visits |
+| **Fraud leakage reduction** | 5-layer Ghost Shift Detector + post-approval controls catch fraud pre- and post-payout |
+| **Validated-incident batching** | Region cache groups same-zone claims into insurer-friendly event-level exposure views |
+| **Operational scalability** | One platform serves multiple cities, zones, and trigger types without insurer-specific integration per zone |
 
 Key business metrics the system tracks:
 - Loss ratio by zone

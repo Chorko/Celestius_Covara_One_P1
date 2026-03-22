@@ -58,18 +58,19 @@ export default function AdminDashboard() {
         supabase.from('trigger_events').select('trigger_family').is('ended_at', null),
       ])
 
-      // "Needs Review" = only held claims (manually escalated or AI-uncertain)
-      // NOT submitted auto-trigger claims that were auto-processed
+      // "Needs Review" = claims awaiting human attention
       const needs_review = claimsData?.filter(
-        (c) => c.claim_status === 'held'
+        (c) => ['submitted', 'soft_hold_verification', 'fraud_escalated_review'].includes(c.claim_status)
       ).length ?? 0
-      // "Fraud Detected" = rejected claims with high fraud holdback
+      // "Fraud Detected" = rejected or post-approval flagged claims with high fraud holdback
       const fraud_detected = claimsData?.filter(
-        (c) => c.claim_status === 'rejected' &&
+        (c) => (c.claim_status === 'rejected' || c.claim_status === 'post_approval_flagged') &&
           (c.payout_recommendations as { fraud_holdback_fh?: number }[])?.[0]?.fraud_holdback_fh &&
           ((c.payout_recommendations as { fraud_holdback_fh?: number }[])?.[0]?.fraud_holdback_fh ?? 0) > 0.30
       ).length ?? 0
-      const approved_claims = claimsData?.filter((c) => c.claim_status === 'approved').length ?? 0
+      const approved_claims = claimsData?.filter(
+        (c) => ['approved', 'auto_approved', 'paid'].includes(c.claim_status)
+      ).length ?? 0
       const total_claims = claimsData?.length ?? 0
       const total_recommended_payout_inr = claimsData?.reduce(
         (s, c) => s + ((c.payout_recommendations as { recommended_payout?: number; expected_payout?: number }[])?.[0]?.recommended_payout || 0), 0
@@ -153,21 +154,43 @@ export default function AdminDashboard() {
 
   const statusColor = (status: string) => {
     switch (status) {
-      case 'approved': return 'badge-emerald'
-      case 'held':
-      case 'submitted': return 'badge-amber'
-      case 'rejected': return 'badge-red'
+      case 'approved':
+      case 'auto_approved':
+      case 'paid': return 'badge-emerald'
+      case 'submitted':
+      case 'soft_hold_verification': return 'badge-amber'
+      case 'fraud_escalated_review': return 'badge-purple'
+      case 'rejected':
+      case 'post_approval_flagged': return 'badge-red'
       default: return 'badge-blue'
     }
   }
 
   const statusIcon = (status: string) => {
     switch (status) {
-      case 'approved': return <CheckCircle size={12} />
-      case 'held':
-      case 'submitted': return <Clock size={12} />
-      default: return <AlertTriangle size={12} />
+      case 'approved':
+      case 'auto_approved':
+      case 'paid': return <CheckCircle size={12} />
+      case 'submitted':
+      case 'soft_hold_verification': return <Clock size={12} />
+      case 'fraud_escalated_review':
+      case 'post_approval_flagged': return <AlertTriangle size={12} />
+      default: return <Clock size={12} />
     }
+  }
+
+  const statusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      auto_approved: 'Auto-Approved',
+      approved: 'Approved',
+      paid: 'Paid',
+      submitted: 'Submitted',
+      soft_hold_verification: 'Verification Hold',
+      fraud_escalated_review: 'Fraud Review',
+      rejected: 'Rejected',
+      post_approval_flagged: 'Post-Approval Flag',
+    }
+    return labels[status] || status
   }
 
   return (
@@ -249,6 +272,65 @@ export default function AdminDashboard() {
           </p>
         </div>
       </div>
+
+      {/* Claim Pipeline Status Bar */}
+      {metrics.total_claims > 0 && (
+        <div className="glass-card p-5 mb-8 animate-fade-in-up delay-200">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-semibold text-neutral-400 uppercase tracking-wider flex items-center gap-2">
+              <Activity size={14} /> Claim Pipeline Status
+            </h3>
+            <span className="text-xs text-neutral-500">{metrics.total_claims} total claims</span>
+          </div>
+          <div className="flex rounded-lg overflow-hidden h-3 mb-3">
+            {metrics.approved_claims > 0 && (
+              <div
+                className="h-full"
+                style={{
+                  width: `${(metrics.approved_claims / metrics.total_claims) * 100}%`,
+                  background: 'linear-gradient(90deg, #10b981, #34d399)',
+                }}
+              />
+            )}
+            {metrics.needs_review > 0 && (
+              <div
+                className="h-full"
+                style={{
+                  width: `${(metrics.needs_review / metrics.total_claims) * 100}%`,
+                  background: 'linear-gradient(90deg, #f59e0b, #fbbf24)',
+                }}
+              />
+            )}
+            {metrics.fraud_detected > 0 && (
+              <div
+                className="h-full"
+                style={{
+                  width: `${(metrics.fraud_detected / metrics.total_claims) * 100}%`,
+                  background: 'linear-gradient(90deg, #ef4444, #f87171)',
+                }}
+              />
+            )}
+          </div>
+          <div className="flex items-center gap-5 text-xs">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+              <span className="text-neutral-400">Approved</span>
+              <span className="font-bold text-white">{metrics.approved_claims}</span>
+              <span className="text-neutral-600">({Math.round((metrics.approved_claims / metrics.total_claims) * 100)}%)</span>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+              <span className="text-neutral-400">Review</span>
+              <span className="font-bold text-white">{metrics.needs_review}</span>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-red-400" />
+              <span className="text-neutral-400">Fraud</span>
+              <span className="font-bold text-white">{metrics.fraud_detected}</span>
+            </span>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 mb-8">
         {/* Trigger Distribution Chart */}
@@ -341,7 +423,7 @@ export default function AdminDashboard() {
                   </div>
                   <div className="flex items-center gap-3 shrink-0 ml-3">
                     <span className={`badge ${statusColor(claim.claim_status)}`}>
-                      {claim.claim_status}
+                      {statusLabel(claim.claim_status)}
                     </span>
                     <span className="text-xs text-neutral-600">
                       {new Date(claim.claimed_at).toLocaleDateString()}
