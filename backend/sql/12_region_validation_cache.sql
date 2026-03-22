@@ -51,7 +51,14 @@ alter table public.validated_regional_incidents enable row level security;
 -- Workers may read validated incidents to understand their zone's history
 create policy "Workers can view validated incidents" on public.validated_regional_incidents
   for select to authenticated
-  using (true);
+  using (
+    public.current_user_role() = 'insurer_admin'
+    or zone_id = (
+      select preferred_zone_id
+      from public.worker_profiles
+      where profile_id = auth.uid()
+    )
+  );
 
 -- Only the backend service role can validate/write incidents
 create policy "Service role can manage validated incidents" on public.validated_regional_incidents

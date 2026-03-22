@@ -96,16 +96,38 @@ export default function WorkerDashboard() {
 
     // Fetch claim counts
     try {
-      const { data: claimData } = await supabase
-        .from('manual_claims')
-        .select('claim_status')
-        .eq('worker_profile_id', wData.profile_id)
-      if (claimData) {
-        const pending = claimData.filter(c => ['submitted', 'soft_hold_verification', 'fraud_escalated_review'].includes(c.claim_status)).length
-        const approved = claimData.filter(c => ['approved', 'auto_approved', 'paid'].includes(c.claim_status)).length
-        const rejected = claimData.filter(c => ['rejected', 'post_approval_flagged'].includes(c.claim_status)).length
-        setClaimCounts({ pending, approved, rejected, total: claimData.length })
-      }
+      const pendingStatuses = ['submitted', 'soft_hold_verification', 'fraud_escalated_review']
+      const approvedStatuses = ['approved', 'auto_approved', 'paid']
+      const rejectedStatuses = ['rejected', 'post_approval_flagged']
+
+      const [pendingResp, approvedResp, rejectedResp, totalResp] = await Promise.all([
+        supabase
+          .from('manual_claims')
+          .select('*', { count: 'exact', head: true })
+          .eq('worker_profile_id', wData.profile_id)
+          .in('claim_status', pendingStatuses),
+        supabase
+          .from('manual_claims')
+          .select('*', { count: 'exact', head: true })
+          .eq('worker_profile_id', wData.profile_id)
+          .in('claim_status', approvedStatuses),
+        supabase
+          .from('manual_claims')
+          .select('*', { count: 'exact', head: true })
+          .eq('worker_profile_id', wData.profile_id)
+          .in('claim_status', rejectedStatuses),
+        supabase
+          .from('manual_claims')
+          .select('*', { count: 'exact', head: true })
+          .eq('worker_profile_id', wData.profile_id),
+      ])
+
+      setClaimCounts({
+        pending: pendingResp.count ?? 0,
+        approved: approvedResp.count ?? 0,
+        rejected: rejectedResp.count ?? 0,
+        total: totalResp.count ?? 0,
+      })
     } catch (e) { console.error('Could not load claim counts', e) }
 
     // Compute policy quote inline from worker profile

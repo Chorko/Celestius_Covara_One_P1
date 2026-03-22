@@ -123,7 +123,7 @@ async def get_premium_quote(
 
 @router.post("/activate")
 async def activate_policy(
-    body: ActivatePolicyRequest,
+    body: ActivatePolicyRequest | None = None,
     user: dict = Depends(require_worker),
 ):
     """
@@ -131,22 +131,24 @@ async def activate_policy(
     In a full DB, this would write to a 'policies' table.
     For this scaffold, we return a success token with plan details.
     """
-    if body.plan not in VALID_PLANS:
+    selected_plan = (body.plan if body else "essential")
+
+    if selected_plan not in VALID_PLANS:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid plan '{body.plan}'. Must be 'essential' or 'plus'.",
+            detail=f"Invalid plan '{selected_plan}'. Must be 'essential' or 'plus'.",
         )
 
     import datetime
 
     now = datetime.datetime.utcnow()
     valid_until = now + datetime.timedelta(days=7)
-    weekly_benefit = PLAN_WEEKLY_BENEFITS[body.plan]
+    weekly_benefit = PLAN_WEEKLY_BENEFITS[selected_plan]
 
     return {
         "status": "active",
-        "message": f"{body.plan.capitalize()} weekly coverage activated.",
-        "plan": body.plan,
+        "message": f"{selected_plan.capitalize()} weekly coverage activated.",
+        "plan": selected_plan,
         "weekly_benefit_w": weekly_benefit,
         "activated_at": now.isoformat() + "Z",
         "valid_until": valid_until.isoformat() + "Z",

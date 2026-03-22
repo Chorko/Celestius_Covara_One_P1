@@ -49,7 +49,14 @@ alter table public.disruption_events enable row level security;
 -- Workers may read disruption events (to display their zone's triggers)
 create policy "Workers can view disruption_events" on public.disruption_events
   for select to authenticated
-  using (true);
+  using (
+    public.current_user_role() = 'insurer_admin'
+    or zone_id = (
+      select preferred_zone_id
+      from public.worker_profiles
+      where profile_id = auth.uid()
+    )
+  );
 
 -- Only the backend service role (insurer admin / server) can create/modify events
 create policy "Service role can manage disruption_events" on public.disruption_events
