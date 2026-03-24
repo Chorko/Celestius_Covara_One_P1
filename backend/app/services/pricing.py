@@ -1,5 +1,5 @@
 """
-DEVTrails — Pricing & Payout Engine
+Covara One — Pricing & Payout Engine
 
 Computes Covered Income (B), Exposure (E), Confidence (C),
 and the final expected payouts and premiums based on the actuarial formulas.

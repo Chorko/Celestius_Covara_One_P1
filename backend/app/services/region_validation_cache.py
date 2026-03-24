@@ -1,5 +1,5 @@
 """
-DEVTrails — Region Validation Cache Service (Gap §4.3)
+Covara One — Region Validation Cache Service (Gap §4.3)
 
 Provides fast-lane approval for claims in zones with validated
 regional incidents. Reduces repeated manual review but NEVER

@@ -1,5 +1,5 @@
 """
-DEVTrails — Synthetic Pack Seed Loader (Excel)
+Covara One — Synthetic Pack Seed Loader (Excel)
 
 Reads DEVTrails_Synthetic_Seed_Pack.xlsx, creates real
 Supabase Auth users, remaps the template UUIDs to the new real UUIDs,

@@ -1,5 +1,5 @@
 """
-DEVTrails — Trigger Engine Service
+Covara One — Trigger Engine Service
 
 Handles logic related to the 15-trigger library and matching
 active disruption events to worker zones/shifts.

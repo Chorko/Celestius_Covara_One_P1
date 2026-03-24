@@ -1,6 +1,6 @@
 -- ============================================================
 -- 06_synthetic_seed.sql
--- DEVTrails — Synthetic Seed Data
+-- Covara One — Synthetic Seed Data
 --
 -- Run AFTER 01–04 AND either 11_claim_states.sql or 13_unified_extensions.sql
 -- have been applied.  The seed uses expanded claim states (auto_approved,

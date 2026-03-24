@@ -1,6 +1,6 @@
 openapi: "3.0.3"
 info:
-  title: DEVTrails Mock API
+  title: Covara One Mock API
   description: |
     Minimal runnable scaffold for the DEVTrails parametric income-protection platform.
     This API exposes three read-only demonstration endpoints that return data already
@@ -33,7 +33,7 @@ paths:
                     example: ok
                   service:
                     type: string
-                    example: devtrails-mock-api
+                    example: covara-one-mock-api
                   version:
                     type: string
                     example: 0.1.0-scaffold

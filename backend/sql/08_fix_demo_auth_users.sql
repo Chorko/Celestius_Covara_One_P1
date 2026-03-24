@@ -1,6 +1,6 @@
 -- ============================================================
 -- 08_fix_demo_auth_users.sql
--- DEVTrails — Fix broken demo auth accounts
+-- Covara One — Fix broken demo auth accounts
 --
 -- Run this IN ORDER in the Supabase SQL Editor.
 -- This replaces the direct auth.users INSERT from 06_synthetic_seed.sql

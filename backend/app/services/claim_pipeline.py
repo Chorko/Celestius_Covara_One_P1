@@ -1,5 +1,5 @@
 """
-DEVTrails — 8-Stage Claim Pipeline
+Covara One — 8-Stage Claim Pipeline
 
 Orchestrates the entire claim decision process:
 1. Trigger validation

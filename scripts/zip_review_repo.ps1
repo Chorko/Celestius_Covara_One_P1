@@ -1,4 +1,4 @@
-# DEVTrails — Clean Review Zip Script (PowerShell)
+# Covara One — Clean Review Zip Script (PowerShell)
 # Creates a clean artifact of the repository for judges and technical reviewers.
 # Automatically excludes unnecessary environments, dependencies, and caching folders.
 # Usage: .\scripts\zip_review_repo.ps1

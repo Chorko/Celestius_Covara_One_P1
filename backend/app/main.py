@@ -1,7 +1,7 @@
 """
-DEVTrails — FastAPI Application Entry Point
+Covara One — FastAPI Application Entry Point
 
-This is the main backend API for the DEVTrails parametric insurance platform.
+This is the main backend API for the Covara One parametric insurance platform.
 It is an early scaffold — not a production backend.
 
 Run:
@@ -26,6 +26,7 @@ from backend.app.routers import (
     triggers,
     policies,
     analytics,
+    ingest,
 )
 from backend.app.seed import seed_all
 
@@ -49,12 +50,12 @@ async def lifespan(app: FastAPI):
 # ── App Setup ─────────────────────────────────────────────────────
 
 app = FastAPI(
-    title="DEVTrails API",
+    title="Covara One API",
     description=(
-        "Backend API for the DEVTrails parametric income-protection platform. "
-        "Early scaffold — not a production backend."
+        "Backend API for the Covara One parametric income-protection platform. "
+        "Round-robin API pools with LRU caching for weather, AQI, and traffic data."
     ),
-    version="0.2.0-scaffold",
+    version="0.3.0",
     lifespan=lifespan,
 )
 
@@ -76,6 +77,7 @@ app.include_router(claims.router)
 app.include_router(triggers.router)
 app.include_router(policies.router)
 app.include_router(analytics.router)
+app.include_router(ingest.router)
 
 
 # ── Root & Health ─────────────────────────────────────────────────
@@ -85,8 +87,8 @@ app.include_router(analytics.router)
 def root():
     """API root — returns basic info."""
     return {
-        "service": "devtrails-api",
-        "version": "0.2.0-scaffold",
+        "service": "covara-one-api",
+        "version": "0.3.0",
         "docs": "/docs",
         "status": "running",
     }
@@ -98,8 +100,8 @@ def health_check():
     missing = settings.validate()
     return {
         "status": "ok" if not missing else "degraded",
-        "service": "devtrails-api",
-        "version": "0.2.0-scaffold",
+        "service": "covara-one-api",
+        "version": "0.3.0",
         "config_ok": not missing,
         "missing_config": missing if missing else None,
     }

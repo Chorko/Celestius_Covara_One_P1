@@ -1,5 +1,5 @@
 -- ══════════════════════════════════════════════════════════════════════
--- DEVTrails — Unified Migration (v00)
+-- Covara One — Unified Migration (v00)
 -- ══════════════════════════════════════════════════════════════════════
 -- Copy-paste ready. Fully idempotent — safe on fresh OR existing DBs.
 -- Consolidates migrations 01–13 into a single script.

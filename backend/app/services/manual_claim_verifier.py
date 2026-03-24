@@ -1,5 +1,5 @@
 """
-DEVTrails — Manual Claim Verifier
+Covara One — Manual Claim Verifier
 
 Manual claims undergo stricter scrutiny than trigger-driven batch claims.
 This service evaluates evidence completeness, geo-confidence, and provides

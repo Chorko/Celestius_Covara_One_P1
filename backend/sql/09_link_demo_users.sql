@@ -1,6 +1,6 @@
 -- ============================================================
 -- 09_link_demo_users.sql
--- DEVTrails — Re-link demo accounts after Dashboard recreation
+-- Covara One — Re-link demo accounts after Dashboard recreation
 --
 -- Run this AFTER completing ALL steps in 08_fix_demo_auth_users.sql
 -- (including creating users via Supabase Dashboard and running STEP 3)

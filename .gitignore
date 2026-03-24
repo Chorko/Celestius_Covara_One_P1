@@ -84,3 +84,7 @@ temp/
 # Temporary Folders
 # ==========================
 TEMP_WILL_BE_DELETED/
+
+# Local IDE Settings
+.vscode/
+

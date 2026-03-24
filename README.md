@@ -1,4 +1,4 @@
-# DEVTrails 2026 — AI-Powered Parametric Income Protection for Gig Workers
+# Covara One (DEVTrails 2026) — AI-Powered Parametric Income Protection for Gig Workers
 
 **Team Celestius** — Bhrahmesh A · Chorko C · T Dharshini · T Ashwin · Shripriya Sriram
 
@@ -6,7 +6,7 @@
 
 > A hyperlocal, weekly income-protection engine for food-delivery workers that pays only when verified disruption overlaps real earning exposure.
 
-📹 **Demo Video:** [Watch the DEVTrails Platform Demo](https://www.youtube.com/watch?v=TB0tV3Kcn80)
+📹 **Demo Video:** [Watch the Covara One Platform Demo](https://www.youtube.com/watch?v=TB0tV3Kcn80)
 
 ---
 
@@ -29,7 +29,7 @@
 
 ## What This Project Is
 
-DEVTrails is an AI-assisted **parametric insurance platform** that protects delivery workers' **weekly income** — not health, life, vehicle repair, or accident damage. The system monitors external disruption signals (heavy rain, severe AQI, heatwaves, outages, closures, traffic collapse), estimates whether a worker's earning ability was genuinely affected during a covered shift, and can automatically initiate claims when conditions are met.
+Covara One is an AI-assisted **parametric insurance platform** that protects delivery workers' **weekly income** — not health, life, vehicle repair, or accident damage. The system monitors external disruption signals (heavy rain, severe AQI, heatwaves, outages, closures, traffic collapse), estimates whether a worker's earning ability was genuinely affected during a covered shift, and can automatically initiate claims when conditions are met.
 
 ### Core Product Pillars
 
@@ -58,7 +58,7 @@ DEVTrails is an AI-assisted **parametric insurance platform** that protects deli
 ## Current Repository State
 
 > [!NOTE]
-> This repository contains a **functional early-stage scaffold** of the DEVTrails platform — a working FastAPI backend, a working Next.js 16 frontend, a complete Supabase SQL schema with RLS, and real integration between all layers.
+> This repository contains a **functional early-stage scaffold** of the Covara One platform — a working FastAPI backend, a working Next.js 16 frontend, a complete Supabase SQL schema with RLS, and real integration between all layers.
 >
 > **What you will find:**
 > - A running **Next.js 16 frontend** with worker dashboard (earnings chart, zone alerts, policy quote), claim submission with GPS + photo evidence, admin review queue with AI-assisted decisions, and admin trigger engine
@@ -309,7 +309,7 @@ flowchart LR
 | **Event-ID idempotency** | Each disruption window is assigned a unique `event_id`. If a trigger fires again for the same zone/family/window, the existing event is matched — no duplicate created. |
 | **Worker-event uniqueness** | A partial unique index ensures that no worker can have more than one approved/paid claim for the same event. Duplicates are rejected at the database level. |
 | **Atomic state transitions** | Claim status transitions are validated against the allowed state machine — invalid transitions are rejected. |
-| **No partial payouts** | Unlike competitors that release 50% provisionally, DEVTrails uses a **soft hold** approach: money never moves until verification completes. This avoids clawback risk, accounting complexity, and trust erosion. |
+| **No partial payouts** | Unlike competitors that release 50% provisionally, Covara One uses a **soft hold** approach: money never moves until verification completes. This avoids clawback risk, accounting complexity, and trust erosion. |
 | **Retry-safe requests** | Payout execution is idempotent — retrying a payout request for the same event/worker returns the existing result, never creates a second payment. |
 
 > **Defensibility of soft hold over partial payout:** Soft hold protects both liquidity and customer trust by delaying money movement until verification finishes, instead of creating clawback risk through provisional payouts. Once verification completes, the full parametric band amount is released. The worker sees a clear status transition, not a confusing partial-then-maybe-more flow.
@@ -374,7 +374,7 @@ When a disruption affects many workers in the same zone simultaneously, forcing 
 
 ## Post-Approval Fraud Controls
 
-Fraud detection doesn't stop at the approval gate. DEVTrails provides controls for handling fraud evidence that surfaces **after** a claim has been approved or paid.
+Fraud detection doesn't stop at the approval gate. Covara One provides controls for handling fraud evidence that surfaces **after** a claim has been approved or paid.
 
 | Control | Action | Effect |
 |---|---|---|
@@ -398,7 +398,7 @@ This makes the system look mature **after** payout, not just before payout.
 
 ## Progressive KYC / Trust Ladder
 
-Full identity verification upfront creates friction that kills conversion. DEVTrails uses a **progressive KYC ladder** — stronger verification is triggered by increasing payout exposure or fraud risk, not required for initial onboarding.
+Full identity verification upfront creates friction that kills conversion. Covara One uses a **progressive KYC ladder** — stronger verification is triggered by increasing payout exposure or fraud risk, not required for initial onboarding.
 
 | Level | Verification | When triggered |
 |---|---|---|
@@ -414,7 +414,7 @@ Full identity verification upfront creates friction that kills conversion. DEVTr
 
 ## WhatsApp Notifications (Planned)
 
-Dashboard-only communication is unrealistic for delivery workers who are on the road during shifts. DEVTrails plans WhatsApp as a **first-class notification channel**:
+Dashboard-only communication is unrealistic for delivery workers who are on the road during shifts. Covara One plans WhatsApp as a **first-class notification channel**:
 
 | Notification | Channel | Trigger |
 |---|---|---|
@@ -463,7 +463,7 @@ The platform uses a **3-tier trigger architecture**: early warning → claim tri
 ## Adversarial Defense & Anti-Spoofing Strategy
 
 > [!CAUTION]
-> **Market-Shift Context:** A sophisticated syndicate of 500 delivery workers in a tier-1 city has successfully exploited a beta parametric insurance platform using coordinated GPS spoofing via Telegram groups — faking locations in severe weather zones while resting at home, triggering mass false payouts and draining the liquidity pool. Simple GPS verification is officially obsolete. This section documents how DEVTrails defends against this exact attack vector.
+> **Market-Shift Context:** A sophisticated syndicate of 500 delivery workers in a tier-1 city has successfully exploited a beta parametric insurance platform using coordinated GPS spoofing via Telegram groups — faking locations in severe weather zones while resting at home, triggering mass false payouts and draining the liquidity pool. Simple GPS verification is officially obsolete. This section documents how Covara One defends against this exact attack vector.
 
 ```mermaid
 flowchart TD
@@ -542,7 +542,7 @@ flowchart TD
 
 ### 1. The Differentiation: Genuine Worker vs. Bad Actor
 
-DEVTrails does **not** trust raw GPS coordinates alone. The platform differentiates genuinely stranded delivery partners from spoofers using **multi-signal verification** — a layered approach where no single data point can trigger or block a payout in isolation.
+Covara One does **not** trust raw GPS coordinates alone. The platform differentiates genuinely stranded delivery partners from spoofers using **multi-signal verification** — a layered approach where no single data point can trigger or block a payout in isolation.
 
 | Signal layer | What it checks | Why GPS alone fails here |
 |---|---|---|
@@ -569,11 +569,11 @@ A **spoofing bad actor** will show: no pre-disruption activity → GPS coordinat
 
 ### 1a. Evidence Integrity & AI Image Detection
 
-Sophisticated fraud rings may submit **AI-generated photos** as disruption evidence, or **edit real photos** to alter GPS coordinates and timestamps. DEVTrails defends against this using multi-layer image forensics:
+Sophisticated fraud rings may submit **AI-generated photos** as disruption evidence, or **edit real photos** to alter GPS coordinates and timestamps. Covara One defends against this using multi-layer image forensics:
 
 #### AI-Generated Image Detection (Gemini + SynthID)
 
-Google embeds **SynthID** — an invisible, robust digital watermark — into images generated by its AI models. This watermark survives compression, cropping, and re-encoding. DEVTrails leverages this:
+Google embeds **SynthID** — an invisible, robust digital watermark — into images generated by its AI models. This watermark survives compression, cropping, and re-encoding. Covara One leverages this:
 
 | Check | Method | What it catches |
 |---|---|---|
@@ -582,7 +582,7 @@ Google embeds **SynthID** — an invisible, robust digital watermark — into im
 | **Camera vs. AI metadata signature** | Real camera photos contain specific EXIF fields (Make, Model, LensModel, FocalLength, ExposureTime, ISO) that AI-generated images lack | AI images have no genuine camera sensor data — they may have no EXIF at all or use synthetic metadata |
 
 > [!IMPORTANT]
-> **How DEVTrails uses Gemini for AI image detection:** Since we already integrate Gemini API for claim narrative generation, we extend it to perform evidence analysis. Gemini Vision can detect SynthID watermarks in AI-generated images and assess the probability that an image was synthetically created. This is not a separate integration — it's an extension of our existing Gemini pipeline.
+> **How Covara One uses Gemini for AI image detection:** Since we already integrate Gemini API for claim narrative generation, we extend it to perform evidence analysis. Gemini Vision can detect SynthID watermarks in AI-generated images and assess the probability that an image was synthetically created. This is not a separate integration — it's an extension of our existing Gemini pipeline.
 
 #### EXIF Integrity & Modification Detection
 
@@ -620,11 +620,11 @@ The image forensics layer produces a composite **evidence integrity score** that
 
 ### 1b. Advanced Fraud Vectors & Threat Model
 
-GPS spoofing is only one attack surface. DEVTrails defends against a full spectrum of fraud vectors, classified by severity and sophistication:
+GPS spoofing is only one attack surface. Covara One defends against a full spectrum of fraud vectors, classified by severity and sophistication:
 
 #### Tier 1 — Direct Spoofing (Technology-Based)
 
-| Vector | How the attack works | DEVTrails defense |
+| Vector | How the attack works | Covara One defense |
 |---|---|---|
 | **GPS spoofing apps** | Worker uses a mock-location app (e.g., Fake GPS, iSpoofer) to fake device coordinates in a red-alert zone | EXIF cross-check, TomTom Snap-to-Roads plausibility, movement plausibility over time, impossible-travel velocity checks |
 | **VPN / proxy routing** | Worker routes traffic through a VPN server or proxy located in the disruption zone, masking their real IP | VPN / datacenter / TOR IP detection against known ranges; carrier-IP expectation (Jio, Airtel, Vi); **treated as a supporting fraud signal, not a standalone rejection trigger** |
@@ -632,7 +632,7 @@ GPS spoofing is only one attack surface. DEVTrails defends against a full spectr
 
 #### Tier 2 — Identity Misuse (Social-Based)
 
-| Vector | How the attack works | DEVTrails defense |
+| Vector | How the attack works | Covara One defense |
 |---|---|---|
 | **Buddy login (account handoff)** | Worker A (safe zone) shares OTP/password with Worker B (red-alert zone); Worker B logs into Worker A's app and files a claim using real local conditions | First-login-on-new-device during red-alert triggers liveness check (selfie); device fingerprint history mismatch; session continuity break detection; historical zone affinity — Worker A never operated in this zone before |
 | **Account sharing ring** | Multiple people rotate one account to file claims from different zones | Device-account binding detects multiple unique device fingerprints per account; IP/ASN pattern clustering reveals multi-location access |
@@ -640,7 +640,7 @@ GPS spoofing is only one attack surface. DEVTrails defends against a full spectr
 
 #### Tier 3 — Coordinated / Systemic Abuse
 
-| Vector | How the attack works | DEVTrails defense |
+| Vector | How the attack works | Covara One defense |
 |---|---|---|
 | **Weather chaser (pre-emptive zone squatting)** | Worker sees a red-alert forecast, travels to the zone without working, waits in a café during the storm, and claims "stranded on delivery" | Pre-trigger presence requirement: must show work activity in/near the zone before or during the trigger window; historical zone affinity check; evidence of active work intent, not just physical presence |
 | **Activity continuity anomaly (operational mismatch)** | Suspicious claims tied to weak or absent activity continuity — worker claims stranding but has no verifiable pre-disruption delivery trail, or shows unusual acceptance/delivery patterns inconsistent with genuine work | Historical order completion cross-check; shift-activity gap analysis; repeated localized claim bursts with low operational evidence |
@@ -648,7 +648,7 @@ GPS spoofing is only one attack surface. DEVTrails defends against a full spectr
 
 ### 1c. Signal Confidence Hierarchy
 
-Not all verification signals are equally trustworthy. DEVTrails evaluates claims using a **weighted signal hierarchy** — higher-trust signals carry more weight in the fraud decision:
+Not all verification signals are equally trustworthy. Covara One evaluates claims using a **weighted signal hierarchy** — higher-trust signals carry more weight in the fraud decision:
 
 | Rank | Signal | Trust level | Rationale |
 |:---:|---|---|---|
@@ -684,7 +684,7 @@ These controls detect fraud that bypasses location spoofing by targeting identit
 
 ### 2. The Data: Detecting Coordinated Fraud Rings
 
-Beyond individual spoof detection, DEVTrails analyzes **cross-claimant patterns** to identify organized fraud rings:
+Beyond individual spoof detection, Covara One analyzes **cross-claimant patterns** to identify organized fraud rings:
 
 | Data point | What it reveals | Detection method |
 |---|---|---|
@@ -720,7 +720,7 @@ Anti-spoofing must not punish honest gig workers who experience genuine disrupti
 
 #### False-Positive / Honest Worker Protection
 
-| Scenario that catches honest workers | Why it happens | How DEVTrails protects them |
+| Scenario that catches honest workers | Why it happens | How Covara One protects them |
 |---|---|---|
 | **New device** | Worker upgraded their phone or factory-reset | New device alone only triggers review, not rejection; liveness check only during red-alert coincidence |
 | **Missing EXIF metadata** | Photo sent via WhatsApp/Telegram, which strip metadata | Never auto-rejected — routed to `needs_review` with other signals evaluated |
@@ -738,7 +738,7 @@ Anti-spoofing must not punish honest gig workers who experience genuine disrupti
 
 ### 4. Liquidity Protection & Circuit-Breaker Controls
 
-The 500-worker syndicate attack is fundamentally a **liquidity drain** attack. DEVTrails defends the payout pool with automated circuit-breakers:
+The 500-worker syndicate attack is fundamentally a **liquidity drain** attack. Covara One defends the payout pool with automated circuit-breakers:
 
 | Control | Trigger condition | Action |
 |---|---|---|
@@ -756,7 +756,7 @@ These controls protect the liquidity pool without blocking legitimate claims —
 
 To demonstrate the system's defense capability, consider the exact attack described in the market-shift briefing:
 
-| Step | What happens | DEVTrails response |
+| Step | What happens | Covara One response |
 |---|---|---|
 | 1. **Coordination** | 500 workers in one zone coordinate via Telegram to spoof GPS during a red-alert weather warning | — |
 | 2. **Mass submission** | Claims flood in within a 20-minute window, all from near-identical coordinates | **Circuit-breaker fires**: mass-claim throttling activates for the zone |
@@ -769,7 +769,7 @@ The key insight: even within a coordinated fraud ring, the system preserves genu
 
 ### 6. Basis-Risk Acknowledgment
 
-As a parametric insurance product, DEVTrails explicitly acknowledges **basis risk** — the gap between trigger activation and individual impact:
+As a parametric insurance product, Covara One explicitly acknowledges **basis risk** — the gap between trigger activation and individual impact:
 
 - A trigger may fire (e.g., 72mm rain in a zone) but not every worker in that zone suffers equally — some may have already completed their shift
 - A worker may suffer genuine disruption even when the trigger value is borderline (e.g., 63mm rain, just below the 64.5mm threshold)
@@ -846,13 +846,13 @@ Environmental thresholds (rain, AQI, heat) are anchored to official Indian gover
 
 ## Parametric Product: Weekly Benefit Plans
 
-> DEVTrails uses an internal weekly risk-and-pricing model to calibrate fair premiums and benefit levels, while the final worker-facing product remains parametric: once a pre-agreed trigger band is hit and both exposure matching and anti-spoofing verification pass, the payout is released according to the selected weekly benefit plan.
+> Covara One uses an internal weekly risk-and-pricing model to calibrate fair premiums and benefit levels, while the final worker-facing product remains parametric: once a pre-agreed trigger band is hit and both exposure matching and anti-spoofing verification pass, the payout is released according to the selected weekly benefit plan.
 
 The formula engine remains an **internal pricing and calibration tool**. The **customer-facing product** is structured as a parametric weekly benefit ladder released only when both the trigger threshold and the anti-spoofing verification checks pass.
 
 ### Two Plans Only: Essential & Plus
 
-DEVTrails offers exactly **two** worker-facing plans to keep the purchase decision simple and transparent:
+Covara One offers exactly **two** worker-facing plans to keep the purchase decision simple and transparent:
 
 | Plan | Weekly benefit (W) | Target worker | Indicative weekly premium |
 |---|---:|---|---|
@@ -966,9 +966,10 @@ Celestius_DEVTrails_P1/
 │   │   ├── 04_storage_policies.sql  ← Storage bucket policies
 │   │   ├── 05_rls_rollback.sql      ← RLS cleanup script
 │   │   ├── 06_synthetic_seed.sql    ← Demo users + comprehensive seed data
-│   │   ├── 10_payout_safety.sql     ← Disruption events + worker-event uniqueness
-│   │   ├── 11_claim_states.sql      ← Expanded claim state machine (8 states)
-│   │   └── 12_region_validation_cache.sql ← Validated regional incidents + cluster spike
+│   │   ├── 07_grant_patch.sql       ← Grant patch for service role
+│   │   ├── 08_fix_demo_auth_users.sql ← Demo auth user fixes
+│   │   ├── 09_link_demo_users.sql   ← Link demo users to profiles
+│   │   └── 13_unified_extensions.sql ← Payout safety, claim states, region cache (consolidated)
 │   ├── mock_api.py                  ← Legacy 3-endpoint demo scaffold
 │   └── openapi.yaml                 ← OpenAPI 3.0 contract
 ├── frontend/
@@ -1059,7 +1060,7 @@ We chose a **web-first / PWA-first** architecture for reach and low friction, wi
 
 **To see the platform in action:**
 1. Set up your `.env` files (see Supabase & Authentication Setup above)
-2. Run `backend/sql/01` through `06` (plus `10`, `11`, `12` for payout safety, claim states, and region cache) in your Supabase SQL editor
+2. Run `backend/sql/01` through `09` and `13_unified_extensions.sql` in your Supabase SQL editor
 3. Start the backend: `cd backend && uvicorn app.main:app --reload --port 8000`
 4. Start the frontend: `cd frontend && npm run dev`
 5. Log in with `worker@demo.com` / `demo1234` to see the worker dashboard with pre-seeded earnings, claims, and alerts
@@ -1141,7 +1142,7 @@ After running `backend/sql/06_synthetic_seed.sql` in your Supabase SQL editor, t
 
 ## Worker Lifecycle Story — Ravi in the Mumbai Monsoon
 
-> Meet **Ravi Kumar**, a Swiggy delivery rider in Andheri West, Mumbai. Here's what his experience looks like on DEVTrails.
+> Meet **Ravi Kumar**, a Swiggy delivery rider in Andheri West, Mumbai. Here's what his experience looks like on Covara One.
 
 | Step | What happens | System action |
 |---|---|---|
@@ -1194,11 +1195,11 @@ Workers see different premiums each Monday because the system re-computes zone r
 
 ## Business Framing
 
-DEVTrails is positioned as an **insurer-facing platform** or **embedded protection layer** — not as a fully licensed insurer. The product provides the parametric underwriting engine, claims orchestration, and fraud detection that a licensed insurer would embed into their distribution channel for gig-worker income protection.
+Covara One is positioned as an **insurer-facing platform** or **embedded protection layer** — not as a fully licensed insurer. The product provides the parametric underwriting engine, claims orchestration, and fraud detection that a licensed insurer would embed into their distribution channel for gig-worker income protection.
 
 ### Insurer Value Proposition
 
-| Benefit | How DEVTrails delivers it |
+| Benefit | How Covara One delivers it |
 |---|---|
 | **Reduced manual claim handling** | 8-stage automated pipeline + region fast-lane = fewer claims need human review |
 | **Lower Loss Adjustment Expense (LAE)** | Parametric trigger-based decisions replace manual adjuster visits |
