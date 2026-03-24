@@ -1,5 +1,5 @@
 """
-DEVTrails — Severity Scoring Engine
+Covara One — Severity Scoring Engine
 
 Computes the Disruption DNA severity score (S) from normalized components.
 This score drives the payout scale based on how severe the combined events are.

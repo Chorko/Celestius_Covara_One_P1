@@ -1,5 +1,5 @@
 """
-DEVTrails — Claims Router
+Covara One — Claims Router
 
 Handles:
 - POST /claims (Submit manual claim)

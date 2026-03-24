@@ -48,7 +48,7 @@ def seed_test_users():
                 # Ensure insurer_profile exists
                 sb.table("insurer_profiles").upsert({
                     "profile_id": user_id,
-                    "company_name": "DEVTrails Inc",
+                    "company_name": "Covara One Inc",
                     "job_title": "Risk Admin"
                 }).execute()
                 

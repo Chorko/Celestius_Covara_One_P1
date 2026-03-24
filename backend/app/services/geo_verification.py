@@ -1,5 +1,5 @@
 """
-DEVTrails — Geo-Verification Service
+Covara One — Geo-Verification Service
 
 Verifies if provided geographic coordinates fall within or near
 the designated operational zones.

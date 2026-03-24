@@ -1,5 +1,5 @@
 """
-DEVTrails — Region Controls & Behavioral Identity Service
+Covara One — Region Controls & Behavioral Identity Service
 
 Behavioral identity, region-based monitoring, and dynamic trust scoring
 to detect fraud that bypasses location spoofing by targeting identity,

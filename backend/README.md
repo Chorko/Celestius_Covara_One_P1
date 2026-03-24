@@ -186,6 +186,7 @@ flowchart TD
 | `02_auth_triggers.sql` | Auth event triggers for automatic profile creation |
 | `03_rls_policies.sql` | Row-Level Security policies for all tables |
 | `04_storage_policies.sql` | Storage bucket policies for claim evidence uploads |
-| `10_payout_safety.sql` | Disruption events table + worker-event uniqueness index |
-| `11_claim_states.sql` | Expanded claim state machine (8 states: submitted → auto_approved / soft_hold / fraud_escalated → approved → paid) |
-| `12_region_validation_cache.sql` | Validated regional incidents table with cluster spike detection |
+| `10_payout_safety.sql` | *(Consolidated into `13_unified_extensions.sql`)* |
+| `11_claim_states.sql` | *(Consolidated into `13_unified_extensions.sql`)* |
+| `12_region_validation_cache.sql` | *(Consolidated into `13_unified_extensions.sql`)* |
+| `13_unified_extensions.sql` | Payout safety, expanded claim state machine (8 states), regional validation cache with cluster spike detection (unified migration) |

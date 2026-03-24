@@ -1,5 +1,5 @@
 """
-DEVTrails — Triggers Router
+Covara One — Triggers Router
 
 Handles:
 - GET /triggers/library (Static 15-trigger list)

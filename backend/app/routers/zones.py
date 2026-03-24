@@ -1,5 +1,5 @@
 """
-DEVTrails — Zones Router
+Covara One — Zones Router
 
 Provides zone listing for city selection during onboarding,
 claim zone matching, and trigger zone display.

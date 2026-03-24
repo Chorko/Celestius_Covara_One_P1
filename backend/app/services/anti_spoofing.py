@@ -1,5 +1,5 @@
 """
-DEVTrails — Anti-Spoofing Verification Service (Layer 3)
+Covara One — Anti-Spoofing Verification Service (Layer 3)
 
 Multi-signal cross-validation to detect sophisticated GPS spoofing,
 VPN/proxy abuse, emulator usage, and identity misuse.

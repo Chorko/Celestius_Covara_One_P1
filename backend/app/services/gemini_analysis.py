@@ -1,5 +1,5 @@
 """
-DEVTrails — Gemini Analysis Service
+Covara One — Gemini Analysis Service
 
 Provides AI narrative summaries for manual claims.
 Called by the backend to translate raw data points into actionable insights

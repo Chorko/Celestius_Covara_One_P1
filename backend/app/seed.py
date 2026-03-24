@@ -1,5 +1,5 @@
 """
-DEVTrails — Seed Data Loader
+Covara One — Seed Data Loader
 
 Populates the Supabase database with synthetic demo data:
 - Zones (Mumbai, Delhi, Bangalore, Hyderabad — 2 zones each)

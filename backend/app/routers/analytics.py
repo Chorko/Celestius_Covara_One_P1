@@ -1,5 +1,5 @@
 """
-DEVTrails — Analytics Router
+Covara One — Analytics Router
 
 Powers the dashboard charts and metrics for the insurer/admin persona.
 """
