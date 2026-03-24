@@ -9,6 +9,7 @@ import {
   FileSearch, Zap, Shield, TrendingUp, AlertTriangle, Fingerprint
 } from 'lucide-react'
 import Link from 'next/link'
+import AnimatedCounter from '@/components/AnimatedCounter'
 
 interface DashboardMetrics {
   active_workers: number
@@ -216,7 +217,7 @@ export default function AdminDashboard() {
               <Users size={20} className="text-emerald-400" />
             </div>
           </div>
-          <div className="text-3xl font-bold mb-1">{metrics.active_workers}</div>
+          <div className="text-3xl font-bold mb-1"><AnimatedCounter value={metrics.active_workers} /></div>
           <p className="text-xs text-emerald-400 flex items-center gap-1">
             <TrendingUp size={12} /> Covered on platform
           </p>
@@ -229,7 +230,7 @@ export default function AdminDashboard() {
               <Clock size={20} className="text-amber-400" />
             </div>
           </div>
-          <div className="text-3xl font-bold mb-1">{metrics.needs_review}</div>
+          <div className="text-3xl font-bold mb-1"><AnimatedCounter value={metrics.needs_review} /></div>
           <p className="text-xs text-amber-400">Manual / escalated / AI-uncertain</p>
         </div>
 
@@ -240,7 +241,7 @@ export default function AdminDashboard() {
               <Fingerprint size={20} className="text-red-400" />
             </div>
           </div>
-          <div className="text-3xl font-bold text-red-400 mb-1">{metrics.fraud_detected}</div>
+          <div className="text-3xl font-bold text-red-400 mb-1"><AnimatedCounter value={metrics.fraud_detected} /></div>
           <p className="text-xs text-red-400/70">High fraud score — rejected</p>
         </div>
 
@@ -251,7 +252,7 @@ export default function AdminDashboard() {
               <CheckCircle size={20} className="text-emerald-400" />
             </div>
           </div>
-          <div className="text-3xl font-bold mb-1">{metrics.approved_claims}</div>
+          <div className="text-3xl font-bold mb-1"><AnimatedCounter value={metrics.approved_claims} /></div>
           <p className="text-xs text-neutral-500">
             Out of {metrics.total_claims} total claims
           </p>
@@ -265,7 +266,7 @@ export default function AdminDashboard() {
             </div>
           </div>
           <div className="text-3xl font-bold mb-1">
-            ₹{metrics.total_recommended_payout_inr?.toLocaleString('en-IN') || 0}
+            <AnimatedCounter value={metrics.total_recommended_payout_inr} prefix="₹" />
           </div>
           <p className="text-xs text-neutral-500">
             Expected: ₹{metrics.total_expected_payout_inr?.toLocaleString('en-IN') || 0}
@@ -334,7 +335,8 @@ export default function AdminDashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 mb-8">
         {/* Trigger Distribution Chart */}
-        <div className="lg:col-span-2 glass-card p-6 animate-fade-in-up delay-300">
+        <div className="lg:col-span-2 chart-container">
+        <div className="glass-card p-6 animate-fade-in-up delay-300">
           <div className="mb-6">
             <h2 className="text-lg font-semibold flex items-center gap-2">
               <Activity size={20} className="text-blue-400" /> Trigger Distribution
@@ -380,6 +382,7 @@ export default function AdminDashboard() {
               </PieChart>
             </ResponsiveContainer>
           </div>
+        </div>
         </div>
 
         {/* Recent Activity Feed */}
