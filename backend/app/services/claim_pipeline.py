@@ -20,6 +20,7 @@ from backend.app.services.pricing import (
 )
 from backend.app.services.fraud_engine import evaluate_fraud_risk
 from backend.app.services.manual_claim_verifier import evaluate_manual_claim
+from backend.app.services.region_validation_cache import should_fast_lane
 
 # ── Parametric Payout Bands ──────────────────────────────────────────────
 PLAN_WEEKLY_BENEFITS = {
@@ -83,6 +84,7 @@ def run_claim_pipeline(
     zone_claims_last_hour: int = 0,
     zone_avg_hourly: float = 5.0,
     plan: str = "essential",
+    validated_incidents: list[dict] = None,
 ) -> dict:
 
     trace = []
@@ -127,6 +129,32 @@ def run_claim_pipeline(
         "exposure_check",
         "Shift overlap and zone confirmed for worker context.",
     )
+
+    # --- 3b. Region Validation Fast-Lane ---
+    fast_lane_eligible = False
+    if trigger_context and (validated_incidents is not None):
+        trigger_family = trigger_context.get("trigger_family", "")
+        claim_ts = trigger_context.get("started_at", now_iso())
+        fl = should_fast_lane(
+            zone_id=worker_context.get("zone_id", ""),
+            trigger_family=trigger_family,
+            claim_timestamp=claim_ts,
+            validated_incidents=validated_incidents,
+            zone_claims_last_hour=zone_claims_last_hour,
+        )
+        fast_lane_eligible = fl["eligible"]
+        add_trace(
+            3,
+            "region_fast_lane",
+            fl["reason"],
+        )
+        if fl["cluster_spike"]:
+            # Override: force batch validation
+            add_trace(
+                3,
+                "cluster_spike_override",
+                "Cluster spike detected — all claims routed to batch validation.",
+            )
 
     # --- Manual Strictness ---
     manual_held = False
