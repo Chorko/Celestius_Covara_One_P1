@@ -71,6 +71,8 @@ coverage/
 htmlcov/
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
+.pyright/
 tmp/
 temp/
 
@@ -85,6 +87,8 @@ temp/
 # ==========================
 TEMP_WILL_BE_DELETED/
 
-# Local IDE Settings
-.vscode/
+# ==========================
+# Antigravity / Gemini IDE
+# ==========================
+.gemini/
 
