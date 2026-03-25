@@ -136,8 +136,3 @@ if __name__ == "__main__":
     print(f"Training on {len(df)} rows...")
     results = train_model(df)
     print(json.dumps(results, indent=2))
-""",
-    """Covara One — Severity Classifier baseline training.
-    
-    Run: python -m backend.app.services.ml_training
-    """

@@ -17,6 +17,8 @@ and fraud engine can consume without caring whether the data
 was real or mock.
 """
 
+from __future__ import annotations
+
 import os
 import httpx
 from typing import Optional
