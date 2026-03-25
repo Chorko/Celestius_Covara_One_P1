@@ -127,44 +127,16 @@ body {
               box-shadow 0.3s ease;
   position: relative;
   overflow: hidden;
-  isolation: isolate;
-  transform: translateZ(0);
 }
-.glass-card::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(135deg, transparent 40%, rgba(16, 185, 129, 0) 40%, rgba(16, 185, 129, 0) 100%);
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  opacity: 0;
-  transition: opacity 0.4s ease;
-  pointer-events: none;
-  z-index: -1;
-}
-.glass-card:hover::before {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.3), rgba(59, 130, 246, 0.2), rgba(139, 92, 246, 0.15));
-  opacity: 1;
-}
+/* Hover glow via box-shadow only — no pseudo-elements, no overflow risk */
 .glass-card:hover {
   background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.1);
-  transform: translateY(-2px) translateZ(0);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 30px rgba(16, 185, 129, 0.04);
-}
-/* Static variant — NO hover lift / glow / ::before.
-   Use inside grids where hover effects would bleed into neighbors. */
-.glass-card-static {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(12px);
-  border-radius: 1rem;
-  position: relative;
-  overflow: hidden;
+  border-color: rgba(16, 185, 129, 0.25);
+  transform: translateY(-2px);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    0 0 20px rgba(16, 185, 129, 0.06),
+    inset 0 1px 0 rgba(16, 185, 129, 0.1);
 }
 .glass-input {
   background: rgba(255, 255, 255, 0.04);
@@ -613,8 +585,8 @@ body {
    SECTION ENTER — smooth slide-in for conditionally rendered sections
    ═══════════════════════════════════════════════════════════ */
 @keyframes sectionEnter {
-  from { opacity: 0; transform: translateY(12px); max-height: 0; }
-  to   { opacity: 1; transform: translateY(0);    max-height: 600px; }
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0);    }
 }
 .section-enter {
   animation: sectionEnter 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
