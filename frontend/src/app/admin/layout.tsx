@@ -101,16 +101,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="p-3" style={{ borderTop: '1px solid rgba(255, 255, 255, 0.06)' }}>
           <button
             onClick={handleSignOut}
-            className="flex w-full items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-white/30 hover:text-red-400 transition-all cursor-pointer"
-            style={{ border: '1px solid transparent' }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'rgba(239, 68, 68, 0.08)'
-              e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.15)'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'transparent'
-              e.currentTarget.style.borderColor = 'transparent'
-            }}
+            className="btn-signout"
           >
             <LogOut size={18} />
             <span>Sign Out</span>

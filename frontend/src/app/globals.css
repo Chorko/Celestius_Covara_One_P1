@@ -121,9 +121,14 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.06);
   backdrop-filter: blur(12px);
   border-radius: 1rem;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              background 0.3s ease,
+              border-color 0.3s ease,
+              box-shadow 0.3s ease;
   position: relative;
   overflow: hidden;
+  isolation: isolate;           /* ← stacking context: prevents ::before from leaking */
+  transform: translateZ(0);    /* ← GPU layer promotion for smooth hover lift */
 }
 .glass-card::before {
   content: '';
@@ -139,6 +144,7 @@ body {
   opacity: 0;
   transition: opacity 0.4s ease;
   pointer-events: none;
+  z-index: -1;                 /* ← stay behind card content, never paint over children */
 }
 .glass-card:hover::before {
   background: linear-gradient(135deg, rgba(16, 185, 129, 0.3), rgba(59, 130, 246, 0.2), rgba(139, 92, 246, 0.15));
@@ -147,7 +153,7 @@ body {
 .glass-card:hover {
   background: rgba(255, 255, 255, 0.05);
   border-color: rgba(255, 255, 255, 0.1);
-  transform: translateY(-2px);
+  transform: translateY(-2px) translateZ(0);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 30px rgba(16, 185, 129, 0.04);
 }
 .glass-input {
@@ -252,14 +258,27 @@ body {
   75% { transform: translate(-5px, 2px); }
 }
 
-.animate-fade-in-up { animation: fadeInUp 0.5s ease-out both; }
-.animate-slide-in-left { animation: slideInLeft 0.4s ease-out both; }
+.animate-fade-in-up {
+  animation: fadeInUp 0.5s ease-out both;
+  will-change: transform, opacity;       /* GPU-accelerated */
+}
+.animate-slide-in-left {
+  animation: slideInLeft 0.4s ease-out both;
+  will-change: transform, opacity;
+}
 .animate-pulse-glow { animation: pulse-glow 3s ease-in-out infinite; }
-.animate-float { animation: float 6s ease-in-out infinite; }
-.animate-page-enter { animation: pageEnter 0.4s ease-out both; }
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+  will-change: transform;
+}
+.animate-page-enter {
+  animation: pageEnter 0.4s ease-out both;
+  will-change: transform, opacity;
+}
 .animate-reveal {
   opacity: 0;
   transform: translateY(30px);
+  will-change: transform, opacity;
 }
 .animate-reveal.revealed {
   animation: revealUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
@@ -552,6 +571,43 @@ body {
 }
 .toast.exiting {
   animation: toastSlideOut 0.3s ease-in both;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SIGN-OUT BUTTON (CSS-only hover, replaces inline JS)
+   ═══════════════════════════════════════════════════════════ */
+.btn-signout {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.3);
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  transition: color 0.25s ease,
+              background 0.25s ease,
+              border-color 0.25s ease;
+}
+.btn-signout:hover {
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.15);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CHART CONTAINER (prevents tooltip from being clipped)
+   ═══════════════════════════════════════════════════════════ */
+.chart-container {
+  position: relative;
+  overflow: visible !important;  /* let Recharts tooltip escape */
+}
+.chart-container .glass-card {
+  overflow: visible;             /* override glass-card clipping inside chart areas */
 }
 
 /* ═══════════════════════════════════════════════════════════
