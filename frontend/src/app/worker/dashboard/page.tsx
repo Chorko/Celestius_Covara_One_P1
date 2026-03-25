@@ -319,7 +319,7 @@ export default function WorkerDashboard() {
 
         {/* ===== CLAIM STATUS SUMMARY ===== */}
         {claimCounts.total > 0 && (
-          <section className="animate-fade-in-up delay-200">
+          <section className="section-enter">
             <div className="glass-card p-5">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider flex items-center gap-2">
@@ -382,7 +382,7 @@ export default function WorkerDashboard() {
 
         {/* ===== COVERAGE QUOTE CARD ===== */}
         {policyQuote && (
-          <section className="animate-fade-in-up delay-200">
+          <section className="section-enter">
             <div className="glass-card glow-emerald p-6 md:p-8">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
                 {/* Left -- title + numbers */}
@@ -447,8 +447,7 @@ export default function WorkerDashboard() {
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
           {/* Earnings Chart -- 2/3 */}
-          <div className="lg:col-span-2 chart-container">
-          <div className="glass-card p-6 animate-fade-in-up delay-300">
+          <div className="lg:col-span-2 glass-card-static p-6 animate-fade-in-up delay-300">
             <div className="mb-6 flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-semibold text-white flex items-center gap-2">
@@ -512,10 +511,9 @@ export default function WorkerDashboard() {
               </ResponsiveContainer>
             </div>
           </div>
-          </div>
 
           {/* Zone Trigger Alerts -- 1/3 */}
-          <div className="glass-card p-6 flex flex-col animate-fade-in-up delay-400">
+          <div className="glass-card-static p-6 flex flex-col animate-fade-in-up delay-400">
             <div className="mb-5">
               <h2 className="text-lg font-semibold text-white flex items-center gap-2">
                 <CloudRain size={20} className="text-blue-400" />
