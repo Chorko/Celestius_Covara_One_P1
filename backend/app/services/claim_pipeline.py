@@ -12,6 +12,8 @@ Orchestrates the entire claim decision process:
 8. Audit logging
 """
 
+from __future__ import annotations
+
 from datetime import datetime, timezone
 from backend.app.services.severity import calculate_severity
 from backend.app.services.pricing import (
@@ -47,7 +49,7 @@ PAYOUT_BANDS = {
 }
 
 
-def map_severity_to_band(severity_s: float, trigger_band: str = None) -> int:
+def map_severity_to_band(severity_s: float, trigger_band: str | None = None) -> int:
     """Map composite severity score to parametric payout band (1, 2, or 3)."""
     if trigger_band == "escalation" or severity_s >= 0.70:
         return 3
@@ -61,7 +63,7 @@ def calculate_parametric_payout(band: int, plan: str = "essential") -> dict:
     """Calculate the parametric payout based on band and plan."""
     weekly_benefit = PLAN_WEEKLY_BENEFITS.get(plan, 3000)
     band_info = PAYOUT_BANDS.get(band, PAYOUT_BANDS[1])
-    payout = weekly_benefit * band_info["multiplier"]  # type: ignore
+    payout = weekly_benefit * float(band_info["multiplier"])
 
     return {
         "plan": plan,
@@ -69,7 +71,7 @@ def calculate_parametric_payout(band: int, plan: str = "essential") -> dict:
         "band": band,
         "band_label": band_info["label"],
         "band_multiplier": band_info["multiplier"],
-        "parametric_payout": round(payout, 2),
+        "parametric_payout": round(float(payout), 2),
     }
 
 
@@ -78,13 +80,13 @@ def run_claim_pipeline(
     worker_context: dict,
     trigger_context: dict | None,
     claim_mode: str,  # 'manual' or 'trigger_auto'
-    evidence_records: list[dict] = None,
-    claim_record: dict = None,
-    device_context: dict = None,
+    evidence_records: list[dict] | None = None,
+    claim_record: dict | None = None,
+    device_context: dict | None = None,
     zone_claims_last_hour: int = 0,
     zone_avg_hourly: float = 5.0,
     plan: str = "essential",
-    validated_incidents: list[dict] = None,
+    validated_incidents: list[dict] | None = None,
 ) -> dict:
 
     trace = []
