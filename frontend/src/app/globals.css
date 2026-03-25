@@ -128,15 +128,12 @@ body {
   position: relative;
   overflow: hidden;
 }
-/* Hover glow via box-shadow only — no pseudo-elements, no overflow risk */
+/* Hover: subtle lift + border accent. No outer glow to avoid grid-gap bleed. */
 .glass-card:hover {
   background: rgba(255, 255, 255, 0.05);
   border-color: rgba(16, 185, 129, 0.25);
   transform: translateY(-2px);
-  box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.3),
-    0 0 20px rgba(16, 185, 129, 0.06),
-    inset 0 1px 0 rgba(16, 185, 129, 0.1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
 }
 .glass-input {
   background: rgba(255, 255, 255, 0.04);
@@ -585,11 +582,12 @@ body {
    SECTION ENTER — smooth slide-in for conditionally rendered sections
    ═══════════════════════════════════════════════════════════ */
 @keyframes sectionEnter {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0);    }
+  0%   { opacity: 0; transform: translateY(16px); }
+  40%  { opacity: 0.6; }
+  100% { opacity: 1; transform: translateY(0); }
 }
 .section-enter {
-  animation: sectionEnter 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: sectionEnter 0.7s ease-out both;
   will-change: transform, opacity;
 }
 
