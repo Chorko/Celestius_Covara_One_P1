@@ -138,6 +138,7 @@ The DEVTrails 2026 challenge requires:
 | Supabase Auth & RLS | ✅ Implemented | Google OAuth, role-based routing, Row-Level Security |
 | Integrations (weather, AQI, traffic) | ✅ Designed | OpenWeather, TomTom, NewsAPI mapped; connectors planned |
 | Progressive KYC | ✅ Designed | Phone OTP → platform ID → bank/UPI → optional DigiLocker ladder |
+| Progressive Web App (PWA) | ✅ Implementing | Installable mobile experience with offline support, push notifications |
 | WhatsApp notifications | 📋 Planned | Disruption alerts, claim updates, payout notifications |
 | Caching layer | 📋 Planned | Strategy and TTL policy defined; implementation pending |
 | ML training pipeline | 📋 Planned | Random Forest baseline hardcoded at p=0.15 |
@@ -1028,6 +1029,7 @@ Each folder README follows a consistent structure:
 | **Styling** | Tailwind CSS v4 | Utility-first CSS with glassmorphism design system, zero-config setup |
 | **Charts** | Recharts | React-native charting for analytics dashboards, trigger mix, severity distribution |
 | **State** | Zustand | Lightweight client-side state management for auth and UI state |
+| **Mobile** | PWA (next-pwa) | Installable app-like experience with offline caching, push notifications, splash screen |
 | **Cache** | Redis *(planned)* | Fast key-value caching for trigger feeds, dashboard summaries, simulation outputs |
 | **Data Science** | pandas, numpy, scikit-learn | Bootstrap EDA, Random Forest baseline, boxplot outlier analysis |
 
@@ -1045,11 +1047,28 @@ We chose a **web-first / PWA-first** architecture for reach and low friction, wi
 
 5. **Supabase integration** — Supabase Auth (Google OAuth, email/password) and Supabase Realtime work seamlessly with browser-based clients. The JavaScript SDK is mature and well-documented for web use cases.
 
-6. **Progressive enhancement path** — The web app can be wrapped as a PWA (Progressive Web App) later to provide an app-like experience with offline support, push notifications, and home-screen installation — bridging the gap without the overhead of native development.
+6. **PWA as the mobile strategy (active)** — The web app is being wrapped as a **Progressive Web App (PWA)** to provide an installable, app-like experience with offline caching, push notifications, splash screens, and home-screen installation. This was chosen over React Native (full rewrite, weeks of work) and Capacitor (app-store overhead, slow iteration) because PWA delivers 95% of the native experience with zero additional codebase.
 
 7. **Optional deeper mobile signals** — Where available, native mobile integrations can provide hardware-level anti-spoofing signals (background GPS, accelerometer/gyroscope sensor data, GNSS C/N0 validation) as **optional supporting signals** in the fraud engine — without requiring a full native app for all workers.
 
-> **Architecture position:** Web-first PWA for onboarding, dashboards, renewals, and communication. Optional deeper device-assurance signals via mobile/native integrations where available. This absorbs the best of both approaches without locking into an artificial web-vs-mobile tradeoff.
+> **Architecture position:** Web-first PWA for onboarding, dashboards, renewals, and communication. The PWA is now actively being implemented — workers will "Add to Home Screen" and get a full-screen, app-like experience indistinguishable from a native app. Optional deeper device-assurance signals via mobile/native integrations where available.
+
+### Why PWA Over React Native / Capacitor
+
+We evaluated three approaches for mobile delivery and chose PWA:
+
+| Approach | Effort | Codebase Impact | App-Store Required | Chose? |
+|---|---|---|---|---|
+| **PWA** | ~2 hours | Zero rewrites — same Next.js codebase | ❌ No | ✅ Yes |
+| **Capacitor** | ~3-5 hours | Wraps web build in native shell | ✅ Yes (.apk/.ipa) | ❌ No |
+| **React Native / Expo** | Days-weeks | Full UI rewrite | ✅ Yes | ❌ No |
+
+**Why PWA wins for Covara One:**
+- **Zero friction onboarding** — gig workers with low storage, varied Android versions can install from the browser with one tap. No Play Store search, no 50MB download, no approval delays.
+- **Instant updates** — service worker cache invalidation means every deployment is live instantly. No app-store review cycle.
+- **Offline resilience** — service worker pre-caches the worker dashboard, claim submission form, and policy pages. Workers in areas with spotty network can still access their coverage status.
+- **Push notifications** — Web Push API enables disruption alerts, claim status updates, and payout confirmations without WhatsApp or SMS dependency.
+- **Same codebase** — the admin desktop dashboard and the worker mobile experience share 100% of the React component code.
 
 ---
 
