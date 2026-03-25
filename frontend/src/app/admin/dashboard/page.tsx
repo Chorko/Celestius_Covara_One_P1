@@ -335,7 +335,7 @@ export default function AdminDashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 mb-8">
         {/* Trigger Distribution Chart */}
-        <div className="lg:col-span-2 glass-card-static p-6 animate-fade-in-up delay-300">
+        <div className="lg:col-span-2 glass-card p-6">
           <div className="mb-6">
             <h2 className="text-lg font-semibold flex items-center gap-2">
               <Activity size={20} className="text-blue-400" /> Trigger Distribution
@@ -384,7 +384,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Recent Activity Feed */}
-        <div className="lg:col-span-3 glass-card-static p-6 animate-fade-in-up delay-400">
+        <div className="lg:col-span-3 glass-card p-6 animate-fade-in-up delay-400">
           <div className="flex items-center justify-between mb-6">
             <div>
               <h2 className="text-lg font-semibold flex items-center gap-2">

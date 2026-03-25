@@ -447,7 +447,7 @@ export default function WorkerDashboard() {
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
           {/* Earnings Chart -- 2/3 */}
-          <div className="lg:col-span-2 glass-card-static p-6 animate-fade-in-up delay-300">
+          <div className="lg:col-span-2 glass-card p-6">
             <div className="mb-6 flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-semibold text-white flex items-center gap-2">
@@ -513,7 +513,7 @@ export default function WorkerDashboard() {
           </div>
 
           {/* Zone Trigger Alerts -- 1/3 */}
-          <div className="glass-card-static p-6 flex flex-col animate-fade-in-up delay-400">
+          <div className="glass-card p-6 flex flex-col animate-fade-in-up delay-400">
             <div className="mb-5">
               <h2 className="text-lg font-semibold text-white flex items-center gap-2">
                 <CloudRain size={20} className="text-blue-400" />
