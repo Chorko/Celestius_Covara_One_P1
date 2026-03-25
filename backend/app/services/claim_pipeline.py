@@ -71,7 +71,7 @@ def calculate_parametric_payout(band: int, plan: str = "essential") -> dict:
         "band": band,
         "band_label": band_info["label"],
         "band_multiplier": band_info["multiplier"],
-        "parametric_payout": round(float(payout), 2),
+        "parametric_payout": round(float(payout), 2),  # type: ignore[call-overload]
     }
 
 

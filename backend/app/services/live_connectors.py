@@ -255,7 +255,7 @@ def _mock_rainfall(city: str) -> dict:
         "source": "mock",
         "city": city,
         "station": "simulated",
-        "rain_mm_24h": round(random.uniform(0, 80), 1),
+        "rain_mm_24h": round(float(random.uniform(0, 80)), 1),  # type: ignore[call-overload]
         "category": "moderate",
     }
 
@@ -266,7 +266,7 @@ def _mock_temperature(city: str) -> dict:
         "source": "mock",
         "city": city,
         "station": "simulated",
-        "temp_c": round(random.uniform(28, 42), 1),
+        "temp_c": round(float(random.uniform(28, 42)), 1),  # type: ignore[call-overload]
         "weather_code": "",
     }
 
@@ -287,8 +287,8 @@ def _mock_weather(city: str) -> dict:
     return {
         "source": "mock",
         "city": city,
-        "temp_c": round(random.uniform(25, 40), 1),
-        "rain_mm_1h": round(random.uniform(0, 15), 1),
+        "temp_c": round(float(random.uniform(25, 40)), 1),  # type: ignore[call-overload]
+        "rain_mm_1h": round(float(random.uniform(0, 15)), 1),  # type: ignore[call-overload]
         "humidity": random.randint(40, 90),
         "description": "simulated conditions",
     }
@@ -296,10 +296,10 @@ def _mock_weather(city: str) -> dict:
 
 def _mock_traffic(lat: float, lng: float) -> dict:
     import random
-    delay = round(random.uniform(5, 55), 1)
+    delay = round(float(random.uniform(5, 55)), 1)  # type: ignore[call-overload]
     return {
         "source": "mock",
-        "current_speed_kmh": round(60 * (1 - delay / 100), 1),
+        "current_speed_kmh": round(float(60 * (1 - delay / 100)), 1),  # type: ignore[call-overload]
         "free_flow_speed_kmh": 60,
         "traffic_delay_pct": delay,
         "confidence": 0.7,
