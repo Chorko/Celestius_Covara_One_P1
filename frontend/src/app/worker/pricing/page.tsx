@@ -117,7 +117,10 @@ export default function WorkerPricing() {
   }, [supabase, profile])
 
   useEffect(() => {
-    if (!profile) return
+    if (!profile) {
+      setLoading(false)
+      return
+    }
     void fetchQuote()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.id])
@@ -125,10 +128,13 @@ export default function WorkerPricing() {
   const handleChoosePlan = (plan: PlanTier) => { setSelectedPlan(plan); setPaymentSuccess(false); setPaying(false); setShowModal(true) }
   const handlePay = () => { setPaying(true); setTimeout(() => { setPaying(false); setPaymentSuccess(true) }, 2000) }
   const closeModal = () => { setShowModal(false); setSelectedPlan(null); setPaymentSuccess(false) }
+  // Fixed IRDAI plan prices — always shown even if quote fetch fails
+  const FIXED_PRICES: Record<string, number> = { essential: 28, plus: 42 }
   const getPremium = (plan: PlanTier) => {
-    if (!quote) return 0
+    if (!quote) return FIXED_PRICES[plan.id]
     const essentialBenefit = PLANS.find(p => p.id === 'essential')?.weeklyBenefit ?? 3000
-    return Math.round(quote.weekly_premium_inr * (plan.weeklyBenefit / essentialBenefit))
+    const actuarial = Math.round(quote.weekly_premium_inr * (plan.weeklyBenefit / essentialBenefit))
+    return actuarial > 0 ? actuarial : FIXED_PRICES[plan.id]
   }
 
   if (loading) {
@@ -257,7 +263,7 @@ export default function WorkerPricing() {
                     </li>
                   ))}
                 </ul>
-                <button onClick={() => handleChoosePlan(plan)} disabled={!quote}
+                <button onClick={() => handleChoosePlan(plan)}
                   className={plan.popular ? 'btn-primary w-full py-3 text-sm font-semibold' : 'btn-secondary w-full py-3 text-sm font-semibold'}>
                   Choose {plan.name}
                 </button>

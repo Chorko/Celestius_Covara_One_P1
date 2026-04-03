@@ -332,9 +332,13 @@ export default function WorkerDashboard() {
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2 text-xs">
-                    {policyQuote.B != null && <span className="badge-info">B (Base) = {policyQuote.B}</span>}
-                    {policyQuote.E != null && <span className="badge-success">E (Earnings) = {policyQuote.E}</span>}
-                    {policyQuote.C != null && <span className="badge-purple">C (City) = {policyQuote.C}</span>}
+                    {policyQuote.observed_weekly_gross != null && (
+                      <span className="badge-info">Weekly Gross ≈ ₹{policyQuote.observed_weekly_gross?.toLocaleString('en-IN')}</span>
+                    )}
+                    {policyQuote.max_payout_cap_inr != null && (
+                      <span className="badge-success">Max Payout ₹{policyQuote.max_payout_cap_inr?.toLocaleString('en-IN')}</span>
+                    )}
+                    <span className="badge-purple">IRDAI Micro-Insurance Plan</span>
                   </div>
                 </div>
                 <div className="md:w-56 flex-shrink-0">
