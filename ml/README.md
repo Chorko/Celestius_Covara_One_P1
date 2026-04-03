@@ -10,18 +10,22 @@
 
 | Component | Status |
 |-----------|--------|
-| Bootstrap pipeline design | 📝 Documented |
-| Random Forest baseline results | 📝 Documented |
-| Feature importance analysis | 📝 Documented |
-| Boxplot outlier analysis | 📝 Documented |
-| Severity normalization method | 📝 Documented |
-| Pricing integration formula | 📝 Documented |
-| ML training scripts | 📋 Planned |
+| Bootstrap pipeline design | ✅ Implemented |
+| Random Forest baseline results | ✅ Trained + saved (`ml/model_artifacts/severity_rf.joblib`) |
+| Feature importance analysis | ✅ Documented |
+| Boxplot outlier analysis | ✅ Documented |
+| Severity normalization method | ✅ Implemented (`severity.py`) |
+| Pricing integration formula | ✅ Implemented (`pricing.py`) |
+| ML training scripts | ✅ Implemented (`ml_training.py`) |
+| Anti-spoofing feature engineering | ✅ Documented (13 features, output by `fraud_engine.py`) |
+| What ML Does vs Does Not Do | ✅ Documented |
 | EDA notebooks | 📋 Planned |
 | XGBoost comparison | 📋 Planned |
+| ML live inference wired to claims | ⚠️ Hardcoded p=0.15 (model exists, wiring pending) |
 | Feedback loop implementation | 📋 Planned |
-| Anti-spoofing feature engineering | 📝 Documented |
-| What ML Does vs Does Not Do | 📝 Documented |
+
+> **Pricing note:** Bootstrap median was ₹218.7/week on high-income assumptions. Final IRDAI-aligned fixed rates are ₹28/week (Essential) and ₹42/week (Plus) — both compliant with the ₹10,000/year IRDAI micro-insurance limit.
+
 
 ---
 

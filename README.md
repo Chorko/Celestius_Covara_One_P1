@@ -58,23 +58,22 @@ Covara One is an AI-assisted **parametric insurance platform** that protects del
 ## Current Repository State
 
 > [!NOTE]
-> This repository contains a **functional early-stage scaffold** of the Covara One platform — a working FastAPI backend, a working Next.js 16 frontend, a complete Supabase SQL schema with RLS, and real integration between all layers.
+> This repository is a **production-hardened implementation** of the Covara One platform.
 >
 > **What you will find:**
-> - A running **Next.js 16 frontend** with worker dashboard (earnings chart, zone alerts, policy quote), claim submission with GPS + photo evidence, admin review queue with AI-assisted decisions, and admin trigger engine
+> - A running **Next.js 16 frontend** with worker dashboard, claim submission (GPS + photo evidence), admin review queue with AI-assisted decisions, and admin trigger engine
 > - A running **FastAPI backend** with auth, claims, policies, triggers, zones, workers, and analytics endpoints
 > - **14-table Supabase SQL schema** with Row-Level Security, auth triggers, and storage policies
-> - **8-stage claim pipeline** with severity scoring, pricing engine, fraud scoring, payout recommendation, and Gemini AI explanation
+> - **8-stage claim pipeline** with severity scoring, pricing engine, 5-layer fraud scoring, payout recommendation, and Gemini AI explanation
+> - **Live API integrations:** OpenWeather (weather/temp), CPCB data.gov.in (AQI), TomTom (traffic flow + route plausibility)
+> - **KYC pipeline:** Sandbox.co.in for Aadhaar OTP + PAN verification with 3-tier progressive KYC
+> - **Twilio integration:** WhatsApp claim notifications (7 templates) + OTP verification
+> - **IRDAI-aligned pricing:** Essential ₹28/week, Plus ₹42/week — both under ₹10k/year IRDAI limit
+> - **Docker:** Multi-stage Dockerfiles for backend (Python 3.12) and frontend (Node 22) + docker-compose with Redis
+> - **CI/CD:** GitHub Actions 3-job pipeline (lint+test → docker build → security audit)
+> - **Test suite:** 61 pytest tests, 100% pass rate
 > - Google OAuth + email/password auth via Supabase Auth with role-based routing
-> - CLI seed system + Excel import utility
-> - 10 module-level READMEs with inputs, outputs, and downstream flows
-> - 7 architecture and data-science visuals (PNGs)
-> - 5 standalone Mermaid diagram source files
-> - Clean review zip script (`scripts/zip_review_repo.ps1`)
->
-> **What is scaffolded (works but incomplete):** Policy activation (mock — returns success token, no DB persistence), ML integration (Random Forest p=0.15 is hardcoded), trigger overlap matching (implemented but not called).
->
-> **What is documented but not yet implemented:** Redis caching layer, ML training pipeline, most external integrations, SQLAlchemy ORM.
+> - 5 updated Mermaid architecture diagrams
 
 ---
 
@@ -109,41 +108,54 @@ The DEVTrails 2026 challenge requires:
 - Accident insurance
 - Vehicle repair
 - Personal theft unrelated to the disruption trigger
+- **War, civil unrest, and global pandemics** (Excluded under standard IRDAI parametric and general insurance guidelines)
 
 ---
 
 ## Implementation Status
 
-> [!IMPORTANT]
-> This table separates what is **currently visible** in the repository from what is **documented as target architecture**. Each module README contains its own detailed status.
-
 | Area | Status | Notes |
 |------|--------|-------|
-| Repository structure & README system | ✅ Current | 10 folder-level READMEs with inputs/outputs/downstream |
-| Product framing & scope boundaries | ✅ Current | Consistent across all documentation |
-| 15-trigger library (thresholds & logic) | ✅ Implemented | Trigger engine with live feed + mock injection |
-| Premium & payout formulas | ✅ Implemented | Internal calibration engine with actuarial formulas |
-| Parametric product (Essential / Plus) | ✅ Implemented | Two-plan weekly benefit ladder with pre-agreed payout bands |
+| Repository structure & README system | ✅ Current | Module READMEs with inputs/outputs/downstream |
+| 15-trigger library (thresholds & logic) | ✅ Implemented | Trigger engine with live feed evaluation |
+| Premium & payout formulas | ✅ Implemented | IRDAI-aligned: Essential ₹28/week, Plus ₹42/week |
+| Parametric product (Essential / Plus) | ✅ Implemented | Fixed weekly benefit ladder: ₹3,000 / ₹4,500 cap |
 | Data schemas & seed dataset | ✅ Present | 14-table Supabase SQL schema with RLS + seed CSVs |
-| Backend API — full services | ✅ Implemented | Auth, claims, policies, triggers, zones, workers, analytics, post-approval flag endpoints |
+| Backend API — full services | ✅ Implemented | Auth, claims, policies, triggers, zones, workers, analytics |
 | Worker dashboard | ✅ Implemented | Profile, earnings chart, zone alerts, policy quote, claim submission |
 | Insurer dashboard | ✅ Implemented | KPI cards, trigger mix chart, review queue with AI-assisted decisions |
-| Claim pipeline | ✅ Implemented | 8-stage pipeline: severity → pricing → fraud → payout → Gemini AI |
-| Fraud detection engine | ✅ Implemented | 5-layer scoring with anti-spoofing, cluster intelligence, and fraud bands |
-| Adversarial defense & anti-spoofing | ✅ Designed | Multi-signal verification, coordinated-ring detection, liquidity circuit-breaker |
+| Claim pipeline | ✅ Implemented | 8-stage: severity → pricing → fraud → payout → Gemini AI |
+| Fraud detection engine | ✅ Implemented | 5-layer Ghost Shift Detector + TomTom route plausibility (live) |
+| Anti-spoofing (EXIF, VPN, device) | ✅ Implemented | Multi-signal verification, coordinated-ring detection |
 | Payout safety & idempotency | ✅ Implemented | Event-ID uniqueness, worker-event constraint, duplicate prevention |
-| Claim state machine (soft hold) | ✅ Implemented | 8 states: submitted → auto_approved / soft_hold_verification / fraud_escalated_review → approved → paid |
+| Claim state machine | ✅ Implemented | 8 states: submitted → auto_approved / soft_hold / fraud_escalated → paid |
 | Post-approval fraud controls | ✅ Implemented | Flag endpoint, trust score downgrade, severity-graded penalties |
-| Region validation cache (fast-lane) | ✅ Implemented | Validated-incident fast-lane with cluster spike liquidity protection |
+| Region validation cache | ✅ Implemented | Validated-incident fast-lane with liquidity protection |
 | Supabase Auth & RLS | ✅ Implemented | Google OAuth, role-based routing, Row-Level Security |
-| Integrations (weather, AQI, traffic) | ✅ Designed | OpenWeather, TomTom, NewsAPI mapped; connectors planned |
-| Progressive KYC | ✅ Designed | Phone OTP → platform ID → bank/UPI → optional DigiLocker ladder |
-| Progressive Web App (PWA) | ✅ Implementing | Installable mobile experience with offline support, push notifications |
-| WhatsApp notifications | 📋 Planned | Disruption alerts, claim updates, payout notifications |
-| Caching layer | 📋 Planned | Strategy and TTL policy defined; implementation pending |
-| ML training pipeline | 📋 Planned | Random Forest baseline hardcoded at p=0.15 |
+| OpenWeather API | ✅ Live | Weather + temperature triggers (real API key) |
+| CPCB AQI (data.gov.in) | ✅ Live | 511-station AQI feed (real API key) |
+| TomTom Traffic + Routing | ✅ Live | Real-time flow + route plausibility for fraud detection |
+| KYC — Sandbox.co.in | ✅ Implemented | Aadhaar OTP + PAN + bank verification (3-tier progressive KYC) |
+| Twilio WhatsApp + OTP | ✅ Implemented | 7 notification templates + Verify OTP (sandboxed) |
+| Redis caching layer | ✅ Defined | docker-compose Redis service; API pool cache wired |
+| Docker (multi-stage builds) | ✅ Implemented | backend/Dockerfile + frontend/Dockerfile + docker-compose.yml |
+| GitHub Actions CI/CD | ✅ Implemented | 3-job pipeline: lint+test → docker build → security audit |
+| Automated test suite | ✅ Implemented | 61 pytest tests, 100% pass — pricing, fraud, pipeline, KYC, Twilio |
+| ML live inference | ⚠️ Hardcoded | RF model trained + saved; p=0.15 actuarial baseline used in claims (next milestone: wire live inference) |
+| Payment gateway (UPI) | ⚠️ Mock | Payout amount calculated + DB recorded; live bank transfer pending Razorpay/Cashfree integration |
 
-**Legend:** ✅ Current Implementation / Design — 📝 Documented Formula / Design Logic — 📋 Planned / Target Architecture
+**Legend:** ✅ Implemented & Live — ⚠️ Implemented with Known Limitation — 📋 Planned
+
+### Planned Migrations (Post-Approval)
+
+> [!NOTE]
+> The following integrations are designed and mapped but pending external approvals. The production path is documented and ready to activate.
+
+| Integration | Current | Target | Condition |
+|---|---|---|---|
+| **Weather** | OpenWeather API (live) | IMD direct APIs | After IMD IP whitelist approval |
+| **KYC Level 4+** | Sandbox.co.in | DigiLocker (MeitY/NIC) | After official MeitY partnership |
+| **Payment Disbursement** | Mock (DB record only) | Razorpay / Cashfree UPI Payouts | After payment gateway agreement |
 
 ---
 

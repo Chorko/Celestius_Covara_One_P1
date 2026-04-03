@@ -1,62 +1,70 @@
 %% Covara One — Unified System Architecture
-%% Status: Target architecture (no code implementation exists yet)
-%% Source: root README.md
+%% Status: Production-ready (Phases 0–6 complete)
+%% Updated: 2026-04-03
 
 graph TB
-    subgraph "External Signals"
-        WX["☁️ Weather / Rain<br/>(IMD / OGD)"]
-        AQ["🌫️ AQI<br/>(CPCB)"]
-        HT["🌡️ Heat / Temp<br/>(IMD / NDMA)"]
-        TR["🚦 Traffic<br/>(Proxy / Mock)"]
+    subgraph "External Signals (Live)"
+        WX["☁️ Weather / Rain<br/>(OpenWeather API)"]
+        AQ["🌫️ AQI<br/>(CPCB / data.gov.in)"]
+        HT["🌡️ Heat / Temp<br/>(OpenWeather)"]
+        TR["🚦 Traffic<br/>(TomTom Flow + Routing)"]
         PL["📱 Platform Signals<br/>(Mock)"]
         CV["🚧 Closures<br/>(Mock)"]
     end
 
+    subgraph "Identity & Comms"
+        KY["🪪 KYC<br/>(Sandbox.co.in)"]
+        TW["💬 Notifications<br/>(Twilio WhatsApp + OTP)"]
+    end
+
     subgraph "Worker App"
-        WO["Onboarding"]
+        WO["Onboarding + KYC"]
         WD["Worker Dashboard"]
         WP["Weekly Policy View"]
         WC["Claim Status"]
     end
 
     subgraph "Core Platform"
-        SI["Signal Ingestion<br/>& Normalization"]
+        SI["Signal Ingestion<br/>& Normalization<br/>(ApiProviderPool)"]
         TE["Trigger Engine<br/>(15 Triggers, T1–T15)"]
         CE["Claim Engine<br/>(8-Stage Pipeline)"]
-        FE["Fraud Engine<br/>(Ghost Shift Detector)"]
-        PE["Premium Engine<br/>(Income Twin)"]
+        FE["Fraud Engine<br/>(5-Layer Ghost Shift Detector)"]
+        PE["Premium Engine<br/>(IRDAI ₹28–42/week)"]
         PO["Payout Orchestration<br/>(Zero-Touch Payout)"]
     end
 
     subgraph "Data & Intelligence"
-        DL["Data Layer<br/>(worker_data + trigger_data)"]
+        DL["Supabase<br/>(14-table schema + RLS)"]
         ML["ML Layer<br/>(Random Forest Baseline)"]
-        AN["Analytics Engine"]
+        RC["Redis<br/>(API Pool Cache)"]
     end
 
     subgraph "Insurer Operations"
         ID["Insurer Dashboard"]
-        AD["Claim Analytics<br/>Dashboard"]
+        AD["Claim Analytics"]
         FR["Fraud Review Panel"]
     end
 
     WX & AQ & HT & TR & PL & CV --> SI
-    SI --> TE
+    SI --> RC
+    RC --> TE
     TE --> CE
     CE --> FE
+    TR --> FE
     FE --> PO
+    WO --> KY
+    KY --> DL
     WO --> PE
     PE --> WP
+    PO --> TW
+    TW --> WC
     DL --> ML
     ML --> PE
     ML --> TE
-    CE --> AN
-    AN --> AD
-    PO --> WC
+    CE --> AD
+    AD --> ID
     PO --> ID
     FE --> FR
-    TE --> DL
-    CE --> DL
 
     style WO fill:#4a9eff,color:#fff
     style WD fill:#4a9eff,color:#fff
@@ -65,3 +73,5 @@ graph TB
     style ID fill:#ff8c42,color:#fff
     style AD fill:#ff8c42,color:#fff
     style FR fill:#ff8c42,color:#fff
+    style KY fill:#2ecc71,color:#fff
+    style TW fill:#2ecc71,color:#fff

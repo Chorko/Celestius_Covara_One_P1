@@ -27,6 +27,7 @@ from backend.app.routers import (
     policies,
     analytics,
     ingest,
+    kyc,
 )
 from backend.app.seed import seed_all
 
@@ -53,9 +54,11 @@ app = FastAPI(
     title="Covara One API",
     description=(
         "Backend API for the Covara One parametric income-protection platform. "
-        "Round-robin API pools with LRU caching for weather, AQI, and traffic data."
+        "Includes zero-touch auto-claims, live trigger ingestion (OpenWeather/TomTom/CPCB), "
+        "5-layer fraud detection, IRDAI-compliant KYC (Sandbox.co.in), "
+        "and Twilio OTP + WhatsApp notifications."
     ),
-    version="0.3.0",
+    version="0.4.0",
     lifespan=lifespan,
 )
 
@@ -78,6 +81,7 @@ app.include_router(triggers.router)
 app.include_router(policies.router)
 app.include_router(analytics.router)
 app.include_router(ingest.router)
+app.include_router(kyc.router)
 
 
 # ── Root & Health ─────────────────────────────────────────────────

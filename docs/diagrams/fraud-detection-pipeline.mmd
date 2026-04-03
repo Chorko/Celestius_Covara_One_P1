@@ -1,36 +1,47 @@
 %% Covara One — Fraud Detection Pipeline (Ghost Shift Detector)
-%% Status: Target architecture (no code implementation exists yet)
-%% Source: fraud/README.md
+%% Status: Production-implemented (5-layer, live TomTom route plausibility)
+%% Updated: 2026-04-03
 
 flowchart TD
     subgraph "Layer 1: Event Truth"
-        L1["Signal Validation<br/>Cross-check weather, AQI, closure sources"]
+        L1["Signal Validation<br/>Cross-check OpenWeather + CPCB AQI + TomTom"]
     end
 
-    subgraph "Layer 2: Worker Truth"
-        L2["Exposure Verification<br/>GPS consistency, shift overlap, zone match"]
+    subgraph "Layer 2: Worker Truth + Route Plausibility"
+        L2A["Exposure Verification<br/>GPS consistency, shift overlap, zone match"]
+        L2B["TomTom Route Check<br/>Physical route plausibility (live API)"]
     end
 
-    subgraph "Layer 3: Behavioral Anomaly"
-        L3["Pattern Detection<br/>Claim frequency, impossible travel, device flags"]
+    subgraph "Layer 3: Anti-Spoofing"
+        L3["Multi-Signal Verification<br/>EXIF GPS/timestamp, VPN detect, device fingerprint"]
     end
 
-    subgraph "Layer 4: Cluster Intelligence"
-        L4["Group Analysis<br/>Synchronized claims, shared devices, payout overlap"]
+    subgraph "Layer 4: Behavioral Anomaly"
+        L4["Pattern Detection<br/>Claim frequency, impossible travel, prior rate"]
     end
 
-    L1 --> L2
-    L2 --> L3
+    subgraph "Layer 5: Cluster Intelligence"
+        L5["Group Analysis<br/>Synchronized claims, shared devices, zone spike"]
+    end
+
+    L1 --> L2A
+    L1 --> L2B
+    L2A & L2B --> L3
     L3 --> L4
-    L4 --> SCORE["Fraud Risk Score<br/>(weighted composite)"]
+    L4 --> L5
+    L5 --> SCORE["Fraud Risk Score<br/>(weighted composite, 9 signals)"]
     SCORE --> BANDS{"Decision Band"}
-    BANDS -->|"0.00 – 0.25"| LOW["✅ Low Risk<br/>Auto-approve"]
-    BANDS -->|"0.25 – 0.50"| MED["⏸️ Medium Risk<br/>Soft review"]
-    BANDS -->|"0.50+"| HIGH["🚫 High Risk<br/>Hard hold"]
+    BANDS -->|"0.00 – 0.25"| LOW["✅ Auto-Approve<br/>Zero-touch payout"]
+    BANDS -->|"0.25 – 0.50"| MED["⏸️ Needs Review<br/>Soft hold, insurer queue"]
+    BANDS -->|"0.50 – 0.75"| HOLD["🔒 Hold for Fraud<br/>Hard hold, Twilio alert"]
+    BANDS -->|"0.75+"| HIGH["🚫 Reject / Escalate<br/>Manual investigation"]
 
     style L1 fill:#f39c12,color:#fff
-    style L2 fill:#4a9eff,color:#fff
-    style L3 fill:#9b59b6,color:#fff
-    style L4 fill:#e74c3c,color:#fff
+    style L2A fill:#4a9eff,color:#fff
+    style L2B fill:#4a9eff,color:#fff
+    style L3 fill:#16a085,color:#fff
+    style L4 fill:#9b59b6,color:#fff
+    style L5 fill:#e74c3c,color:#fff
     style LOW fill:#2ecc71,color:#fff
     style HIGH fill:#e74c3c,color:#fff
+    style HOLD fill:#c0392b,color:#fff

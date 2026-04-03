@@ -92,3 +92,13 @@ TEMP_WILL_BE_DELETED/
 # ==========================
 .gemini/
 
+# ==========================
+# Obsidian Knowledge Vault
+# ==========================
+.obsidian/
+*.canvas
+
+# ==========================
+# Keep env template (not secrets)
+# ==========================
+!.env.example

@@ -10,13 +10,11 @@
 |-----------|--------|
 | Integration inventory | ✅ Documented |
 | Real-vs-mock classification | ✅ Documented |
-| Mock strategy documentation | ✅ Documented |
-| IMD Weather APIs (official) | ✅ Designed (exact endpoints mapped) |
-| CPCB AQI API (OGD) | ✅ Designed (registration required) |
-| OpenWeather API (fallback) | ✅ Designed (API key available) |
-| TomTom API integration | ✅ Designed (API key available) |
-| NewsAPI integration | ✅ Designed (API key available) |
-| API-to-Defense mapping | ✅ Documented |
+| OpenWeather API (primary weather) | ✅ Live (real API key) |
+| CPCB AQI API (data.gov.in) | ✅ Live (real API key, 511 stations) |
+| TomTom Traffic Flow + Routing | ✅ Live (real API key, route plausibility wired into fraud engine) |
+| KYC — Sandbox.co.in | ✅ Implemented (Aadhaar OTP, PAN, Bank verify) |
+| Twilio WhatsApp + OTP | ✅ Implemented (7 templates, sandboxed) |
 | Gemini API integration | ✅ Implemented |
 | Payment sandbox | 📋 Planned |
 
@@ -24,21 +22,20 @@
 
 ## Integration Inventory
 
-| # | Integration | Category | Source | Real / Mock | Why chosen |
-|---|------------|----------|--------|-------------|-----------|
-| 1 | **IMD Rainfall APIs** | Weather | India Meteorological Department | Real (free, official) | Official rain thresholds anchor T1–T3 triggers |
-| 2 | **CPCB AQI API** | Air Quality | Central Pollution Control Board / OGD | Real (free, official) | Official AQI bands anchor T5–T6 triggers |
-| 3 | **IMD Temperature APIs** | Temperature | India Meteorological Department | Real (free, official) | Official heat-wave criteria anchor T7–T9 triggers |
-| 4 | **Traffic Data** | Traffic | TomTom / proxy | Premium (or mock) | Real-time traffic APIs for delay percentages |
-| 5 | **Platform Outage Feed** | Platform | Delivery platform heartbeat | Mock | Platform APIs are unavailable; simulate outage events |
-| 6 | **Demand Drop Signal** | Platform | Delivery platform order volume | Mock | Platform APIs are unavailable; simulate order drops |
-| 7 | **Zone Closure Feed** | Civic | Municipal / police notices | Mock | No real-time API; simulate closure flags |
-| 8 | **Payment Gateway** | Payout | UPI / payment sandbox | Mock | Actual payment integration not required for hackathon demo |
-| 9 | **Bank Verification** | Identity | Banking API | Mock | Simulate bank account verification status |
-| 10 | **Gemini AI** | Risk scoring | Google Gemini API | Real (API key) | AI-assisted risk assessment and claim narrative generation |
-| 11 | **OpenWeather API** | Weather (fallback) | OpenWeather | Real (API key) | Fallback weather feed when IMD IP whitelisting is pending |
-| 12 | **TomTom APIs** | Traffic / Anti-Spoofing | TomTom | Real (API key) | Traffic Flow, Incidents, Geofencing, Routing, Snap-to-Roads |
-| 13 | **NewsAPI** | Civic / Context | NewsAPI | Real (API key) | Strike, protest, closure context; NOT a primary claims source |
+| # | Integration | Category | Source | Real / Mock | Notes |
+|---|------------|----------|--------|-------------|-------|
+| 1 | **OpenWeather API** | Weather + Temp | OpenWeather | **Live** | Primary weather feed; T1–T3 rain + T7–T8 temp triggers |
+| 2 | **CPCB AQI API** | Air Quality | data.gov.in (OGD) | **Live** | 511 stations; T5–T6 AQI triggers |
+| 3 | **TomTom Traffic Flow** | Traffic | TomTom | **Live** | Real-time speed + delay; T12 traffic trigger |
+| 4 | **TomTom Routing API** | Anti-Spoofing | TomTom | **Live** | Route plausibility check in Layer 2 of fraud engine |
+| 5 | **Sandbox.co.in KYC** | Identity | Sandbox.co.in | **Implemented** | Aadhaar OTP, PAN verification, bank account verification |
+| 6 | **Twilio Verify** | OTP | Twilio | **Implemented** | Phone number OTP for auth + KYC confirmation |
+| 7 | **Twilio WhatsApp** | Notifications | Twilio | **Implemented** | 7 templates: trigger alerts, claim updates, payout confirmation |
+| 8 | **Gemini AI** | Risk scoring | Google Gemini | **Implemented** | AI-assisted claim narrative generation |
+| 9 | **Platform Outage Feed** | Platform | Delivery platform | Mock | Platform APIs are unavailable; simulate outage events |
+| 10 | **Demand Drop Signal** | Platform | Delivery platform | Mock | Platform APIs are unavailable; simulate order drops |
+| 11 | **Zone Closure Feed** | Civic | Municipal / police | Mock | No real-time API; simulate closure flags |
+| 12 | **Payment Gateway** | Payout | UPI / payment sandbox | Mock | Actual payment integration not required for demo |
 
 ---
 

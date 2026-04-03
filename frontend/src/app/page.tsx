@@ -4,7 +4,9 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useUserStore } from '@/store'
-import { Shield, ArrowRight, Zap, Dna, Ghost } from 'lucide-react'
+import ThemeToggle from '@/components/ThemeToggle'
+import { Shield, ArrowRight, AlertCircle } from 'lucide-react'
+import Image from 'next/image'
 
 export default function Home() {
   const router = useRouter()
@@ -16,7 +18,6 @@ export default function Home() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Route user based on role
   const routeToRole = useCallback(async (userId: string) => {
     const controller = new AbortController()
     const tid = setTimeout(() => controller.abort(), 10000)
@@ -52,7 +53,7 @@ export default function Home() {
       const msg = profileError.message ?? ''
       const detail = profileError.details ?? ''
       if (code === 'PGRST205' || msg.toLowerCase().includes('schema') || detail.toLowerCase().includes('schema')) {
-        setError(`Database not set up — run SQL migration files 01–07 in the Supabase SQL Editor for project aptgddoivrzpvpmydfyh, then try again. [${code || 'no-code'}: ${msg}]`)
+        setError(`Database not set up — run SQL migration files 01–07 in the Supabase SQL Editor, then try again. [${code || 'no-code'}: ${msg}]`)
       } else if (code === 'PGRST116') {
         setError(`Profile row missing — demo seed (06_synthetic_seed.sql) may not have run successfully. [${code}: ${msg}]`)
       } else {
@@ -68,16 +69,13 @@ export default function Home() {
     }
   }, [supabase, setProfile, router])
 
-  // Check existing session
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         setUser(session.user)
         routeToRole(session.user.id)
       }
-    }).catch(() => {
-      // Session expired or invalid — stay on login page
-    })
+    }).catch(() => {})
   }, [supabase.auth, setUser, routeToRole])
 
   const handleEmailLogin = async (e: React.FormEvent) => {
@@ -119,59 +117,81 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen relative overflow-hidden flex items-center justify-center p-4" style={{ background: '#050510' }}>
-      {/* Dot grid background */}
-      <div className="dot-grid" />
-      {/* Animated floating orbs */}
-      <div className="absolute top-[-10%] left-[-5%] w-[500px] h-[500px] rounded-full animate-float" style={{ background: 'radial-gradient(circle, rgba(16, 185, 129, 0.12) 0%, transparent 70%)', animationDuration: '8s' }} />
-      <div className="absolute bottom-[-15%] right-[-10%] w-[600px] h-[600px] rounded-full animate-float" style={{ background: 'radial-gradient(circle, rgba(59, 130, 246, 0.1) 0%, transparent 70%)', animationDuration: '10s', animationDelay: '2s' }} />
-      <div className="absolute top-[40%] right-[15%] w-[350px] h-[350px] rounded-full animate-float" style={{ background: 'radial-gradient(circle, rgba(139, 92, 246, 0.08) 0%, transparent 70%)', animationDuration: '12s', animationDelay: '4s' }} />
-      <div className="absolute bottom-[30%] left-[10%] w-[250px] h-[250px] rounded-full animate-float" style={{ background: 'radial-gradient(circle, rgba(16, 185, 129, 0.06) 0%, transparent 70%)', animationDuration: '9s', animationDelay: '1s' }} />
-      <div className="absolute top-[15%] left-[50%] w-[200px] h-[200px] rounded-full animate-float" style={{ background: 'radial-gradient(circle, rgba(59, 130, 246, 0.07) 0%, transparent 70%)', animationDuration: '11s', animationDelay: '3s' }} />
+    <main
+      className="min-h-screen relative flex items-center justify-center p-4"
+      style={{ background: 'var(--bg-primary)' }}
+    >
+      {/* Background image */}
+      <div className="absolute inset-0 opacity-30 pointer-events-none">
+        <Image
+          src="/images/hero-bg.png"
+          alt=""
+          fill
+          className="object-cover"
+          priority
+        />
+        <div
+          className="absolute inset-0"
+          style={{
+            background: `linear-gradient(to bottom, var(--bg-primary), transparent 30%, transparent 70%, var(--bg-primary))`,
+          }}
+        />
+      </div>
+
+      {/* Theme toggle */}
+      <div className="absolute top-4 right-4 z-20">
+        <ThemeToggle />
+      </div>
 
       {/* Main card */}
       <div className="relative z-10 w-full max-w-md animate-fade-in-up">
-        <div className="glass-strong rounded-2xl p-8 glow-emerald">
+        <div className="card-elevated p-8 md:p-10">
           {/* Branding */}
-          <div className="flex flex-col items-center text-center mb-8 animate-fade-in-up">
-            <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4" style={{ background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(16, 185, 129, 0.05))', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
-              <Shield className="text-emerald-400" size={32} />
+          <div className="flex flex-col items-center text-center mb-8">
+            <div
+              className="w-14 h-14 rounded-xl flex items-center justify-center mb-4"
+              style={{
+                background: 'var(--accent-muted)',
+                border: '1px solid var(--border-secondary)',
+              }}
+            >
+              <Shield style={{ color: 'var(--accent)' }} size={28} />
             </div>
-            <h1 className="text-3xl font-bold text-white tracking-tight mb-2">Covara One</h1>
-            <p className="text-sm text-white/50 leading-relaxed max-w-xs">
+            <h1
+              className="text-2xl font-semibold tracking-tight mb-1"
+              style={{ color: 'var(--text-primary)' }}
+            >
+              Covara One
+            </h1>
+            <p className="text-sm leading-relaxed max-w-xs" style={{ color: 'var(--text-tertiary)' }}>
               AI-Powered Parametric Income Protection for Gig Workers
             </p>
           </div>
 
-          {/* Feature pills */}
-          <div className="flex flex-wrap justify-center gap-2 mb-8 animate-fade-in-up delay-100">
-            <span className="badge badge-emerald">
-              <Zap size={10} /> Zero-Touch Claims
-            </span>
-            <span className="badge badge-purple">
-              <Dna size={10} /> Disruption DNA
-            </span>
-            <span className="badge badge-amber">
-              <Ghost size={10} /> Ghost Shift Detector
-            </span>
-          </div>
-
           {/* Error display */}
           {error && (
-            <div className="mb-6 p-3 rounded-xl text-sm animate-fade-in-up" style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', color: '#fca5a5' }}>
-              {error}
+            <div
+              className="mb-6 p-3 rounded-lg text-sm flex items-start gap-2"
+              style={{
+                background: 'var(--danger-muted)',
+                border: '1px solid var(--danger)',
+                color: 'var(--danger)',
+              }}
+            >
+              <AlertCircle size={16} className="mt-0.5 shrink-0" />
+              <span>{error}</span>
             </div>
           )}
 
           {/* Quick-switch buttons */}
-          <div className="flex gap-2 mb-5 animate-fade-in-up delay-200">
+          <div className="flex gap-2 mb-5">
             <button
               type="button"
               onClick={() => { setEmail('worker@demo.com'); setPassword('demo1234') }}
-              className={`flex-1 py-2 px-3 rounded-xl text-xs font-semibold transition-all cursor-pointer ${email === 'worker@demo.com' ? 'text-emerald-300' : 'text-white/40 hover:text-white/60'}`}
+              className="flex-1 py-2.5 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer"
               style={email === 'worker@demo.com'
-                ? { background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)' }
-                : { background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.08)' }
+                ? { background: 'var(--accent-muted)', border: '1px solid var(--accent)', color: 'var(--accent)' }
+                : { background: 'var(--bg-tertiary)', border: '1px solid var(--border-primary)', color: 'var(--text-tertiary)' }
               }
             >
               Login as Worker
@@ -179,10 +199,10 @@ export default function Home() {
             <button
               type="button"
               onClick={() => { setEmail('admin@demo.com'); setPassword('demo1234') }}
-              className={`flex-1 py-2 px-3 rounded-xl text-xs font-semibold transition-all cursor-pointer ${email === 'admin@demo.com' ? 'text-blue-300' : 'text-white/40 hover:text-white/60'}`}
+              className="flex-1 py-2.5 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer"
               style={email === 'admin@demo.com'
-                ? { background: 'rgba(59, 130, 246, 0.15)', border: '1px solid rgba(59, 130, 246, 0.3)' }
-                : { background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.08)' }
+                ? { background: 'var(--info-muted)', border: '1px solid var(--info)', color: 'var(--info)' }
+                : { background: 'var(--bg-tertiary)', border: '1px solid var(--border-primary)', color: 'var(--text-tertiary)' }
               }
             >
               Login as Admin
@@ -190,31 +210,41 @@ export default function Home() {
           </div>
 
           {/* Login form */}
-          <form onSubmit={handleEmailLogin} className="space-y-4 mb-6 animate-fade-in-up delay-300">
+          <form onSubmit={handleEmailLogin} className="space-y-4 mb-6">
             <div>
-              <label className="text-[10px] font-semibold text-white/30 uppercase tracking-widest mb-1.5 block">Email</label>
+              <label
+                className="text-xs font-medium uppercase tracking-wider mb-1.5 block"
+                style={{ color: 'var(--text-tertiary)' }}
+              >
+                Email
+              </label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="glass-input"
+                className="input-field"
                 placeholder="Email address"
               />
             </div>
             <div>
-              <label className="text-[10px] font-semibold text-white/30 uppercase tracking-widest mb-1.5 block">Password</label>
+              <label
+                className="text-xs font-medium uppercase tracking-wider mb-1.5 block"
+                style={{ color: 'var(--text-tertiary)' }}
+              >
+                Password
+              </label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="glass-input"
+                className="input-field"
                 placeholder="Password"
               />
             </div>
             <button
               type="submit"
               disabled={loading}
-              className="btn-primary w-full flex items-center justify-center gap-2"
+              className="btn-primary w-full flex items-center justify-center gap-2 py-3"
             >
               {loading ? (
                 <span className="flex items-center gap-2">
@@ -228,12 +258,17 @@ export default function Home() {
           </form>
 
           {/* Divider */}
-          <div className="relative mb-6 animate-fade-in-up delay-400">
+          <div className="relative mb-6">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full" style={{ borderTop: '1px solid rgba(255, 255, 255, 0.08)' }} />
+              <div className="w-full" style={{ borderTop: '1px solid var(--border-primary)' }} />
             </div>
             <div className="relative flex justify-center text-xs">
-              <span className="px-3 text-white/30" style={{ background: 'rgba(255, 255, 255, 0.06)' }}>or continue with</span>
+              <span
+                className="px-3"
+                style={{ background: 'var(--bg-elevated)', color: 'var(--text-tertiary)' }}
+              >
+                or continue with
+              </span>
             </div>
           </div>
 
@@ -241,7 +276,7 @@ export default function Home() {
           <button
             onClick={handleGoogleLogin}
             type="button"
-            className="btn-secondary w-full flex items-center justify-center gap-3 animate-fade-in-up delay-500"
+            className="btn-secondary w-full flex items-center justify-center gap-3"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -254,7 +289,7 @@ export default function Home() {
         </div>
 
         {/* Footer */}
-        <p className="text-center text-[11px] text-white/20 mt-6 animate-fade-in-up delay-500">
+        <p className="text-center text-xs mt-6" style={{ color: 'var(--text-tertiary)' }}>
           Secured by Supabase Auth &middot; Powered by AI
         </p>
       </div>

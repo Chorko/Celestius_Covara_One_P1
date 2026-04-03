@@ -27,17 +27,41 @@ logger = logging.getLogger("covara.aqi_ingest")
 # ── Provider fetch functions ─────────────────────────────────────────────
 
 
-async def _fetch_cpcb(lat: float, lon: float, key: str = "", **_) -> dict:
-    """Fetch AQI from CPCB via data.gov.in Open Government Data API."""
+async def _fetch_cpcb(lat: float, lon: float, key: str = "", city: str = "", **_) -> dict:
+    """Fetch AQI from CPCB via data.gov.in Open Government Data API.
+    
+    Supports city-level filtering via filters[city] and pollutant
+    filtering via filters[pollutant_id] for PM2.5 readings.
+    """
     url = (
         f"https://api.data.gov.in/resource/3b01bcb8-0b14-4abf-b6f2-c1bfd384ba69"
         f"?api-key={key}&format=json&offset=0&limit=10"
     )
+    # Add city filter if available for zone-level precision
+    if city:
+        url += f"&filters[city]={city}"
+    # Prefer PM2.5 readings for AQI calculation
+    url += "&filters[pollutant_id]=PM2.5"
+
     async with httpx.AsyncClient(timeout=10) as client:
         resp = await client.get(url)
         resp.raise_for_status()
         data = resp.json()
     records = data.get("records", [])
+    if not records:
+        # Retry without pollutant filter to get any available reading
+        fallback_url = (
+            f"https://api.data.gov.in/resource/3b01bcb8-0b14-4abf-b6f2-c1bfd384ba69"
+            f"?api-key={key}&format=json&offset=0&limit=10"
+        )
+        if city:
+            fallback_url += f"&filters[city]={city}"
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(fallback_url)
+            resp.raise_for_status()
+            data = resp.json()
+        records = data.get("records", [])
+
     if not records:
         return {"provider": "cpcb", "aqi": None, "pm25": None, "pm10": None, "raw": data}
     rec = records[0]
@@ -48,6 +72,7 @@ async def _fetch_cpcb(lat: float, lon: float, key: str = "", **_) -> dict:
         "pm10": _safe_float(rec.get("pollutant_avg")) if rec.get("pollutant_id") == "PM10" else None,
         "station": rec.get("station"),
         "city": rec.get("city"),
+        "last_update": rec.get("last_update"),
         "raw": data,
     }
 
