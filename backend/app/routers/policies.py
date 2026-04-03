@@ -12,6 +12,8 @@ from backend.app.supabase_client import get_supabase_admin
 from backend.app.services.pricing import (
     calculate_policy_metrics,
     calculate_payout,
+    get_premium_quote as get_pricing_quote,
+    PLAN_DEFINITIONS,
 )
 from backend.app.services.claim_pipeline import (
     PLAN_WEEKLY_BENEFITS,
@@ -20,17 +22,8 @@ from backend.app.services.claim_pipeline import (
 
 router = APIRouter(prefix="/policies", tags=["Policies"])
 
-# ── Two plans only ────────────────────────────────────────────────────────
+# ── Two plans only ────────────────────────────────────────────────────
 VALID_PLANS = ("essential", "plus")
-
-# Plan uplift factor: scales the premium (and payout cap) proportionally to
-# the plan's weekly benefit relative to the Essential baseline.
-# Plus = ₹4,500 / ₹3,000 = 1.5 × Essential.
-_ESSENTIAL_BENEFIT = PLAN_WEEKLY_BENEFITS["essential"]
-PLAN_UPLIFT: dict[str, float] = {
-    plan: round(benefit / _ESSENTIAL_BENEFIT, 6)
-    for plan, benefit in PLAN_WEEKLY_BENEFITS.items()
-}
 
 
 class ActivatePolicyRequest(BaseModel):
@@ -77,19 +70,14 @@ async def get_premium_quote(
 
     base_metrics = calculate_policy_metrics(worker_context)  # type: ignore
 
-    # Compute an expected payout/premium using a baseline severe scenario
-    # (S=1.0) and p=0.15 to show the worker what their coverage looks like.
-    # The plan uplift factor scales the premium (and cap) proportionally to
-    # the selected plan's weekly benefit, so Plus costs more than Essential.
-    plan_uplift = PLAN_UPLIFT[plan]
+    # Compute expected payout/premium using a baseline severe scenario (S=1.0)
     quote = calculate_payout(
         covered_income_b=base_metrics["covered_income_b"],
         severity_s=1.0,  # quoting worst-case for max payout info
         exposure_e=base_metrics["exposure_e"],
         confidence_base=base_metrics["confidence_base"],
         fraud_penalty=0.0,  # zero fraud initially
-        claim_probability_p=0.15,
-        outlier_uplift_u=plan_uplift,
+        plan=plan,
     )
 
     # ── Parametric payout ladder for selected plan ─────────────────────

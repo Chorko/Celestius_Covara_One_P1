@@ -9,7 +9,7 @@ syndicate threat. Simple GPS verification is obsolete.
 """
 
 import ipaddress
-from datetime import datetime
+from datetime import datetime, timezone
 from backend.app.services.geo_verification import calculate_distance_km
 
 # ── Known VPN / datacenter / TOR IP ranges (sample CIDRs) ──────────────

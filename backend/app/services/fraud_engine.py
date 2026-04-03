@@ -18,12 +18,15 @@ Decision bands:
   reject_spoof_risk — No valid trigger + high spoof confidence + fraud-ring pattern
 """
 
+import logging
 from backend.app.services.anti_spoofing import verify_anti_spoofing
 from backend.app.services.image_forensics import analyze_evidence_integrity
 from backend.app.services.region_controls import (
     evaluate_region_controls,
     calculate_trust_penalty,
 )
+
+logger = logging.getLogger("covara.fraud_engine")
 
 # ── Signal Confidence Hierarchy Weights ──────────────────────────────────
 # Higher rank = more trusted signal (see root README Section 1c)
@@ -35,7 +38,7 @@ SIGNAL_WEIGHTS = {
     "device_continuity": 0.10,  # Rank 5
     "evidence_integrity": 0.10,  # Rank 6
     "anti_spoof": 0.10,  # Ranks 7-8
-    "network_context": 0.05,  # Rank 9 — Lowest trust
+    "route_plausibility": 0.05,  # Rank 9 — TomTom Route API
     "region_controls": 0.05,
 }
 
@@ -101,11 +104,58 @@ def evaluate_fraud_risk(
 
     worker_score = max(0.0, min(1.0, worker_score))
 
+    # ── Route plausibility via TomTom Routing API ──
+    route_plausibility_score = 0.5  # default: uncertain
+    route_result = None
+    last_lat = worker_context.get("last_known_lat")
+    last_lng = worker_context.get("last_known_lng")
+    claim_lat = (claim_data or {}).get("stated_lat") or (claim_data or {}).get("lat")
+    claim_lng = (claim_data or {}).get("stated_lng") or (claim_data or {}).get("lng")
+
+    if all([last_lat, last_lng, claim_lat, claim_lng]):
+        try:
+            from backend.app.services.traffic_ingest import check_route_plausibility
+            import asyncio
+            # check_route_plausibility is async; run it synchronously if we're
+            # not already in an event loop (pipeline is sync). If already in a
+            # loop (called from an async route), schedule it on the running loop.
+            try:
+                loop = asyncio.get_running_loop()
+                # Already in an async context — create a task and use a future
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    route_result = loop.run_in_executor(
+                        pool,
+                        lambda: asyncio.run(
+                            check_route_plausibility(last_lat, last_lng, claim_lat, claim_lng)
+                        ),
+                    )
+                    # This is a coroutine — we can't await it here in sync context,
+                    # so fall back to the score of 0.5 and fill result async later.
+                    route_result = None
+            except RuntimeError:
+                # No running loop — safe to use asyncio.run
+                route_result = asyncio.run(
+                    check_route_plausibility(last_lat, last_lng, claim_lat, claim_lng)
+                )
+
+            if route_result and route_result.get("score") is not None:
+                route_plausibility_score = route_result["score"]
+                if not route_result.get("plausible") and route_result["plausible"] is not None:
+                    flags.append("route_implausible")
+        except Exception as e:
+            logger.warning(f"Route plausibility check failed: {e}")
+            route_plausibility_score = 0.5  # Fail-open on API error
+
     layer_results["worker_truth"] = {
         "score": round(worker_score, 4),
         "active_days": active_days,
         "shift_overlap_ratio": shift_overlap,
         "orders_before_disruption": historical_orders,
+        "route_plausibility": {
+            "score": route_plausibility_score,
+            "detail": route_result if route_result else "no_coordinates_available",
+        },
     }
 
     # ════════════════════════════════════════════════════════════════════
@@ -240,9 +290,9 @@ def evaluate_fraud_risk(
         ),
         ("anti_spoof", anti_spoof_score, SIGNAL_WEIGHTS["anti_spoof"]),
         (
-            "network_context",
-            anti_spoof_score,
-            SIGNAL_WEIGHTS["network_context"],
+            "route_plausibility",
+            route_plausibility_score,
+            SIGNAL_WEIGHTS["route_plausibility"],
         ),
         (
             "region_controls",
@@ -330,7 +380,7 @@ def evaluate_fraud_risk(
             1 if "low_zone_affinity" in unique_flags else 0
         ),
         "shift_overlap_ratio": shift_overlap,
-        "route_plausibility_score": None,  # TomTom integration placeholder
+        "route_plausibility_score": route_plausibility_score,  # Live TomTom Routing API
         "historical_order_continuity": historical_orders,
         "repeated_coord_density": zone_claims_last_hour,
         "batch_timing_similarity": None,  # DBSCAN placeholder

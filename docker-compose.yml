@@ -1,0 +1,91 @@
+# ═══════════════════════════════════════════════════════════════════════
+# Covara One — Docker Compose (Development & Production)
+#
+# Usage:
+#   Development:  docker compose up --build
+#   Production:   docker compose -f docker-compose.yml up -d
+#
+# Services:
+#   backend   — FastAPI API server (port 8000)
+#   frontend  — Next.js web app (port 3000)
+#   redis     — Caching layer for API pool & session store
+# ═══════════════════════════════════════════════════════════════════════
+
+services:
+  # ── Backend API ─────────────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: covara-backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - APP_ENV=production
+      - CORS_ORIGINS=http://localhost:3000,http://frontend:3000
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - covara-net
+
+  # ── Frontend ────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+        - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+        - NEXT_PUBLIC_API_URL=http://backend:8000
+    container_name: covara-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - covara-net
+
+  # ── Redis (Caching) ─────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: covara-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - covara-net
+
+# ── Volumes ───────────────────────────────────────────────────────────
+volumes:
+  redis-data:
+    driver: local
+
+# ── Networks ──────────────────────────────────────────────────────────
+networks:
+  covara-net:
+    driver: bridge

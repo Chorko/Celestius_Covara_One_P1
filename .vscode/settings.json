@@ -10,5 +10,6 @@
   },
   "pyre.searchRoots": ["${workspaceFolder}"],
   "pyre.sitePackagePath": "${workspaceFolder}\\.venv\\Lib\\site-packages",
-  "pyre.pythonPath": "${workspaceFolder}\\.venv\\Scripts\\python.exe"
+  "pyre.pythonPath": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+  "css.lint.unknownAtRules": "ignore"
 }

@@ -1,177 +1,193 @@
 "use client"
 
-import { useEffect, useState } from 'react'
-import { useRouter, usePathname } from 'next/navigation'
+import { useEffect, useState, useCallback } from 'react'
+import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { useUserStore } from '@/store'
 import { createClient } from '@/lib/supabase'
-import { PieChart, ListChecks, Activity, Search, LogOut, Shield, Menu, X, User } from 'lucide-react'
+import { useUserStore } from '@/store'
+import ThemeToggle from '@/components/ThemeToggle'
+import {
+  LayoutDashboard,
+  FileSearch,
+  Activity,
+  Users,
+  Shield,
+  LogOut,
+  Menu,
+  X,
+} from 'lucide-react'
 
-const navItems = [
-  { href: '/admin/dashboard', label: 'Overview', icon: PieChart },
-  { href: '/admin/reviews', label: 'Reviews', icon: ListChecks },
+const NAV_ITEMS = [
+  { href: '/admin/dashboard', label: 'Overview', icon: LayoutDashboard },
+  { href: '/admin/reviews', label: 'Reviews', icon: FileSearch },
   { href: '/admin/triggers', label: 'Triggers', icon: Activity },
-  { href: '/admin/users', label: 'Users', icon: Search },
+  { href: '/admin/users', label: 'Users', icon: Users },
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const router = useRouter()
   const pathname = usePathname()
-  const { user, profile, logout } = useUserStore()
+  const router = useRouter()
   const supabase = createClient()
+  const { profile, logout } = useUserStore()
   const [drawerOpen, setDrawerOpen] = useState(false)
 
-  useEffect(() => {
-    if (!user) {
-      router.push('/')
-    } else if (profile && profile.role !== 'insurer_admin') {
-      router.push('/worker/dashboard')
-    }
-  }, [user, profile, router])
-
-  const handleSignOut = async () => {
+  const handleSignOut = useCallback(async () => {
     await supabase.auth.signOut()
     logout()
     router.push('/')
-  }
+  }, [supabase, logout, router])
 
-  if (!user || !profile) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: '#050510' }}>
-        <div className="flex flex-col items-center gap-4">
-          <div className="preload-logo">
-            <Shield className="text-blue-400" size={28} />
-          </div>
-          <span className="text-sm text-white/40">Loading...</span>
-        </div>
-      </div>
-    )
-  }
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) router.push('/')
+    })
+  }, [supabase, router])
 
   return (
-    <div className="layout-root min-h-screen flex overflow-x-hidden" style={{ background: '#050510' }}>
-      {/* ─── Desktop Sidebar ─── */}
-      <aside className="desktop-sidebar w-[280px] min-h-screen glass-strong flex flex-col relative" style={{ borderRight: '1px solid rgba(255, 255, 255, 0.06)' }}>
-        <div className="absolute top-0 left-0 w-full h-32 pointer-events-none" style={{ background: 'linear-gradient(180deg, rgba(59, 130, 246, 0.06) 0%, transparent 100%)' }} />
-
+    <div className="flex min-h-screen layout-root" style={{ background: 'var(--bg-primary)' }}>
+      {/* ═══ DESKTOP SIDEBAR ═══ */}
+      <aside
+        className="desktop-sidebar fixed top-0 left-0 h-screen w-[240px] flex flex-col z-40 sidebar"
+      >
         {/* Branding */}
-        <div className="relative p-6 flex items-center gap-3" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.06)' }}>
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(59, 130, 246, 0.05))', border: '1px solid rgba(59, 130, 246, 0.3)' }}>
-            <Shield className="text-blue-400" size={20} />
+        <div className="px-5 py-5 flex items-center gap-3" style={{ borderBottom: '1px solid var(--border-primary)' }}>
+          <div
+            className="w-9 h-9 rounded-lg flex items-center justify-center"
+            style={{ background: 'var(--accent-muted)', border: '1px solid var(--border-secondary)' }}
+          >
+            <Shield style={{ color: 'var(--accent)' }} size={18} />
           </div>
-          <span className="font-bold text-lg text-white tracking-tight">Covara One <span className="text-xs font-normal text-white/30">Admin</span></span>
+          <div>
+            <span className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>Covara One</span>
+            <span className="text-xs ml-1.5 font-medium" style={{ color: 'var(--text-tertiary)' }}>Admin</span>
+          </div>
         </div>
 
         {/* User info */}
-        <div className="px-6 py-4" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.04)' }}>
-          <p className="text-sm font-medium text-white/80 mb-1">{profile.full_name}</p>
-          <span className="badge badge-blue">Admin</span>
+        <div className="px-5 py-4" style={{ borderBottom: '1px solid var(--border-primary)' }}>
+          <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+            {profile?.full_name || 'Admin'}
+          </p>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
+            {profile?.email || ''}
+          </p>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 p-3 space-y-1 mt-2">
-          {navItems.map((item) => {
+        <nav className="flex-1 px-3 py-4 space-y-1">
+          {NAV_ITEMS.map((item) => {
             const isActive = pathname === item.href
-            const Icon = item.icon
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                  isActive
-                    ? 'text-blue-300'
-                    : 'text-white/40 hover:text-white/70 hover:bg-white/[0.03]'
-                }`}
-                style={isActive ? {
-                  background: 'rgba(59, 130, 246, 0.1)',
-                  border: '1px solid rgba(59, 130, 246, 0.15)',
-                  boxShadow: '0 0 20px rgba(59, 130, 246, 0.05)',
-                } : {
-                  border: '1px solid transparent',
-                }}
+                className={`sidebar-nav-item ${isActive ? 'active' : ''}`}
               >
-                <Icon size={18} />
-                <span>{item.label}</span>
+                <item.icon size={18} />
+                {item.label}
               </Link>
             )
           })}
         </nav>
 
-        {/* Sign out */}
-        <div className="p-3" style={{ borderTop: '1px solid rgba(255, 255, 255, 0.06)' }}>
-          <button
-            onClick={handleSignOut}
-            className="btn-signout"
-          >
-            <LogOut size={18} />
-            <span>Sign Out</span>
+        {/* Bottom actions */}
+        <div className="px-3 pb-4 space-y-2" style={{ borderTop: '1px solid var(--border-primary)', paddingTop: '12px' }}>
+          <div className="flex items-center justify-between px-3">
+            <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Theme</span>
+            <ThemeToggle />
+          </div>
+          <button onClick={handleSignOut} className="btn-signout">
+            <LogOut size={16} />
+            Sign Out
           </button>
         </div>
       </aside>
 
-      {/* ─── Mobile Header ─── */}
-      <header className="mobile-header fixed top-0 left-0 right-0 z-30 glass-strong px-4 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.06)' }}>
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(59, 130, 246, 0.05))', border: '1px solid rgba(59, 130, 246, 0.3)' }}>
-            <Shield className="text-blue-400" size={16} />
+      {/* ═══ MOBILE HEADER ═══ */}
+      <header
+        className="mobile-header hidden fixed top-0 left-0 right-0 z-40 items-center justify-between px-4 py-3"
+        style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-primary)' }}
+      >
+        <div className="flex items-center gap-2">
+          <div
+            className="w-8 h-8 rounded-lg flex items-center justify-center"
+            style={{ background: 'var(--accent-muted)' }}
+          >
+            <Shield style={{ color: 'var(--accent)' }} size={16} />
           </div>
-          <span className="font-bold text-sm text-white">Covara One <span className="text-[10px] font-normal text-white/30">Admin</span></span>
+          <span className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>Covara One</span>
+          <span className="text-xs font-medium" style={{ color: 'var(--text-tertiary)' }}>Admin</span>
         </div>
-        <button onClick={() => setDrawerOpen(true)} className="w-8 h-8 flex items-center justify-center rounded-lg glass text-white/60 cursor-pointer">
-          <Menu size={18} />
-        </button>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <button
+            onClick={() => setDrawerOpen(true)}
+            className="p-2 rounded-lg"
+            style={{ color: 'var(--text-secondary)' }}
+          >
+            <Menu size={20} />
+          </button>
+        </div>
       </header>
 
-      {/* ─── Mobile Drawer ─── */}
+      {/* ═══ MOBILE DRAWER ═══ */}
       <div className={`drawer-overlay ${drawerOpen ? 'open' : ''}`} onClick={() => setDrawerOpen(false)} />
       <div className={`drawer-panel ${drawerOpen ? 'open' : ''}`}>
         <div className="flex items-center justify-between mb-6">
-          <span className="text-white font-semibold text-sm">Menu</span>
-          <button onClick={() => setDrawerOpen(false)} className="text-white/40 cursor-pointer"><X size={20} /></button>
+          <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Menu</span>
+          <button onClick={() => setDrawerOpen(false)} style={{ color: 'var(--text-tertiary)' }}>
+            <X size={20} />
+          </button>
         </div>
-        <div className="flex items-center gap-3 p-3 glass rounded-xl mb-4">
-          <div className="w-8 h-8 rounded-full bg-blue-500/15 flex items-center justify-center">
-            <User size={16} className="text-blue-400" />
+        {profile && (
+          <div className="mb-6 pb-4" style={{ borderBottom: '1px solid var(--border-primary)' }}>
+            <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{profile.full_name}</p>
+            <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{profile.email}</p>
           </div>
-          <div>
-            <p className="text-sm font-medium text-white">{profile.full_name}</p>
-            <p className="text-xs text-white/40">{user.email}</p>
-          </div>
-        </div>
-        <button
-          onClick={handleSignOut}
-          className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-red-400/80 glass mt-2 cursor-pointer"
-        >
+        )}
+        <nav className="space-y-1 mb-6">
+          {NAV_ITEMS.map((item) => {
+            const isActive = pathname === item.href
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setDrawerOpen(false)}
+                className={`sidebar-nav-item ${isActive ? 'active' : ''}`}
+              >
+                <item.icon size={18} />
+                {item.label}
+              </Link>
+            )
+          })}
+        </nav>
+        <button onClick={handleSignOut} className="btn-signout">
           <LogOut size={16} />
           Sign Out
         </button>
       </div>
 
-      {/* ─── Main Content ─── */}
-      <main className="flex-1 overflow-auto h-screen relative gradient-mesh-admin">
-        <div className="md:hidden h-14" /> {/* Mobile header spacer */}
-        <div className="animate-page-enter">
-          {children}
-        </div>
-      </main>
-
-      {/* ─── Mobile Bottom Nav ─── */}
-      <nav className="mobile-bottom-nav bottom-nav">
-        {navItems.map((item) => {
+      {/* ═══ MOBILE BOTTOM NAV ═══ */}
+      <nav className="bottom-nav mobile-bottom-nav hidden">
+        {NAV_ITEMS.map((item) => {
           const isActive = pathname === item.href
-          const Icon = item.icon
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`bottom-nav-item ${isActive ? 'active-blue' : ''}`}
+              className={`bottom-nav-item ${isActive ? 'active' : ''}`}
             >
-              <Icon size={20} />
+              <item.icon size={20} />
               <span>{item.label}</span>
             </Link>
           )
         })}
       </nav>
+
+      {/* ═══ MAIN CONTENT ═══ */}
+      <main className="flex-1 ml-0 md:ml-[240px] min-h-screen pt-14 md:pt-0">
+        {children}
+      </main>
     </div>
   )
 }

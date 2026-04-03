@@ -31,6 +31,15 @@ class Settings:
     tomtom_api_key: str = os.getenv("TOMTOM_API_KEY", "")
     news_api_key: str = os.getenv("NEWS_API_KEY", "")
 
+    # KYC — Sandbox.co.in
+    sandbox_kyc_api_key: str = os.getenv("SANDBOX_KYC_API_KEY", "")
+
+    # Twilio
+    twilio_account_sid: str = os.getenv("TWILIO_ACCOUNT_SID", "")
+    twilio_auth_token: str = os.getenv("TWILIO_AUTH_TOKEN", "")
+    twilio_verify_service_sid: str = os.getenv("TWILIO_VERIFY_SERVICE_SID", "")
+    twilio_whatsapp_from: str = os.getenv("TWILIO_WHATSAPP_FROM", "")
+
     # ── Dynamic API Key Discovery ──
     # Instead of hardcoding N key fields, we scan env vars at runtime.
     # Just add WEATHER_API_KEY_1, WEATHER_API_KEY_2, ... to .env

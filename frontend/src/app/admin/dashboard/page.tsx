@@ -3,474 +3,232 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useUserStore } from '@/store'
 import { createClient } from '@/lib/supabase'
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts'
-import {
-  Users, Clock, CheckCircle, IndianRupee, Activity, ArrowRight,
-  FileSearch, Zap, Shield, TrendingUp, AlertTriangle, Fingerprint
-} from 'lucide-react'
-import Link from 'next/link'
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import AnimatedCounter from '@/components/AnimatedCounter'
+import Skeleton from '@/components/Skeleton'
+import Link from 'next/link'
+import {
+  Shield, Users, AlertTriangle, CheckCircle, IndianRupee,
+  Clock, ArrowRight, Activity, FileSearch,
+} from 'lucide-react'
 
-interface DashboardMetrics {
-  active_workers: number
-  needs_review: number
-  fraud_detected: number
-  approved_claims: number
-  total_claims: number
-  total_recommended_payout_inr: number
-  total_expected_payout_inr: number
-}
-
-interface DashboardData {
-  metrics: DashboardMetrics
-  charts: { trigger_mix: Record<string, number> }
-}
-
-interface RecentClaim {
-  id: string
-  claim_status: string
-  claim_reason: string
-  claimed_at: string
-  worker_profiles?: {
-    platform_name?: string
-    city?: string
-    profiles?: { full_name?: string; email?: string }
-  }
-}
-
-const COLORS = ['#3b82f6', '#f59e0b', '#ef4444', '#10b981', '#6366f1', '#a855f7']
+/* eslint-disable @typescript-eslint/no-explicit-any */
+interface ClaimItem { id: string; claim_status: string; claim_reason: string; claimed_at: string; worker_profiles?: { platform_name?: string; city?: string }; [key: string]: any }
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 export default function AdminDashboard() {
   const { profile } = useUserStore()
   const supabase = createClient()
-  const [data, setData] = useState<DashboardData | null>(null)
-  const [recentClaims, setRecentClaims] = useState<RecentClaim[]>([])
-  const [fetchError, setFetchError] = useState<string | null>(null)
+  const [workerCount, setWorkerCount] = useState(0)
+  const [claims, setClaims] = useState<ClaimItem[]>([])
+  const [fraudCount, setFraudCount] = useState(0)
+  const [totalPayouts, setTotalPayouts] = useState(0)
+  const [approvedCount, setApprovedCount] = useState(0)
+  const [reviewCount, setReviewCount] = useState(0)
+  const [loading, setLoading] = useState(true)
 
-  const loadAnalytics = useCallback(async () => {
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const [triggerDistribution, setTriggerDistribution] = useState<any[]>([])
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+
+  const loadDashboard = useCallback(async () => {
+    setLoading(true)
     try {
-      const [
-        { count: active_workers },
-        { data: claimsData },
-        { data: triggerData },
-      ] = await Promise.all([
-        supabase.from('worker_profiles').select('*', { count: 'exact', head: true }),
-        supabase.from('manual_claims').select('claim_status, claim_mode, payout_recommendations(recommended_payout, expected_payout, fraud_holdback_fh)'),
-        supabase.from('trigger_events').select('trigger_family').is('ended_at', null),
-      ])
-
-      // "Needs Review" = claims awaiting human attention
-      const needs_review = claimsData?.filter(
-        (c) => ['submitted', 'soft_hold_verification', 'fraud_escalated_review'].includes(c.claim_status)
-      ).length ?? 0
-      // "Fraud Detected" = rejected or post-approval flagged claims with high fraud holdback
-      const fraud_detected = claimsData?.filter(
-        (c) => (c.claim_status === 'rejected' || c.claim_status === 'post_approval_flagged') &&
-          (c.payout_recommendations as { fraud_holdback_fh?: number }[])?.[0]?.fraud_holdback_fh &&
-          ((c.payout_recommendations as { fraud_holdback_fh?: number }[])?.[0]?.fraud_holdback_fh ?? 0) > 0.30
-      ).length ?? 0
-      const approved_claims = claimsData?.filter(
-        (c) => ['approved', 'auto_approved', 'paid'].includes(c.claim_status)
-      ).length ?? 0
-      const total_claims = claimsData?.length ?? 0
-      const total_recommended_payout_inr = claimsData?.reduce(
-        (s, c) => s + ((c.payout_recommendations as { recommended_payout?: number; expected_payout?: number }[])?.[0]?.recommended_payout || 0), 0
-      ) ?? 0
-      const total_expected_payout_inr = claimsData?.reduce(
-        (s, c) => s + ((c.payout_recommendations as { recommended_payout?: number; expected_payout?: number }[])?.[0]?.expected_payout || 0), 0
-      ) ?? 0
-
-      const familyCounts: Record<string, number> = {}
-      triggerData?.forEach((t) => {
-        familyCounts[t.trigger_family] = (familyCounts[t.trigger_family] || 0) + 1
-      })
-
-      setData({
-        metrics: {
-          active_workers: active_workers ?? 0,
-          needs_review,
-          fraud_detected,
-          approved_claims,
-          total_claims,
-          total_recommended_payout_inr,
-          total_expected_payout_inr,
-        },
-        charts: { trigger_mix: familyCounts },
-      })
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Could not load analytics'
-      setFetchError(msg)
-      console.error('Could not load analytics', e)
-    }
+      const { count: wc } = await supabase.from('worker_profiles').select('*', { count: 'exact', head: true })
+      setWorkerCount(wc || 0)
+      const { data: claimData } = await supabase.from('manual_claims').select('*, worker_profiles(platform_name, city)').order('claimed_at', { ascending: false })
+      const allClaims = claimData || []
+      setClaims(allClaims)
+      const approved = allClaims.filter(c => ['approved', 'auto_approved', 'paid'].includes(c.claim_status))
+      setApprovedCount(approved.length)
+      const review = allClaims.filter(c => ['submitted', 'soft_hold_verification', 'fraud_escalated_review'].includes(c.claim_status))
+      setReviewCount(review.length)
+      const { data: prData } = await supabase.from('payout_recommendations').select('fraud_holdback_fh, recommended_payout')
+      if (prData) {
+        setFraudCount(prData.filter(p => (p.fraud_holdback_fh ?? 0) > 0.3).length)
+        setTotalPayouts(prData.reduce((s, p) => s + (p.recommended_payout || 0), 0))
+      }
+      const { data: trData } = await supabase.from('trigger_events').select('trigger_family').order('started_at', { ascending: false })
+      if (trData) {
+        const fam: Record<string, number> = {}
+        trData.forEach(t => { fam[t.trigger_family] = (fam[t.trigger_family] || 0) + 1 })
+        setTriggerDistribution(Object.entries(fam).map(([name, value]) => ({ name: name.charAt(0).toUpperCase() + name.slice(1), value })))
+      }
+    } catch (e) { console.error('Dashboard load error', e) }
+    setLoading(false)
   }, [supabase])
 
-  const loadRecentClaims = useCallback(async () => {
-    try {
-      const { data } = await supabase
-        .from('manual_claims')
-        .select('*, worker_profiles(profile_id, platform_name, city, profiles(full_name, email))')
-        .order('claimed_at', { ascending: false })
-        .limit(6)
-      setRecentClaims(data || [])
-    } catch (e) {
-      console.error('Could not load recent claims', e)
-    }
-  }, [supabase])
+  useEffect(() => { loadDashboard() }, [loadDashboard])
 
-  useEffect(() => {
-    loadAnalytics()
-    loadRecentClaims()
-  }, [loadAnalytics, loadRecentClaims])
-
-  if (!data) {
-    if (fetchError) {
+  const CHART_COLORS = ['#2563eb', '#22c55e', '#eab308', '#ef4444', '#6366f1', '#f97316']
+  const PIE_TOOLTIP = ({ active, payload }: { active?: boolean; payload?: { name: string; value: number }[] }) => {
+    if (active && payload?.length) {
       return (
-        <div className="p-8 max-w-7xl mx-auto gradient-mesh-admin min-h-screen flex items-center justify-center">
-          <div className="glass-card p-8 max-w-md w-full text-center space-y-4">
-            <AlertTriangle size={32} className="text-amber-400 mx-auto" />
-            <p className="text-white font-semibold">Dashboard unavailable</p>
-            <p className="text-neutral-400 text-sm leading-relaxed">{fetchError}</p>
-          </div>
+        <div className="card p-3 text-xs" style={{ boxShadow: 'var(--shadow-lg)' }}>
+          <p className="font-semibold" style={{ color: 'var(--text-primary)' }}>{payload[0].name}</p>
+          <p style={{ color: 'var(--text-secondary)' }}>{payload[0].value} events</p>
         </div>
       )
     }
+    return null
+  }
+
+  const statusBadge = (status: string) => {
+    switch (status) {
+      case 'approved': case 'auto_approved': case 'paid': return 'badge-success'
+      case 'submitted': case 'soft_hold_verification': return 'badge-warning'
+      case 'fraud_escalated_review': return 'badge-purple'
+      case 'rejected': case 'post_approval_flagged': return 'badge-danger'
+      default: return 'badge-info'
+    }
+  }
+  const statusLabel = (s: string) => ({ auto_approved: 'Auto', approved: 'Approved', paid: 'Paid', submitted: 'Submitted', soft_hold_verification: 'Verify', fraud_escalated_review: 'Fraud', rejected: 'Rejected', post_approval_flagged: 'Flagged' } as Record<string, string>)[s] || s
+
+  if (loading) {
     return (
-      <div className="p-8 max-w-7xl mx-auto gradient-mesh-admin min-h-screen">
-        <div className="animate-pulse space-y-6">
-          <div className="h-10 w-80 rounded-lg bg-white/5" />
-          <div className="grid grid-cols-4 gap-6">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="glass-card p-6 h-32 rounded-2xl" />
-            ))}
-          </div>
+      <div className="min-h-screen p-6 md:p-10 max-w-7xl mx-auto space-y-8">
+        <Skeleton width="280px" height="2.5rem" className="mb-3" />
+        <Skeleton width="400px" height="1rem" />
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          {[1,2,3,4,5].map(i => <div key={i} className="card p-5"><Skeleton width="100%" height="80px" /></div>)}
         </div>
       </div>
     )
   }
 
-  const { metrics, charts } = data
-  const triggerMixData = Object.entries(charts.trigger_mix || {}).map(
-    ([name, value]) => ({ name: name.toUpperCase(), value })
-  )
+  const kpiCards = [
+    { icon: <Users size={20} style={{ color: 'var(--success)' }} />, value: workerCount, label: 'Active Workers', sub: 'Covered on platform', accent: 'var(--success)' },
+    { icon: <Clock size={20} style={{ color: 'var(--warning)' }} />, value: reviewCount, label: 'Needs Review', sub: 'Manual / escalated / AI-uncertain', accent: 'var(--warning)' },
+    { icon: <AlertTriangle size={20} style={{ color: 'var(--danger)' }} />, value: fraudCount, label: 'Fraud Detected', sub: 'High fraud score — rejected', accent: 'var(--danger)' },
+    { icon: <CheckCircle size={20} style={{ color: 'var(--accent)' }} />, value: approvedCount, label: 'Approved Claims', sub: `Out of ${claims.length} total claims`, accent: 'var(--accent)' },
+    { icon: <IndianRupee size={20} style={{ color: 'var(--info)' }} />, value: totalPayouts, prefix: '₹', label: 'Total Payouts', sub: `Expected: ₹${totalPayouts.toLocaleString('en-IN')}`, accent: 'var(--info)' },
+  ]
 
-  const statusColor = (status: string) => {
-    switch (status) {
-      case 'approved':
-      case 'auto_approved':
-      case 'paid': return 'badge-emerald'
-      case 'submitted':
-      case 'soft_hold_verification': return 'badge-amber'
-      case 'fraud_escalated_review': return 'badge-purple'
-      case 'rejected':
-      case 'post_approval_flagged': return 'badge-red'
-      default: return 'badge-blue'
-    }
-  }
-
-  const statusIcon = (status: string) => {
-    switch (status) {
-      case 'approved':
-      case 'auto_approved':
-      case 'paid': return <CheckCircle size={12} />
-      case 'submitted':
-      case 'soft_hold_verification': return <Clock size={12} />
-      case 'fraud_escalated_review':
-      case 'post_approval_flagged': return <AlertTriangle size={12} />
-      default: return <Clock size={12} />
-    }
-  }
-
-  const statusLabel = (status: string) => {
-    const labels: Record<string, string> = {
-      auto_approved: 'Auto-Approved',
-      approved: 'Approved',
-      paid: 'Paid',
-      submitted: 'Submitted',
-      soft_hold_verification: 'Verification Hold',
-      fraud_escalated_review: 'Fraud Review',
-      rejected: 'Rejected',
-      post_approval_flagged: 'Post-Approval Flag',
-    }
-    return labels[status] || status
-  }
+  const pipelineData = [
+    { label: 'Approved', count: approvedCount, color: 'var(--success)' },
+    { label: 'Review', count: reviewCount, color: 'var(--warning)' },
+    { label: 'Fraud', count: fraudCount, color: 'var(--danger)' },
+  ]
+  const pipelineTotal = pipelineData.reduce((s, p) => s + p.count, 0) || 1
 
   return (
-    <div className="p-6 md:p-8 pb-28 max-w-7xl mx-auto gradient-mesh-admin min-h-screen">
-      {/* Header */}
-      <div className="mb-8 animate-fade-in-up">
-        <div className="flex items-center gap-3 mb-2">
-          <Shield size={28} className="text-blue-400" />
-          <h1 className="text-3xl font-bold">Insurance Operations Center</h1>
-        </div>
-        <p className="text-neutral-400">
-          Welcome back, <span className="text-white font-medium">{profile?.full_name}</span>.
-          Real-time parametric insurance metrics across all operational zones.
-        </p>
-      </div>
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5 mb-8">
-        <div className="glass-card p-6 animate-fade-in-up delay-100">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-sm font-medium text-neutral-400">Active Workers</span>
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-              <Users size={20} className="text-emerald-400" />
+    <div className="min-h-screen page-mesh">
+      <div className="p-6 md:p-10 pb-28 max-w-7xl mx-auto space-y-6">
+        {/* Header */}
+        <section className="animate-fade-in-up">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="p-2.5 rounded-lg" style={{ background: 'var(--accent-muted)' }}>
+              <Shield size={24} style={{ color: 'var(--accent)' }} />
             </div>
-          </div>
-          <div className="text-3xl font-bold mb-1"><AnimatedCounter value={metrics.active_workers} /></div>
-          <p className="text-xs text-emerald-400 flex items-center gap-1">
-            <TrendingUp size={12} /> Covered on platform
-          </p>
-        </div>
-
-        <div className="glass-card p-6 animate-fade-in-up delay-200">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-sm font-medium text-neutral-400">Needs Review</span>
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center">
-              <Clock size={20} className="text-amber-400" />
-            </div>
-          </div>
-          <div className="text-3xl font-bold mb-1"><AnimatedCounter value={metrics.needs_review} /></div>
-          <p className="text-xs text-amber-400">Manual / escalated / AI-uncertain</p>
-        </div>
-
-        <div className="glass-card p-6 animate-fade-in-up delay-250">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-sm font-medium text-neutral-400">Fraud Detected</span>
-            <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center">
-              <Fingerprint size={20} className="text-red-400" />
-            </div>
-          </div>
-          <div className="text-3xl font-bold text-red-400 mb-1"><AnimatedCounter value={metrics.fraud_detected} /></div>
-          <p className="text-xs text-red-400/70">High fraud score — rejected</p>
-        </div>
-
-        <div className="glass-card p-6 animate-fade-in-up delay-300">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-sm font-medium text-neutral-400">Approved Claims</span>
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-              <CheckCircle size={20} className="text-emerald-400" />
-            </div>
-          </div>
-          <div className="text-3xl font-bold mb-1"><AnimatedCounter value={metrics.approved_claims} /></div>
-          <p className="text-xs text-neutral-500">
-            Out of {metrics.total_claims} total claims
-          </p>
-        </div>
-
-        <div className="glass-card p-6 animate-fade-in-up delay-400">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-sm font-medium text-neutral-400">Total Payouts</span>
-            <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
-              <IndianRupee size={20} className="text-blue-400" />
-            </div>
-          </div>
-          <div className="text-3xl font-bold mb-1">
-            <AnimatedCounter value={metrics.total_recommended_payout_inr} prefix="₹" />
-          </div>
-          <p className="text-xs text-neutral-500">
-            Expected: ₹{metrics.total_expected_payout_inr?.toLocaleString('en-IN') || 0}
-          </p>
-        </div>
-      </div>
-
-      {/* Claim Pipeline Status Bar */}
-      {metrics.total_claims > 0 && (
-        <div className="glass-card p-5 mb-8 animate-fade-in-up delay-200">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-xs font-semibold text-neutral-400 uppercase tracking-wider flex items-center gap-2">
-              <Activity size={14} /> Claim Pipeline Status
-            </h3>
-            <span className="text-xs text-neutral-500">{metrics.total_claims} total claims</span>
-          </div>
-          <div className="flex rounded-lg overflow-hidden h-3 mb-3">
-            {metrics.approved_claims > 0 && (
-              <div
-                className="h-full"
-                style={{
-                  width: `${(metrics.approved_claims / metrics.total_claims) * 100}%`,
-                  background: 'linear-gradient(90deg, #10b981, #34d399)',
-                }}
-              />
-            )}
-            {metrics.needs_review > 0 && (
-              <div
-                className="h-full"
-                style={{
-                  width: `${(metrics.needs_review / metrics.total_claims) * 100}%`,
-                  background: 'linear-gradient(90deg, #f59e0b, #fbbf24)',
-                }}
-              />
-            )}
-            {metrics.fraud_detected > 0 && (
-              <div
-                className="h-full"
-                style={{
-                  width: `${(metrics.fraud_detected / metrics.total_claims) * 100}%`,
-                  background: 'linear-gradient(90deg, #ef4444, #f87171)',
-                }}
-              />
-            )}
-          </div>
-          <div className="flex items-center gap-5 text-xs">
-            <span className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-              <span className="text-neutral-400">Approved</span>
-              <span className="font-bold text-white">{metrics.approved_claims}</span>
-              <span className="text-neutral-600">({Math.round((metrics.approved_claims / metrics.total_claims) * 100)}%)</span>
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
-              <span className="text-neutral-400">Review</span>
-              <span className="font-bold text-white">{metrics.needs_review}</span>
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-red-400" />
-              <span className="text-neutral-400">Fraud</span>
-              <span className="font-bold text-white">{metrics.fraud_detected}</span>
-            </span>
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 mb-8">
-        {/* Trigger Distribution Chart */}
-        <div className="lg:col-span-2 glass-card p-6">
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold flex items-center gap-2">
-              <Activity size={20} className="text-blue-400" /> Trigger Distribution
-            </h2>
-            <p className="text-xs text-neutral-500 mt-1">
-              Disruption events by family across all zones
-            </p>
-          </div>
-          <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={triggerMixData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={55}
-                  outerRadius={95}
-                  paddingAngle={4}
-                  dataKey="value"
-                  stroke="none"
-                >
-                  {triggerMixData.map((_entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'rgba(10, 10, 20, 0.9)',
-                    borderColor: 'rgba(255,255,255,0.1)',
-                    color: '#fff',
-                    borderRadius: '0.75rem',
-                    backdropFilter: 'blur(12px)',
-                  }}
-                  itemStyle={{ color: '#fff' }}
-                />
-                <Legend
-                  verticalAlign="bottom"
-                  height={36}
-                  formatter={(value: string) => (
-                    <span style={{ color: '#a1a1aa', fontSize: '0.75rem' }}>{value}</span>
-                  )}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Recent Activity Feed */}
-        <div className="lg:col-span-3 glass-card p-6 animate-fade-in-up delay-400">
-          <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="text-lg font-semibold flex items-center gap-2">
-                <FileSearch size={20} className="text-purple-400" /> Recent Activity
-              </h2>
-              <p className="text-xs text-neutral-500 mt-1">Latest claim submissions and decisions</p>
+              <h1 className="text-2xl md:text-3xl font-semibold" style={{ color: 'var(--text-primary)' }}>Insurance Operations Center</h1>
+              <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>
+                Welcome back, <strong>{profile?.full_name}</strong>. Real-time parametric insurance metrics across all operational zones.
+              </p>
             </div>
-            <Link
-              href="/admin/reviews"
-              className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors"
-            >
-              View all <ArrowRight size={12} />
-            </Link>
           </div>
+        </section>
 
-          <div className="space-y-3 max-h-72 overflow-auto">
-            {recentClaims.length === 0 ? (
-              <div className="text-center py-12 text-neutral-500 text-sm">
-                No recent claim activity
+        {/* KPI Cards */}
+        <section className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          {kpiCards.map((c, i) => (
+            <div key={i} className={`card p-5 animate-fade-in-up delay-${(i + 1) * 100}`} style={{ borderLeft: `3px solid ${c.accent}` }}>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="p-1.5 rounded-md" style={{ background: 'var(--bg-tertiary)' }}>{c.icon}</div>
+                <span className="text-xs font-medium" style={{ color: 'var(--text-tertiary)' }}>{c.label}</span>
+              </div>
+              <span className="text-2xl font-bold block" style={{ color: 'var(--text-primary)' }}>
+                <AnimatedCounter value={c.value} prefix={c.prefix || ''} />
+              </span>
+              <span className="text-xs mt-1 block" style={{ color: 'var(--text-tertiary)' }}>{c.sub}</span>
+            </div>
+          ))}
+        </section>
+
+        {/* Pipeline Bar */}
+        <section className="card p-5 section-enter">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-semibold uppercase tracking-wider flex items-center gap-2" style={{ color: 'var(--text-tertiary)' }}>
+              <Activity size={16} /> Claim Pipeline Status
+            </h2>
+            <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{claims.length} total claims</span>
+          </div>
+          <div className="flex rounded-lg overflow-hidden h-3" style={{ background: 'var(--bg-tertiary)' }}>
+            {pipelineData.map((p, i) => p.count > 0 && (
+              <div key={i} className="h-full transition-all" style={{ width: `${(p.count / pipelineTotal) * 100}%`, background: p.color }} />
+            ))}
+          </div>
+          <div className="flex items-center gap-5 mt-3 text-xs">
+            {pipelineData.map((p, i) => (
+              <span key={i} className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full" style={{ background: p.color }} />
+                <span style={{ color: 'var(--text-tertiary)' }}>{p.label}</span>
+                <strong style={{ color: 'var(--text-primary)' }}>{p.count}</strong>
+                <span style={{ color: 'var(--text-tertiary)' }}>({Math.round((p.count / pipelineTotal) * 100)}%)</span>
+              </span>
+            ))}
+          </div>
+        </section>
+
+        {/* Charts + Recent Claims */}
+        <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Pie Chart */}
+          <div className="card p-6">
+            <div className="mb-4">
+              <h2 className="text-base font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                <Activity size={18} style={{ color: 'var(--info)' }} /> Trigger Distribution
+              </h2>
+              <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>Disruption events by family across all zones</p>
+            </div>
+            {triggerDistribution.length > 0 ? (
+              <div className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={triggerDistribution} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={55} outerRadius={90} paddingAngle={3} strokeWidth={0}>
+                      {triggerDistribution.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip content={<PIE_TOOLTIP />} />
+                    <Legend wrapperStyle={{ fontSize: '12px', color: 'var(--text-tertiary)' }} />
+                  </PieChart>
+                </ResponsiveContainer>
               </div>
             ) : (
-              recentClaims.map((claim) => (
-                <div
-                  key={claim.id}
-                  className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] transition-colors"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
-                      {statusIcon(claim.claim_status)}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">
-                        {claim.worker_profiles?.platform_name || 'Worker'} - {claim.worker_profiles?.city || 'Unknown'}
-                      </p>
-                      <p className="text-xs text-neutral-500 truncate">{claim.claim_reason}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0 ml-3">
-                    <span className={`badge ${statusColor(claim.claim_status)}`}>
-                      {statusLabel(claim.claim_status)}
-                    </span>
-                    <span className="text-xs text-neutral-600">
-                      {new Date(claim.claimed_at).toLocaleDateString()}
-                    </span>
-                  </div>
-                </div>
-              ))
+              <div className="h-64 flex items-center justify-center" style={{ color: 'var(--text-tertiary)' }}>
+                <p className="text-sm">No trigger events recorded</p>
+              </div>
             )}
           </div>
-        </div>
-      </div>
 
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-fade-in-up delay-500">
-        <Link href="/admin/reviews" className="glass-card p-5 flex items-center gap-4 group cursor-pointer">
-          <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center group-hover:bg-blue-500/20 transition-colors">
-            <FileSearch size={22} className="text-blue-400" />
+          {/* Recent Claims */}
+          <div className="card p-6 flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-base font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                  <FileSearch size={18} style={{ color: 'var(--accent)' }} /> Recent Activity
+                </h2>
+                <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>Latest claim submissions and decisions</p>
+              </div>
+              <Link href="/admin/reviews" className="text-xs font-medium flex items-center gap-1" style={{ color: 'var(--accent)' }}>
+                View all <ArrowRight size={12} />
+              </Link>
+            </div>
+            <div className="flex-1 space-y-2 overflow-y-auto max-h-[300px]">
+              {claims.slice(0, 6).map(c => (
+                <div key={c.id} className="flex items-center justify-between p-3 rounded-lg transition-colors" style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-primary)' }}>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`badge ${statusBadge(c.claim_status)}`}>{statusLabel(c.claim_status)}</span>
+                      <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                        {new Date(c.claimed_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </span>
+                    </div>
+                    <p className="text-sm truncate" style={{ color: 'var(--text-secondary)' }}>{c.claim_reason}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-          <div>
-            <p className="font-semibold text-sm">Review Claims</p>
-            <p className="text-xs text-neutral-500">Adjudicate pending submissions</p>
-          </div>
-          <ArrowRight size={16} className="text-neutral-600 ml-auto group-hover:text-white transition-colors" />
-        </Link>
-
-        <Link href="/admin/triggers" className="glass-card p-5 flex items-center gap-4 group cursor-pointer">
-          <div className="w-12 h-12 rounded-xl bg-amber-500/10 flex items-center justify-center group-hover:bg-amber-500/20 transition-colors">
-            <Zap size={22} className="text-amber-400" />
-          </div>
-          <div>
-            <p className="font-semibold text-sm">Trigger Engine</p>
-            <p className="text-xs text-neutral-500">Monitor and inject triggers</p>
-          </div>
-          <ArrowRight size={16} className="text-neutral-600 ml-auto group-hover:text-white transition-colors" />
-        </Link>
-
-        <Link href="/admin/users" className="glass-card p-5 flex items-center gap-4 group cursor-pointer">
-          <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center group-hover:bg-purple-500/20 transition-colors">
-            <Users size={22} className="text-purple-400" />
-          </div>
-          <div>
-            <p className="font-semibold text-sm">Manage Users</p>
-            <p className="text-xs text-neutral-500">Search and inspect worker profiles</p>
-          </div>
-          <ArrowRight size={16} className="text-neutral-600 ml-auto group-hover:text-white transition-colors" />
-        </Link>
+        </section>
       </div>
     </div>
   )

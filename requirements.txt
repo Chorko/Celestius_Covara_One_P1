@@ -1,6 +1,5 @@
 # Covara One — Python Dependencies
-# fastapi, uvicorn, supabase are actively used by the backend scaffold.
-# Remaining dependencies declare the target stack for future services.
+# Production backend requirements for the parametric insurance platform.
 
 # Backend API
 fastapi>=0.104.0
@@ -33,3 +32,10 @@ httpx>=0.25.0
 
 # Gemini AI
 google-generativeai>=0.3.0
+
+# Twilio (OTP + WhatsApp notifications)
+twilio>=9.0.0
+
+# Testing
+pytest>=7.4.0
+pytest-asyncio>=0.23.0
