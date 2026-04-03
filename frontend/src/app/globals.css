@@ -388,8 +388,8 @@ body, .card, .sidebar, .bottom-nav, .btn-primary, .btn-secondary, .input-field, 
   100% { background-position: 200% 0; }
 }
 @keyframes sectionEnter {
-  0% { opacity: 0; transform: translateY(12px); }
-  100% { opacity: 1; transform: translateY(0); }
+  0% { opacity: 0; }
+  100% { opacity: 1; }
 }
 @keyframes spin {
   from { transform: rotate(0deg); }
@@ -409,7 +409,7 @@ body, .card, .sidebar, .bottom-nav, .btn-primary, .btn-secondary, .input-field, 
   animation: pageEnter 0.35s ease-out both;
 }
 .section-enter {
-  animation: sectionEnter 0.5s ease-out both;
+  animation: sectionEnter 0.4s ease-out both;
 }
 
 .delay-100 { animation-delay: 60ms; }
@@ -438,8 +438,18 @@ body, .card, .sidebar, .bottom-nav, .btn-primary, .btn-secondary, .input-field, 
    SIDEBAR
    ═══════════════════════════════════════════════════════════ */
 .sidebar {
+  position: fixed !important;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  height: 100dvh;
+  overflow-y: auto;
+  overflow-x: hidden;
   background: var(--bg-secondary);
   border-right: 1px solid var(--border-primary);
+  /* Prevent child transforms from creating a new stacking context */
+  will-change: auto;
+  isolation: isolate;
 }
 .sidebar-nav-item {
   display: flex;
@@ -684,4 +694,15 @@ body, .card, .sidebar, .bottom-nav, .btn-primary, .btn-secondary, .input-field, 
 @media (min-width: 769px) {
   .mobile-bottom-nav { display: none !important; }
   .mobile-header { display: none !important; }
+  /* Ensure sidebar is always fixed on desktop and main scrolls independently */
+  .layout-root {
+    overflow: hidden;
+    height: 100vh;
+    height: 100dvh;
+  }
+  main {
+    overflow-y: auto;
+    height: 100vh;
+    height: 100dvh;
+  }
 }
