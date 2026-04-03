@@ -28,8 +28,8 @@ build/
 *.tsbuildinfo
 .npm
 .yarn/
-package-lock.json
-yarn.lock
+# NOTE: package-lock.json and yarn.lock are intentionally NOT ignored
+# They must be committed so CI can run `npm ci` for reproducible builds
 
 # ==========================
 # Data Science / Jupyter
