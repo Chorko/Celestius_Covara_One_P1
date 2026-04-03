@@ -17,24 +17,35 @@
 | Workers endpoints (profile, stats) | ✅ Implemented |
 | Zones endpoints (list, detail, cities) | ✅ Implemented |
 | Analytics endpoint (admin KPIs) | ✅ Implemented |
+| Ingest endpoints (weather, AQI, traffic, scan-all-zones) | ✅ Implemented |
 | 8-stage claim pipeline | ✅ Implemented |
-| Pricing engine (actuarial formulas) | ✅ Implemented |
-| Fraud scoring engine | ✅ Implemented |
+| IRDAI pricing engine (₹28/₹42 weekly fixed plans) | ✅ Implemented |
+| Fraud scoring engine (5-layer Ghost Shift Detector) | ✅ Implemented |
+| TomTom route plausibility in Layer 2 | ✅ Implemented |
 | Manual claim verifier | ✅ Implemented |
 | Gemini AI claim narrative | ✅ Implemented |
 | EXIF evidence extraction (forensic) | ✅ Implemented |
-| Anti-spoofing verification (Layer 3) | ✅ Implemented |
+| Anti-spoofing verification | ✅ Implemented |
 | Image forensics & AI detection | ✅ Implemented |
 | Region controls & behavioral identity | ✅ Implemented |
 | Region validation cache (fast-lane) | ✅ Implemented |
 | Payout safety (event-ID, worker-event uniqueness) | ✅ Implemented |
 | Claim state machine (8 states, soft hold) | ✅ Implemented |
 | Post-approval fraud controls | ✅ Implemented |
-| Supabase SQL schema (14 tables + 3 migrations) | ✅ Implemented |
+| Supabase SQL schema (14 tables, unified migration) | ✅ Implemented |
 | Row-Level Security policies | ✅ Implemented |
 | CLI seed system | ✅ Implemented |
-| Redis caching layer | 📋 Planned |
-| ML training pipeline | 📋 Planned |
+| KYC service (Sandbox.co.in — Aadhaar, PAN, Bank) | ✅ Implemented |
+| Twilio WhatsApp + OTP (7 templates) | ✅ Implemented |
+| OpenWeather live data (weather + temp triggers) | ✅ Live |
+| CPCB AQI live data (data.gov.in, 511 stations) | ✅ Live |
+| TomTom Traffic Flow + Routing | ✅ Live |
+| ApiProviderPool (round-robin + LRU cache) | ✅ Implemented |
+| Docker multi-stage build | ✅ Implemented |
+| GitHub Actions CI/CD (3-job pipeline) | ✅ Implemented |
+| Automated pytest suite (61 tests, 100% pass) | ✅ Implemented |
+| Redis caching layer | ✅ Defined (docker-compose) |
+| ML live inference | ⚠️ Hardcoded p=0.15 baseline |
 
 ---
 
@@ -56,8 +67,12 @@
 # From the repo root:
 pip install -r requirements.txt
 
-# Set environment variables (see backend/.env)
+# Set environment variables (see .env.example)
+cp .env.example .env  # fill in your keys
 uvicorn backend.app.main:app --reload --port 8000
+
+# Or with Docker:
+docker compose up --build
 ```
 
 Then open:
@@ -178,15 +193,22 @@ flowchart TD
 
 ## Database Schema (backend/sql/)
 
-14 tables across 4 SQL files:
-
 | File | Contents |
 |------|----------|
-| `01_supabase_platform_schema.sql` | profiles, worker_profiles, insurer_profiles, zones, trigger_events, manual_claims, claim_evidence, payout_recommendations, claim_reviews, audit_events, and more |
-| `02_auth_triggers.sql` | Auth event triggers for automatic profile creation |
-| `03_rls_policies.sql` | Row-Level Security policies for all tables |
-| `04_storage_policies.sql` | Storage bucket policies for claim evidence uploads |
-| `10_payout_safety.sql` | *(Consolidated into `13_unified_extensions.sql`)* |
-| `11_claim_states.sql` | *(Consolidated into `13_unified_extensions.sql`)* |
-| `12_region_validation_cache.sql` | *(Consolidated into `13_unified_extensions.sql`)* |
-| `13_unified_extensions.sql` | Payout safety, expanded claim state machine (8 states), regional validation cache with cluster spike detection (unified migration) |
+| `00_unified_migration.sql` | **Single-file schema** — all 14+2 tables, RLS, auth triggers, storage policies, grants (idempotent) |
+| `06_synthetic_seed.sql` | 62KB seed: demo users, zones, trigger events, claims |
+
+> The schema is fully consolidated. Run `00_unified_migration.sql` in Supabase SQL Editor to bootstrap a fresh project.
+
+---
+
+## New Services (Phase 2)
+
+| Module | File | Responsibility |
+|--------|------|---------------|
+| **KYC Service** | `kyc_service.py` | Sandbox.co.in Aadhaar OTP, PAN verify, bank verify. 3-tier progressive KYC ladder. |
+| **Twilio Service** | `twilio_service.py` | WhatsApp + OTP. 7 notification templates. Mock fallback. |
+| **Trigger Evaluator** | `trigger_evaluator.py` | Threshold evaluation bridge for all 15+ trigger families. |
+| **Zone Coordinates** | `zone_coordinates.py` | Zone-to-coordinate mapping for batch scanning. |
+| **Auto Claim Engine** | `auto_claim_engine.py` | Zero-touch claim initiation from verified trigger events. |
+

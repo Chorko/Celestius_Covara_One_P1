@@ -1,0 +1,15 @@
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+  "python.analysis.extraPaths": ["${workspaceFolder}"],
+  "python.terminal.activateEnvironment": true,
+  "python.analysis.typeCheckingMode": "basic",
+  "python.pythonPath": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+  "python.analysis.autoSearchPaths": true,
+  "python.analysis.diagnosticSeverityOverrides": {
+    "reportMissingModuleSource": "none"
+  },
+  "pyre.searchRoots": ["${workspaceFolder}"],
+  "pyre.sitePackagePath": "${workspaceFolder}\\.venv\\Lib\\site-packages",
+  "pyre.pythonPath": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+  "css.lint.unknownAtRules": "ignore"
+}

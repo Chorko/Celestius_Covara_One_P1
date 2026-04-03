@@ -1,18 +1,20 @@
 %% Covara One — Gig Worker Journey
-%% Status: Target architecture (no code implementation exists yet)
-%% Source: root README.md
+%% Status: Production-implemented
+%% Updated: 2026-04-03
 
 flowchart LR
-    A["📝 Sign Up<br/>Zone, shift, earnings"] --> B["💰 Get Weekly<br/>Premium Quote"]
+    A["📝 Sign Up<br/>Zone, shift, earnings"] --> KY["🪪 KYC<br/>Aadhaar OTP / PAN<br/>(Sandbox.co.in)"]
+    KY --> B["💰 Get Weekly<br/>Premium Quote<br/>₹28 / ₹42"]
     B --> C["✅ Activate<br/>Weekly Cover"]
-    C --> D["⚠️ Receive<br/>Disruption Alert"]
+    C --> D["⚠️ Receive<br/>WhatsApp Alert<br/>(Twilio)"]
     D --> E["📋 Auto-Claim<br/>Initiated"]
-    E --> F["🔍 Fraud Check<br/>& Verification"]
-    F --> G["💸 Payout<br/>Notification"]
+    E --> F["🛡️ 5-Layer Fraud Check<br/>incl. TomTom route plausibility"]
+    F --> G["💸 Payout<br/>WhatsApp confirmation"]
     G --> H["📊 Trust Score<br/>Updated"]
     H --> B
 
     style A fill:#4a9eff,color:#fff
+    style KY fill:#2ecc71,color:#fff
     style B fill:#4a9eff,color:#fff
     style C fill:#2ecc71,color:#fff
     style D fill:#f39c12,color:#fff

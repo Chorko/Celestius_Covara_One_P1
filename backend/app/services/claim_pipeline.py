@@ -12,6 +12,8 @@ Orchestrates the entire claim decision process:
 8. Audit logging
 """
 
+from __future__ import annotations
+
 from datetime import datetime, timezone
 from backend.app.services.severity import calculate_severity
 from backend.app.services.pricing import (
@@ -20,6 +22,7 @@ from backend.app.services.pricing import (
 )
 from backend.app.services.fraud_engine import evaluate_fraud_risk
 from backend.app.services.manual_claim_verifier import evaluate_manual_claim
+from backend.app.services.region_validation_cache import should_fast_lane
 
 # ── Parametric Payout Bands ──────────────────────────────────────────────
 PLAN_WEEKLY_BENEFITS = {
@@ -46,7 +49,7 @@ PAYOUT_BANDS = {
 }
 
 
-def map_severity_to_band(severity_s: float, trigger_band: str = None) -> int:
+def map_severity_to_band(severity_s: float, trigger_band: str | None = None) -> int:
     """Map composite severity score to parametric payout band (1, 2, or 3)."""
     if trigger_band == "escalation" or severity_s >= 0.70:
         return 3
@@ -60,7 +63,7 @@ def calculate_parametric_payout(band: int, plan: str = "essential") -> dict:
     """Calculate the parametric payout based on band and plan."""
     weekly_benefit = PLAN_WEEKLY_BENEFITS.get(plan, 3000)
     band_info = PAYOUT_BANDS.get(band, PAYOUT_BANDS[1])
-    payout = weekly_benefit * band_info["multiplier"]  # type: ignore
+    payout = weekly_benefit * float(band_info["multiplier"])
 
     return {
         "plan": plan,
@@ -68,7 +71,7 @@ def calculate_parametric_payout(band: int, plan: str = "essential") -> dict:
         "band": band,
         "band_label": band_info["label"],
         "band_multiplier": band_info["multiplier"],
-        "parametric_payout": round(payout, 2),
+        "parametric_payout": round(float(payout), 2),  # type: ignore[call-overload]
     }
 
 
@@ -77,12 +80,13 @@ def run_claim_pipeline(
     worker_context: dict,
     trigger_context: dict | None,
     claim_mode: str,  # 'manual' or 'trigger_auto'
-    evidence_records: list[dict] = None,
-    claim_record: dict = None,
-    device_context: dict = None,
+    evidence_records: list[dict] | None = None,
+    claim_record: dict | None = None,
+    device_context: dict | None = None,
     zone_claims_last_hour: int = 0,
     zone_avg_hourly: float = 5.0,
     plan: str = "essential",
+    validated_incidents: list[dict] | None = None,
 ) -> dict:
 
     trace = []
@@ -127,6 +131,32 @@ def run_claim_pipeline(
         "exposure_check",
         "Shift overlap and zone confirmed for worker context.",
     )
+
+    # --- 3b. Region Validation Fast-Lane ---
+    fast_lane_eligible = False
+    if trigger_context and (validated_incidents is not None):
+        trigger_family = trigger_context.get("trigger_family", "")
+        claim_ts = trigger_context.get("started_at", now_iso())
+        fl = should_fast_lane(
+            zone_id=worker_context.get("zone_id", ""),
+            trigger_family=trigger_family,
+            claim_timestamp=claim_ts,
+            validated_incidents=validated_incidents,
+            zone_claims_last_hour=zone_claims_last_hour,
+        )
+        fast_lane_eligible = fl["eligible"]
+        add_trace(
+            3,
+            "region_fast_lane",
+            fl["reason"],
+        )
+        if fl["cluster_spike"]:
+            # Override: force batch validation
+            add_trace(
+                3,
+                "cluster_spike_override",
+                "Cluster spike detected — all claims routed to batch validation.",
+            )
 
     # --- Manual Strictness ---
     manual_held = False

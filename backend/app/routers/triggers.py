@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 
 from backend.app.dependencies import require_insurer_admin
 from backend.app.supabase_client import get_supabase_admin
-from backend.app.services.trigger_engine import TRIGGER_LIBRARY
+from backend.app.services.trigger_engine import TRIGGER_LIBRARY, get_overlapping_triggers
 
 router = APIRouter(prefix="/triggers", tags=["Triggers"])
 
@@ -36,6 +36,23 @@ async def get_trigger_library():
         "triggers": list(TRIGGER_LIBRARY.values()),
         "count": len(TRIGGER_LIBRARY),
     }
+
+
+@router.get("/overlap")
+async def get_overlapping(
+    zone_id: str,
+    shift_start: str,
+    shift_end: str,
+):
+    """
+    Find all trigger events that temporally overlap with a worker's
+    shift window in the given zone.  Uses the trigger-engine overlap
+    logic (event started before shift ends AND event ended after shift
+    starts or is still ongoing).
+    """
+    sb = get_supabase_admin()
+    results = get_overlapping_triggers(sb, zone_id, shift_start, shift_end)
+    return {"zone_id": zone_id, "overlapping_triggers": results, "count": len(results)}
 
 
 @router.get("/live")
@@ -90,3 +107,4 @@ async def simulate_trigger(body: SimulateTriggerRequest):
     resp = sb.table("trigger_events").insert(ins_data).execute()
 
     return {"status": "simulated", "event": resp.data[0]}
+
