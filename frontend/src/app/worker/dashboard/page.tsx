@@ -34,6 +34,9 @@ export default function WorkerDashboard() {
   const [activating, setActivating] = useState(false)
   const [activationMsg, setActivationMsg] = useState<string | null>(null)
   const [dashboardError, setDashboardError] = useState<string | null>(null)
+  // Per-section loading flags for progressive rendering
+  const [claimsLoading, setClaimsLoading] = useState(true)
+  const [quoteLoading, setQuoteLoading] = useState(true)
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const loadDashboardData = useCallback(async () => {
@@ -58,6 +61,8 @@ export default function WorkerDashboard() {
         } else {
           setDashboardError(wError.message)
         }
+        setClaimsLoading(false)
+        setQuoteLoading(false)
         return
       }
       wData = data
@@ -69,76 +74,90 @@ export default function WorkerDashboard() {
       } else {
         setDashboardError(e instanceof Error ? e.message : 'Failed to load dashboard')
       }
+      setClaimsLoading(false)
+      setQuoteLoading(false)
       return
     }
 
-    try {
-      const { data: statsData } = await supabase
-        .from('platform_worker_daily_stats')
-        .select('stat_date, gross_earnings_inr, completed_orders, gps_consistency_score')
-        .eq('worker_profile_id', wData.profile_id)
-        .order('stat_date', { ascending: true })
-        .limit(14)
-      setStats(statsData || [])
-    } catch(e) { console.error("Could not fetch dashboard stats", e) }
+    // ── Fetch remaining sections in parallel so each updates immediately ──
+    await Promise.allSettled([
+      // Stats + Triggers
+      (async () => {
+        try {
+          const { data: statsData } = await supabase
+            .from('platform_worker_daily_stats')
+            .select('stat_date, gross_earnings_inr, completed_orders, gps_consistency_score')
+            .eq('worker_profile_id', wData.profile_id)
+            .order('stat_date', { ascending: true })
+            .limit(14)
+          setStats(statsData || [])
+        } catch(e) { console.error('Could not fetch dashboard stats', e) }
 
-    if (wData?.preferred_zone_id) {
-       const { data: tData } = await supabase
-         .from('trigger_events')
-         .select('*')
-         .eq('zone_id', wData.preferred_zone_id)
-         .order('started_at', { ascending: false })
-         .limit(5)
-       setActiveTriggers(tData || [])
-    }
-
-    try {
-      const { data: claimData } = await supabase
-        .from('manual_claims')
-        .select('claim_status')
-        .eq('worker_profile_id', wData.profile_id)
-      if (claimData) {
-        const pending = claimData.filter(c => ['submitted', 'soft_hold_verification', 'fraud_escalated_review'].includes(c.claim_status)).length
-        const approved = claimData.filter(c => ['approved', 'auto_approved', 'paid'].includes(c.claim_status)).length
-        const rejected = claimData.filter(c => ['rejected', 'post_approval_flagged'].includes(c.claim_status)).length
-        setClaimCounts({ pending, approved, rejected, total: claimData.length })
-      }
-    } catch (e) { console.error('Could not load claim counts', e) }
-
-    try {
-      let observed_weekly_gross: number | null = null
-      try {
-        const { data: recentStats } = await supabase
-          .from('platform_worker_daily_stats')
-          .select('gross_earnings_inr')
-          .eq('worker_profile_id', wData.profile_id)
-          .order('stat_date', { ascending: false })
-          .limit(7)
-        if (recentStats && recentStats.length >= 3) {
-          const totalGross = recentStats.reduce((s, r) => s + (r.gross_earnings_inr || 0), 0)
-          observed_weekly_gross = Math.round((totalGross / recentStats.length) * 6)
+        if (wData?.preferred_zone_id) {
+          try {
+            const { data: tData } = await supabase
+              .from('trigger_events')
+              .select('*')
+              .eq('zone_id', wData.preferred_zone_id)
+              .order('started_at', { ascending: false })
+              .limit(5)
+            setActiveTriggers(tData || [])
+          } catch(e) { console.error('Could not fetch triggers', e) }
         }
-      } catch { /* fallback below */ }
+      })(),
 
-      const fallback_weekly_gross = Math.round((wData.avg_hourly_income_inr || 0) * 8 * 6)
-      const weekly_gross = observed_weekly_gross ?? fallback_weekly_gross
+      // Claims summary — per-section loading
+      (async () => {
+        try {
+          const { data: claimData } = await supabase
+            .from('manual_claims')
+            .select('claim_status')
+            .eq('worker_profile_id', wData.profile_id)
+          if (claimData) {
+            const pending = claimData.filter(c => ['submitted', 'soft_hold_verification', 'fraud_escalated_review'].includes(c.claim_status)).length
+            const approved = claimData.filter(c => ['approved', 'auto_approved', 'paid'].includes(c.claim_status)).length
+            const rejected = claimData.filter(c => ['rejected', 'post_approval_flagged'].includes(c.claim_status)).length
+            setClaimCounts({ pending, approved, rejected, total: claimData.length })
+          }
+        } catch (e) { console.error('Could not load claim counts', e) }
+        finally { setClaimsLoading(false) }
+      })(),
 
-      const B = Math.round(weekly_gross * 0.70)
-      const raw_cap = Math.round(B * 0.75)
-      const payout_cap = Math.min(raw_cap, 10000)
+      // Policy quote — per-section loading
+      (async () => {
+        try {
+          let observed_weekly_gross: number | null = null
+          try {
+            const { data: recentStats } = await supabase
+              .from('platform_worker_daily_stats')
+              .select('gross_earnings_inr')
+              .eq('worker_profile_id', wData.profile_id)
+              .order('stat_date', { ascending: false })
+              .limit(7)
+            if (recentStats && recentStats.length >= 3) {
+              const totalGross = recentStats.reduce((s, r) => s + (r.gross_earnings_inr || 0), 0)
+              observed_weekly_gross = Math.round((totalGross / recentStats.length) * 6)
+            }
+          } catch { /* fallback below */ }
 
-      const cityFactor: Record<string, number> = { Mumbai: 1.3, Delhi: 1.2, Bangalore: 1.25 }
-      const C = cityFactor[wData.city] ?? 1.0
-      const E = wData.trust_score ?? 0.8
-      setPolicyQuote({
-        weekly_premium_inr: Math.round(B * 0.035 * E * C),
-        max_payout_cap_inr: payout_cap,
-        observed_weekly_gross: weekly_gross,
-        B,
-        E: Math.round(E * 100) / 100,
-        C,
-      })
-    } catch(e) { console.error("Could not compute policy quote", e) }
+          const fallback_weekly_gross = Math.round((wData.avg_hourly_income_inr || 0) * 8 * 6)
+          const weekly_gross = observed_weekly_gross ?? fallback_weekly_gross
+          const B = Math.round(weekly_gross * 0.70)
+          const raw_cap = Math.round(B * 0.75)
+          const payout_cap = Math.min(raw_cap, 10000)
+          const cityFactor: Record<string, number> = { Mumbai: 1.3, Delhi: 1.2, Bangalore: 1.25 }
+          const C = cityFactor[wData.city] ?? 1.0
+          const E = wData.trust_score ?? 0.8
+          setPolicyQuote({
+            weekly_premium_inr: Math.round(B * 0.035 * E * C),
+            max_payout_cap_inr: payout_cap,
+            observed_weekly_gross: weekly_gross,
+            B, E: Math.round(E * 100) / 100, C,
+          })
+        } catch(e) { console.error('Could not compute policy quote', e) }
+        finally { setQuoteLoading(false) }
+      })(),
+    ])
   }, [supabase, profile])
 
   useEffect(() => {
@@ -268,52 +287,73 @@ export default function WorkerDashboard() {
         </section>
 
         {/* ===== CLAIMS SUMMARY ===== */}
-        {claimCounts.total > 0 && (
-          <section className="section-enter">
-            <div className="card p-5">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-semibold uppercase tracking-wider flex items-center gap-2" style={{ color: 'var(--text-tertiary)' }}>
-                  <ClipboardList size={16} /> My Claims Summary
-                </h2>
-                <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{claimCounts.total} total</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="flex-1 flex rounded-lg overflow-hidden h-2.5" style={{ background: 'var(--bg-tertiary)' }}>
-                  {claimCounts.approved > 0 && (
-                    <div className="h-full transition-all" style={{ width: `${(claimCounts.approved / claimCounts.total) * 100}%`, background: 'var(--success)' }} />
-                  )}
-                  {claimCounts.pending > 0 && (
-                    <div className="h-full transition-all" style={{ width: `${(claimCounts.pending / claimCounts.total) * 100}%`, background: 'var(--warning)' }} />
-                  )}
-                  {claimCounts.rejected > 0 && (
-                    <div className="h-full transition-all" style={{ width: `${(claimCounts.rejected / claimCounts.total) * 100}%`, background: 'var(--danger)' }} />
-                  )}
+        <section className="section-enter">
+          <div className="card p-5">
+            {claimsLoading ? (
+              <div className="space-y-3">
+                <Skeleton width="180px" height="1rem" />
+                <Skeleton width="100%" height="10px" className="rounded-full" />
+                <div className="flex gap-4">
+                  <Skeleton width="80px" height="0.75rem" />
+                  <Skeleton width="80px" height="0.75rem" />
+                  <Skeleton width="80px" height="0.75rem" />
                 </div>
               </div>
-              <div className="flex items-center gap-4 mt-3 text-xs">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full" style={{ background: 'var(--success)' }} />
-                  <span style={{ color: 'var(--text-tertiary)' }}>Approved</span>
-                  <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{claimCounts.approved}</span>
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full" style={{ background: 'var(--warning)' }} />
-                  <span style={{ color: 'var(--text-tertiary)' }}>Pending</span>
-                  <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{claimCounts.pending}</span>
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full" style={{ background: 'var(--danger)' }} />
-                  <span style={{ color: 'var(--text-tertiary)' }}>Rejected</span>
-                  <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{claimCounts.rejected}</span>
-                </span>
-              </div>
-            </div>
-          </section>
-        )}
+            ) : claimCounts.total === 0 ? null : (
+              <>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-sm font-semibold uppercase tracking-wider flex items-center gap-2" style={{ color: 'var(--text-tertiary)' }}>
+                    <ClipboardList size={16} /> My Claims Summary
+                  </h2>
+                  <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{claimCounts.total} total</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 flex rounded-lg overflow-hidden h-2.5" style={{ background: 'var(--bg-tertiary)' }}>
+                    {claimCounts.approved > 0 && (
+                      <div className="h-full transition-all" style={{ width: `${(claimCounts.approved / claimCounts.total) * 100}%`, background: 'var(--success)' }} />
+                    )}
+                    {claimCounts.pending > 0 && (
+                      <div className="h-full transition-all" style={{ width: `${(claimCounts.pending / claimCounts.total) * 100}%`, background: 'var(--warning)' }} />
+                    )}
+                    {claimCounts.rejected > 0 && (
+                      <div className="h-full transition-all" style={{ width: `${(claimCounts.rejected / claimCounts.total) * 100}%`, background: 'var(--danger)' }} />
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-4 mt-3 text-xs">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full" style={{ background: 'var(--success)' }} />
+                    <span style={{ color: 'var(--text-tertiary)' }}>Approved</span>
+                    <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{claimCounts.approved}</span>
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full" style={{ background: 'var(--warning)' }} />
+                    <span style={{ color: 'var(--text-tertiary)' }}>Pending</span>
+                    <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{claimCounts.pending}</span>
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full" style={{ background: 'var(--danger)' }} />
+                    <span style={{ color: 'var(--text-tertiary)' }}>Rejected</span>
+                    <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{claimCounts.rejected}</span>
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
+        </section>
 
         {/* ===== COVERAGE QUOTE ===== */}
-        {policyQuote && (
-          <section className="section-enter">
+        <section className="section-enter">
+          {quoteLoading ? (
+            <div className="card p-6 md:p-8" style={{ borderLeft: '3px solid var(--accent)' }}>
+              <div className="space-y-3">
+                <Skeleton width="160px" height="1.25rem" />
+                <Skeleton width="220px" height="2.5rem" />
+                <Skeleton width="280px" height="0.75rem" />
+                <Skeleton width="180px" height="2.5rem" className="mt-4" />
+              </div>
+            </div>
+          ) : policyQuote ? (
             <div className="card p-6 md:p-8" style={{ borderLeft: '3px solid var(--accent)' }}>
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
                 <div className="space-y-3 flex-1">
@@ -355,8 +395,8 @@ export default function WorkerDashboard() {
                 </div>
               </div>
             </div>
-          </section>
-        )}
+          ) : null}
+        </section>
 
         {/* ===== CHART + TRIGGERS ===== */}
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
