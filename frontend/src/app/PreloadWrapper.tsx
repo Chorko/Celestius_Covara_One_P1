@@ -8,8 +8,8 @@ export function PreloadWrapper({ children }: { children: React.ReactNode }) {
   const [hide, setHide] = useState(false)
 
   useEffect(() => {
-    const t1 = setTimeout(() => setLoaded(true), 1600)
-    const t2 = setTimeout(() => setHide(true), 2200)
+    const t1 = setTimeout(() => setLoaded(true), 1000)
+    const t2 = setTimeout(() => setHide(true), 1400)
     return () => { clearTimeout(t1); clearTimeout(t2) }
   }, [])
 
@@ -18,7 +18,7 @@ export function PreloadWrapper({ children }: { children: React.ReactNode }) {
       {!hide && (
         <div className={`preload-screen ${loaded ? 'hide' : ''}`}>
           <div className="preload-logo">
-            <Shield className="text-emerald-400" size={32} />
+            <Shield style={{ color: 'var(--accent)' }} size={28} />
           </div>
           <span className="preload-title">Covara One</span>
           <span className="preload-subtitle">Parametric Income Protection</span>

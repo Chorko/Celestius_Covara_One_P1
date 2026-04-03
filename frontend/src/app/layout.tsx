@@ -1,15 +1,17 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-jetbrains-mono",
   subsets: ["latin"],
+  display: "swap",
 });
 
 export const viewport: Viewport = {
@@ -21,11 +23,13 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: "Covara One — Parametric Income Protection",
-  description: "AI-powered parametric income-protection platform for gig workers",
+  description:
+    "AI-powered parametric income-protection platform for gig workers",
 };
 
 import { Analytics } from "@vercel/analytics/next";
 import { PreloadWrapper } from "./PreloadWrapper";
+import ThemeProvider from "@/components/ThemeProvider";
 
 export default function RootLayout({
   children,
@@ -33,11 +37,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" data-theme="dark" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased w-full min-w-full`}
+        className={`${inter.variable} ${jetbrainsMono.variable} antialiased w-full min-w-full`}
       >
-        <PreloadWrapper>{children}</PreloadWrapper>
+        <ThemeProvider>
+          <PreloadWrapper>{children}</PreloadWrapper>
+        </ThemeProvider>
         <Analytics />
       </body>
     </html>

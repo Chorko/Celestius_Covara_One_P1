@@ -396,3 +396,34 @@ async def flag_post_approval(
         "trust_score_penalty": penalty_result,
     }
 
+
+# ── Zero-Touch Auto-Claim Engine ──────────────────────────────────────
+
+
+@router.post(
+    "/auto-process",
+    dependencies=[Depends(require_insurer_admin)],
+    summary="Zero-Touch Auto-Claim Engine",
+    description=(
+        "Scans recent trigger events and automatically creates claims for "
+        "every eligible worker — no manual filing required. "
+        "This is the parametric insurance core: workers get paid without lifting a finger. "
+        "Admin only. Safe to run repeatedly — duplicate claims are prevented by DB constraints."
+    ),
+)
+async def auto_process_claims(lookback_hours: int = 6):
+    """
+    Run the zero-touch auto-claim engine.
+
+    Finds all trigger_events in the last `lookback_hours` with severity
+    'claim' or 'escalation', identifies eligible workers, runs the full
+    claim pipeline for each, and persists results + payout recommendations.
+    """
+    from backend.app.services.auto_claim_engine import run_auto_claim_engine
+    sb = get_supabase_admin()
+    result = await run_auto_claim_engine(sb, lookback_hours=lookback_hours)
+    return {
+        "status": "complete",
+        "lookback_hours": lookback_hours,
+        **result,
+    }
