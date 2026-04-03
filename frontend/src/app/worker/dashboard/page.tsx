@@ -35,6 +35,7 @@ export default function WorkerDashboard() {
   const [activationMsg, setActivationMsg] = useState<string | null>(null)
   const [dashboardError, setDashboardError] = useState<string | null>(null)
   // Per-section loading flags for progressive rendering
+  const [workerLoading, setWorkerLoading] = useState(true)
   const [claimsLoading, setClaimsLoading] = useState(true)
   const [quoteLoading, setQuoteLoading] = useState(true)
 
@@ -61,12 +62,14 @@ export default function WorkerDashboard() {
         } else {
           setDashboardError(wError.message)
         }
+        setWorkerLoading(false)
         setClaimsLoading(false)
         setQuoteLoading(false)
         return
       }
       wData = data
       setWorkerDetails(wData)
+      setWorkerLoading(false)
     } catch (e: unknown) {
       clearTimeout(tid)
       if (controller.signal.aborted || (e instanceof Error && e.name === 'AbortError')) {
@@ -74,6 +77,7 @@ export default function WorkerDashboard() {
       } else {
         setDashboardError(e instanceof Error ? e.message : 'Failed to load dashboard')
       }
+      setWorkerLoading(false)
       setClaimsLoading(false)
       setQuoteLoading(false)
       return
@@ -188,25 +192,28 @@ export default function WorkerDashboard() {
     ? Math.round(stats.reduce((sum, s) => sum + (s.gps_consistency_score || 0), 0) / stats.length * 100)
     : '--'
 
-  if (!workerDetails) {
-    if (dashboardError) {
-      return (
-        <div className="min-h-screen flex items-center justify-center p-4">
-          <div className="card p-8 max-w-md w-full text-center space-y-4">
-            <AlertTriangle size={32} style={{ color: 'var(--warning)' }} className="mx-auto" />
-            <p className="font-semibold" style={{ color: 'var(--text-primary)' }}>Dashboard unavailable</p>
-            <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{dashboardError}</p>
-          </div>
-        </div>
-      )
-    }
+  if (dashboardError && !workerDetails) {
     return (
-      <div className="min-h-screen">
-        <div className="p-6 md:p-10 pb-28 max-w-7xl mx-auto space-y-8">
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="card p-8 max-w-md w-full text-center space-y-4">
+          <AlertTriangle size={32} style={{ color: 'var(--warning)' }} className="mx-auto" />
+          <p className="font-semibold" style={{ color: 'var(--text-primary)' }}>Dashboard unavailable</p>
+          <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{dashboardError}</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (workerLoading) {
+    return (
+      <div className="min-h-screen page-mesh">
+        <div className="p-6 md:p-10 pb-28 max-w-7xl mx-auto space-y-6">
+          {/* Header skeleton */}
           <section className="animate-fade-in-up">
             <Skeleton width="280px" height="2.5rem" className="mb-3" />
-            <Skeleton width="200px" height="0.875rem" />
+            <Skeleton width="320px" height="0.875rem" />
           </section>
+          {/* KPI skeletons */}
           <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[1,2,3,4].map(i => (
               <div key={i} className="card p-5 space-y-3">
@@ -216,10 +223,34 @@ export default function WorkerDashboard() {
               </div>
             ))}
           </section>
+          {/* Claims Summary skeleton */}
+          <section className="section-enter">
+            <div className="card p-5 space-y-3">
+              <Skeleton width="180px" height="1rem" />
+              <Skeleton width="100%" height="10px" className="rounded-full" />
+              <div className="flex gap-4">
+                <Skeleton width="80px" height="0.75rem" />
+                <Skeleton width="80px" height="0.75rem" />
+                <Skeleton width="80px" height="0.75rem" />
+              </div>
+            </div>
+          </section>
+          {/* Streetwise Cover skeleton */}
+          <section className="section-enter">
+            <div className="card p-6 md:p-8" style={{ borderLeft: '3px solid var(--accent)' }}>
+              <div className="space-y-3">
+                <Skeleton width="160px" height="1.25rem" />
+                <Skeleton width="220px" height="2.5rem" />
+                <Skeleton width="280px" height="0.75rem" />
+                <Skeleton width="180px" height="2.5rem" className="mt-4" />
+              </div>
+            </div>
+          </section>
+          {/* Chart + Triggers skeleton */}
           <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 card p-6">
               <Skeleton width="160px" height="1.25rem" className="mb-4" />
-              <Skeleton width="100%" height="200px" />
+              <Skeleton width="100%" height="288px" />
             </div>
             <div className="card p-6">
               <Skeleton width="140px" height="1.25rem" className="mb-4" />

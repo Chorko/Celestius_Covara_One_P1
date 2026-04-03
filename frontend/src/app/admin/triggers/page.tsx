@@ -95,8 +95,8 @@ export default function AdminTriggers() {
         </section>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Simulator */}
-          <section className="card p-6 h-fit animate-fade-in-up delay-100">
+          {/* Simulator — sticky so it stays visible while scrolling history */}
+          <section className="card p-6 h-fit animate-fade-in-up delay-100 lg:sticky lg:top-4">
             <h2 className="text-base font-semibold mb-5 flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
               <PlayCircle size={18} style={{ color: 'var(--warning)' }} /> Inject Mock Trigger
             </h2>
@@ -165,10 +165,22 @@ export default function AdminTriggers() {
             </div>
             {showHistory && historyTriggers.length > 0 && (
               <div className="mt-6">
-                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2" style={{ color: 'var(--text-tertiary)' }}>
-                  <Clock size={14} /> Recent History — {historyTriggers.length} ended events
-                </h3>
-                <div className="space-y-3">{historyTriggers.map(t => <TriggerCard key={t.id} t={t} faded />)}</div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text-tertiary)' }}>
+                    <Clock size={14} /> Recent History
+                    <span className="badge-neutral ml-1">{historyTriggers.length} ended</span>
+                  </h3>
+                  <button
+                    onClick={() => setShowHistory(false)}
+                    className="text-xs px-2 py-1 rounded-lg"
+                    style={{ background: 'var(--bg-tertiary)', color: 'var(--text-tertiary)', border: '1px solid var(--border-primary)' }}
+                  >
+                    Collapse
+                  </button>
+                </div>
+                <div className="space-y-3 overflow-y-auto max-h-[400px] pr-1">
+                  {historyTriggers.map(t => <TriggerCard key={t.id} t={t} faded />)}
+                </div>
               </div>
             )}
           </section>

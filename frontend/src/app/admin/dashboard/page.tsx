@@ -26,6 +26,7 @@ export default function AdminDashboard() {
   const [approvedCount, setApprovedCount] = useState(0)
   const [reviewCount, setReviewCount] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [chartsLoading, setChartsLoading] = useState(true)
 
   /* eslint-disable @typescript-eslint/no-explicit-any */
   const [triggerDistribution, setTriggerDistribution] = useState<any[]>([])
@@ -33,6 +34,7 @@ export default function AdminDashboard() {
 
   const loadDashboard = useCallback(async () => {
     setLoading(true)
+    setChartsLoading(true)
     try {
       const { count: wc } = await supabase.from('worker_profiles').select('*', { count: 'exact', head: true })
       setWorkerCount(wc || 0)
@@ -43,19 +45,28 @@ export default function AdminDashboard() {
       setApprovedCount(approved.length)
       const review = allClaims.filter(c => ['submitted', 'soft_hold_verification', 'fraud_escalated_review'].includes(c.claim_status))
       setReviewCount(review.length)
-      const { data: prData } = await supabase.from('payout_recommendations').select('fraud_holdback_fh, recommended_payout')
-      if (prData) {
+    } catch (e) { console.error('Dashboard KPI error', e) }
+    setLoading(false)
+
+    // Load charts data in parallel
+    try {
+      const [prResult, trResult] = await Promise.allSettled([
+        supabase.from('payout_recommendations').select('fraud_holdback_fh, recommended_payout'),
+        supabase.from('trigger_events').select('trigger_family').order('started_at', { ascending: false }),
+      ])
+      if (prResult.status === 'fulfilled' && prResult.value.data) {
+        const prData = prResult.value.data
         setFraudCount(prData.filter(p => (p.fraud_holdback_fh ?? 0) > 0.3).length)
         setTotalPayouts(prData.reduce((s, p) => s + (p.recommended_payout || 0), 0))
       }
-      const { data: trData } = await supabase.from('trigger_events').select('trigger_family').order('started_at', { ascending: false })
-      if (trData) {
+      if (trResult.status === 'fulfilled' && trResult.value.data) {
+        const trData = trResult.value.data
         const fam: Record<string, number> = {}
         trData.forEach(t => { fam[t.trigger_family] = (fam[t.trigger_family] || 0) + 1 })
         setTriggerDistribution(Object.entries(fam).map(([name, value]) => ({ name: name.charAt(0).toUpperCase() + name.slice(1), value })))
       }
-    } catch (e) { console.error('Dashboard load error', e) }
-    setLoading(false)
+    } catch (e) { console.error('Dashboard charts error', e) }
+    setChartsLoading(false)
   }, [supabase])
 
   useEffect(() => { loadDashboard() }, [loadDashboard])
@@ -91,6 +102,17 @@ export default function AdminDashboard() {
         <Skeleton width="400px" height="1rem" />
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
           {[1,2,3,4,5].map(i => <div key={i} className="card p-5"><Skeleton width="100%" height="80px" /></div>)}
+        </div>
+        {/* Pipeline + charts skeleton */}
+        <div className="card p-5"><Skeleton width="100%" height="48px" /></div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="card p-6"><Skeleton width="160px" height="1.25rem" className="mb-4" /><Skeleton width="100%" height="256px" /></div>
+          <div className="card p-6">
+            <Skeleton width="180px" height="1.25rem" className="mb-4" />
+            <div className="space-y-2">
+              {[1,2,3,4,5,6].map(i => <Skeleton key={i} width="100%" height="60px" />)}
+            </div>
+          </div>
         </div>
       </div>
     )
@@ -180,7 +202,9 @@ export default function AdminDashboard() {
               </h2>
               <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>Disruption events by family across all zones</p>
             </div>
-            {triggerDistribution.length > 0 ? (
+            {chartsLoading ? (
+              <div className="h-64"><Skeleton width="100%" height="256px" /></div>
+            ) : triggerDistribution.length > 0 ? (
               <div className="h-64 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -212,21 +236,27 @@ export default function AdminDashboard() {
                 View all <ArrowRight size={12} />
               </Link>
             </div>
-            <div className="flex-1 space-y-2 overflow-y-auto max-h-[300px]">
-              {claims.slice(0, 6).map(c => (
-                <div key={c.id} className="flex items-center justify-between p-3 rounded-lg transition-colors" style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-primary)' }}>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className={`badge ${statusBadge(c.claim_status)}`}>{statusLabel(c.claim_status)}</span>
-                      <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                        {new Date(c.claimed_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      </span>
+            {chartsLoading ? (
+              <div className="space-y-2">
+                {[1,2,3,4,5,6].map(i => <Skeleton key={i} width="100%" height="60px" />)}
+              </div>
+            ) : (
+              <div className="flex-1 space-y-2 overflow-y-auto max-h-[300px]">
+                {claims.slice(0, 6).map(c => (
+                  <div key={c.id} className="flex items-center justify-between p-3 rounded-lg transition-colors" style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-primary)' }}>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`badge ${statusBadge(c.claim_status)}`}>{statusLabel(c.claim_status)}</span>
+                        <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                          {new Date(c.claimed_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </span>
+                      </div>
+                      <p className="text-sm truncate" style={{ color: 'var(--text-secondary)' }}>{c.claim_reason}</p>
                     </div>
-                    <p className="text-sm truncate" style={{ color: 'var(--text-secondary)' }}>{c.claim_reason}</p>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </section>
       </div>
