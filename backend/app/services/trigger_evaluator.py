@@ -49,12 +49,12 @@ def _evaluate_temperature(temp_c: float) -> tuple[str, str, str] | None:
     return None
 
 
-def _evaluate_aqi(aqi_value: float, city: str = "", zone_name: str = "") -> tuple[str, str, str] | None:
-    """Evaluate AQI using zone-calibrated thresholds when city is known,
+def _evaluate_aqi(aqi_value: float, sb=None, zone_id: str = "", city: str = "", zone_name: str = "") -> tuple[str, str, str] | None:
+    """Evaluate AQI using dynamic/zone-calibrated thresholds when context is known,
     falling back to flat national CPCB thresholds."""
-    if city:
-        # Use zone-aware calibrated thresholds (respects city baseline AQI)
-        return _zone_aqi_eval(aqi_value, city=city, zone_name=zone_name)
+    if city and sb and zone_id:
+        # Use dynamic/zone-aware calibrated thresholds (respects city baseline AQI)
+        return _zone_aqi_eval(sb, aqi_value, zone_id, city=city, zone_name=zone_name)
     # Flat fallback for backward compatibility (national CPCB)
     if aqi_value >= 401:
         return ("AQI_EXTREME", "escalation", f"Extreme AQI: {aqi_value:.0f} ≥ 401")
@@ -252,7 +252,7 @@ def evaluate_aqi_data(
     aqi_value = aqi_data.get("aqi")
 
     if aqi_value is not None:
-        aqi_result = _evaluate_aqi(float(aqi_value), city=city, zone_name=zone_name)
+        aqi_result = _evaluate_aqi(float(aqi_value), sb=sb, zone_id=zone_id, city=city, zone_name=zone_name)
         if aqi_result:
             code, band, desc = aqi_result
             desc += f" (provider: {provider})"

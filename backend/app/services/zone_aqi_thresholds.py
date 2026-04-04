@@ -28,6 +28,7 @@ References:
 
 from __future__ import annotations
 import logging
+from datetime import datetime, timezone
 
 logger = logging.getLogger("covara.zone_aqi_thresholds")
 
@@ -116,18 +117,45 @@ KNOWN_ZONE_TYPES: dict[str, str] = {
 }
 
 
-def get_aqi_thresholds_for_zone(city: str, zone_name: str = "") -> dict:
+def get_aqi_thresholds_for_zone(sb, zone_id: str, city: str, zone_name: str = "") -> dict:
     """
     Returns calibrated AQI trigger thresholds (watch/claim/extreme) for a
-    specific city and optional zone, incorporating:
-      1. City-level AQI baseline
-      2. Zone type (urban core vs mixed vs peri-urban)
-
-    Usage in trigger_evaluator.py:
-        thresholds = get_aqi_thresholds_for_zone(city, zone_name)
-        if aqi_value >= thresholds["extreme"]:
-            ...
+    specific zone.
+    
+    Order of precedence:
+      1. Dynamic DB thresholds from `zone_monthly_thresholds` (current month)
+      2. Static city+zone fallback (from CITY_BASELINES and ZONE_TYPE_ADJUSTMENTS)
+      3. CPCB National Standard (pure fallback)
     """
+    current_month = datetime.now(timezone.utc).strftime("%Y-%m")
+    
+    # ── Try DB first ──
+    if sb and zone_id:
+        try:
+            resp = sb.table("zone_monthly_thresholds") \
+                .select("*") \
+                .eq("zone_id", zone_id) \
+                .eq("year_month", current_month) \
+                .eq("metric", "aqi") \
+                .maybe_single() \
+                .execute()
+                
+            data = resp.data
+            if data:
+                return {
+                    "watch": data["watch_threshold"],
+                    "claim": data["claim_threshold"],
+                    "extreme": data["extreme_threshold"],
+                    "city_baseline_aqi": data.get("observed_p50"),  # roughly median
+                    "zone_type": "dynamic",
+                    "zone_type_adjustment": 0,
+                    "city_description": f"Dynamic monthly bounds based on real observations (n={data.get('sample_count',0)})",
+                    "source": "dynamic_db",
+                }
+        except Exception as e:
+            logger.warning(f"Failed to fetch dynamic threshold for {zone_id}: {e}. Falling back to static.")
+
+    # ── Static Fallback ──
     city_key = city.lower().strip()
     city_config = CITY_BASELINES.get(city_key)
 
@@ -164,18 +192,15 @@ def get_aqi_thresholds_for_zone(city: str, zone_name: str = "") -> dict:
         "zone_type": zone_type,
         "zone_type_adjustment": adjustment,
         "city_description": city_config["description"],
-        "source": "zone_calibrated",
+        "source": "zone_calibrated_static",
     }
 
 
-def evaluate_aqi_for_zone(aqi_value: float, city: str, zone_name: str = "") -> tuple[str, str, str] | None:
+def evaluate_aqi_for_zone(sb, aqi_value: float, zone_id: str, city: str, zone_name: str = "") -> tuple[str, str, str] | None:
     """
     Evaluate AQI against zone-calibrated thresholds.
-    Replaces the flat _evaluate_aqi() in trigger_evaluator.py when zone is known.
-
-    Returns: (trigger_code, severity_band, description) or None
     """
-    thresholds = get_aqi_thresholds_for_zone(city, zone_name)
+    thresholds = get_aqi_thresholds_for_zone(sb, zone_id, city, zone_name)
 
     if aqi_value >= thresholds["extreme"]:
         return (
