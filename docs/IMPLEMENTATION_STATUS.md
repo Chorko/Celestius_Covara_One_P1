@@ -61,6 +61,9 @@
 | Kubernetes orchestration | ✅ Ready | `k8s/` — Deployment, Service, Ingress manifests |
 | GitHub Actions CI/CD | ✅ Implemented | 3-job pipeline: lint+test → docker build → security audit |
 | Automated test suite | ✅ Implemented | 61 pytest tests, 100% pass — pricing, fraud, pipeline, KYC, Twilio |
+| Regional AQI Calibration | ✅ Implemented | City-specific baselines (Delhi 250+ vs Mumbai 150+) |
+| Dynamic Threshold Engine | ✅ Implemented | Monthly p50/p75/p90 distribution calculations (Python + DB) |
+| Indian Zone Network | ✅ Implemented | 65 detailed zones across 15 cities with validated PIN codes |
 | Payment gateway (UPI) | ✅ Mock | `payment_mock.py` — async, RazorpayX-format, failure simulation |
 
 **Legend:** ✅ Implemented & Live — ⚠️ Implemented with Known Limitation — 📋 Planned
@@ -209,6 +212,37 @@ The Admin Dashboard and `/analytics/summary` endpoint surface live actuarial met
 | **Traffic** | Internal product threshold | ≥ 40% travel-time delay | ⚙️ Internal |
 | **Platform Outage** | Internal product threshold | ≥ 30 min downtime | ⚙️ Internal |
 | **Demand Collapse** | Internal product threshold | ≥ 35% order drop | ⚙️ Internal |
+
+---
+
+## Regional Calibration & Dynamic Thresholds
+
+Covara One uses a **data-driven regional calibration engine** to ensure fairness across India's diverse climates. A static trigger (e.g., AQI > 200) is unfair in Delhi (where AQI is rarely below 150) vs. Bangalore (where 101 is "Poor").
+
+### 1. City-Specific Baselines
+
+The system applies a baseline offset to the national standard based on historical city data:
+
+| City | Baseline AQI | Sensitivity | Why? |
+|:---|:---:|:---:|:---|
+| **Delhi / NCR** | 180 | Low | High chronic pollution; requires valid spike to trigger |
+| **Mumbai** | 60 | High | Coastal ventilation; 150 is a significant health disruption |
+| **Bangalore** | 50 | High | Clean air baseline; triggers fire earlier for safety |
+| **Chennai / Kochi** | 70 | High | Marine influence; rain-based triggers more sensitive |
+
+### 2. Dynamic Monthly Engine
+
+The `dynamic_threshold_engine.py` (triggered via `POST /ingest/compute-dynamic-thresholds`) simulates 30 days of historical data distributions for every zone:
+
+1. **Calculate Percentiles**: Computes p50 (median), p75, and p90.
+2. **Derive Triggers**: 
+   - `Watch = p50 * 1.4` (+ zone type adjustment)
+   - `Claim = p75 * 1.3` (+ zone type adjustment)
+   - `Extreme = p90 * 1.2` (+ zone type adjustment)
+3. **Zone Type Adjustments**: 
+   - `urban_core`: +25 tolerance (better shelter/drainage accessibility)
+   - `mixed`: Baseline
+   - `peri_urban`: -25 tolerance (higher risk of local blockage)
 
 ---
 
