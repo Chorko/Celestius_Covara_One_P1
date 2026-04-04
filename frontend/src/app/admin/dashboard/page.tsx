@@ -23,6 +23,8 @@ export default function AdminDashboard() {
   const [claims, setClaims] = useState<ClaimItem[]>([])
   const [fraudCount, setFraudCount] = useState(0)
   const [totalPayouts, setTotalPayouts] = useState(0)
+  const [lossRatio, setLossRatio] = useState(0)
+  const [bcr, setBcr] = useState(0)
   const [approvedCount, setApprovedCount] = useState(0)
   const [reviewCount, setReviewCount] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -51,13 +53,21 @@ export default function AdminDashboard() {
     // Load charts data in parallel
     try {
       const [prResult, trResult] = await Promise.allSettled([
-        supabase.from('payout_recommendations').select('fraud_holdback_fh, recommended_payout'),
+        supabase.from('payout_recommendations').select('fraud_holdback_fh, recommended_payout, expected_payout, gross_premium'),
         supabase.from('trigger_events').select('trigger_family').order('started_at', { ascending: false }),
       ])
       if (prResult.status === 'fulfilled' && prResult.value.data) {
         const prData = prResult.value.data
         setFraudCount(prData.filter(p => (p.fraud_holdback_fh ?? 0) > 0.3).length)
-        setTotalPayouts(prData.reduce((s, p) => s + (p.recommended_payout || 0), 0))
+        const payout = prData.reduce((s, p) => s + (p.recommended_payout || 0), 0)
+        setTotalPayouts(payout)
+        
+        const expected = prData.reduce((s, p) => s + (p.expected_payout || 0), 0)
+        const premium = prData.reduce((s, p) => s + (p.gross_premium || 0), 0)
+        if (premium > 0) {
+          setLossRatio(payout / premium)
+          setBcr(expected / premium)
+        }
       }
       if (trResult.status === 'fulfilled' && trResult.value.data) {
         const trData = trResult.value.data
@@ -126,6 +136,11 @@ export default function AdminDashboard() {
     { icon: <IndianRupee size={20} style={{ color: 'var(--info)' }} />, value: totalPayouts, prefix: '₹', label: 'Total Payouts', sub: `Expected: ₹${totalPayouts.toLocaleString('en-IN')}`, accent: 'var(--info)' },
   ]
 
+  const actuarialCards = [
+    { icon: <Activity size={20} style={{ color: 'var(--purple, #a855f7)' }} />, value: bcr, prefix: '', suffix: 'x', label: 'Burning Cost Rate', sub: 'Target: 0.55 - 0.70', accent: 'var(--purple, #a855f7)', isFloat: true },
+    { icon: <Shield size={20} style={{ color: 'var(--blue, #3b82f6)' }} />, value: lossRatio, prefix: '', suffix: 'x', label: 'Loss Ratio', sub: 'Payout vs Premium', accent: 'var(--blue, #3b82f6)', isFloat: true },
+  ]
+
   const pipelineData = [
     { label: 'Approved', count: approvedCount, color: 'var(--success)' },
     { label: 'Review', count: reviewCount, color: 'var(--warning)' },
@@ -161,6 +176,24 @@ export default function AdminDashboard() {
               </div>
               <span className="text-2xl font-bold block" style={{ color: 'var(--text-primary)' }}>
                 <AnimatedCounter value={c.value} prefix={c.prefix || ''} />
+              </span>
+              <span className="text-xs mt-1 block" style={{ color: 'var(--text-tertiary)' }}>{c.sub}</span>
+            </div>
+          ))}
+
+          {/* Actuarial Metrics */}
+          {actuarialCards.map((c, i) => (
+            <div key={`act-${i}`} className={`card p-5 animate-fade-in-up delay-${(i + kpiCards.length + 1) * 100}`} style={{ borderLeft: `3px solid ${c.accent}` }}>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="p-1.5 rounded-md" style={{ background: 'var(--bg-tertiary)' }}>{c.icon}</div>
+                <span className="text-xs font-medium" style={{ color: 'var(--text-tertiary)' }}>{c.label}</span>
+              </div>
+              <span className="text-2xl font-bold block" style={{ color: 'var(--text-primary)' }}>
+                {c.value > 0 ? (
+                  <span>{c.prefix}{c.value.toFixed(2)}{c.suffix}</span>
+                ) : (
+                  <AnimatedCounter value={0} prefix={c.prefix || ''} />
+                )}
               </span>
               <span className="text-xs mt-1 block" style={{ color: 'var(--text-tertiary)' }}>{c.sub}</span>
             </div>
