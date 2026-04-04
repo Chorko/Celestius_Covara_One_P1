@@ -64,23 +64,19 @@
 
 <div align="center">
 
-```
-╔══════════════════════════════════════════════════════════════════╗
-║                                                                  ║
-║   🌧️  Mumbai 72mm rain → zone paused → ₹0 income for 2 days     ║
-║   🏭  Delhi AQI 485 → GRAP Stage IV → riders forced off road     ║
-║   🌡️  47°C heatwave → IMD red alert → deliveries collapse        ║
-║                                                                  ║
-║   Platform insurance covers accidents.                            ║
-║   Government covers hospitalization.                              ║
-║                                                                  ║
-║   ❌  NOBODY covers income loss from external disruptions.        ║
-║   ✅  Covara One fills this gap. Automatically.                   ║
-║                                                                  ║
-╚══════════════════════════════════════════════════════════════════╝
-```
+| | The Shock | What Happens | The Cost |
+|:-:|:---|:---|:---:|
+| 🌧️ | Mumbai — 72mm rain in 6h | Zomato, Swiggy, Blinkit all pause zones | **₹0 for 2 days** |
+| 🏭 | Delhi — AQI 485, GRAP Stage IV | Two-wheelers banned, no deliveries | **₹0 for the week** |
+| 🌡️ | Kolkata — 47°C heatwave, IMD Red Alert | Platform collapses mid-shift | **₹0 for 3 days** |
 
 </div>
+
+> 🏥 **Platforms** cover accidents. **Government** covers hospitalization.
+> 
+> ❌ **Nobody** covers income lost when the city shuts down — until now.
+> 
+> ✅ **Covara One** fills this exact gap. Automatically. Zero forms.
 
 India's **12.7 million gig workers** power the digital economy. Yet **80% have zero formal insurance** and no product covers income loss from weather, AQI, or outages.
 
@@ -93,23 +89,30 @@ India's **12.7 million gig workers** power the digital economy. Yet **80% have z
 
 ---
 
+
 ## 👤 Our Persona — Arjun, the Monsoon Rider
 
 <table>
 <tr>
-<td width="65%">
+<td width="60%">
 
-> **Arjun, 29** — Swiggy delivery rider, Andheri West, Mumbai
-> - 🛵 Works evening shifts (5 PM – 1 AM), peak + late window
-> - 💰 Nets ~₹19,000/month after fuel
-> - 💳 **Zero savings. Zero insurance.**
->
-> During October 2024 floods, Andheri received 157mm in 6 hours. Every platform paused. **Arjun earned ₹0 for 3 days.**
->
-> *That's ₹1,900 gone — enough to wipe out his entire fuel budget for the month.*
+### Arjun, 29 &nbsp; `Swiggy Rider · Andheri West, Mumbai`
+
+| | |
+|:-|-|
+| 🛵 **Shift** | 5 PM – 1 AM (peak + late window) |
+| 💰 **Income** | ~₹19,000/month after fuel |
+| 💳 **Savings** | ₹0 — paycheck to paycheck |
+| 📍 **Zone** | MU-WE-01 (Andheri West) |
+
+**October 2024 — The event that changed everything:**
+
+> Andheri received **157mm in 6 hours.** Every platform paused.  
+> Arjun sat under an awning for 3 days, earning **absolutely nothing.**  
+> *₹1,900 gone — his entire fuel budget for the month.*
 
 </td>
-<td width="35%" align="center">
+<td width="40%" align="center">
 
 **Why Arjun pays ₹28/week**
 
@@ -126,6 +129,7 @@ India's **12.7 million gig workers** power the digital economy. Yet **80% have z
 </table>
 
 ---
+
 
 ## 🎬 Live Scenarios
 
