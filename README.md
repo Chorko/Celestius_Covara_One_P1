@@ -49,7 +49,7 @@
 | 👤 | [Our Persona](#-our-persona--arjun-the-monsoon-rider) |
 | 🎬 | [Live Scenarios](#-live-scenarios) |
 | ⚡ | [How It Works](#-how-it-works) |
-| 💰 | [Coverage Plans](#-coverage-plans) |
+| 💰 | [Coverage Plans & IRDAI Compliance](#-coverage-plans--irdai-compliance) |
 | 🛡️ | [The Fraud Fortress](#️-the-fraud-fortress) |
 | ⚡ | [15-Trigger Library](#-the-15-trigger-library) |
 | 🔐 | [Adversarial Defense](#-adversarial-defense--anti-spoofing-strategy) |
@@ -59,7 +59,8 @@
 | 🚨 | [Post-Approval Controls](#-post-approval-fraud-controls) |
 | 🪪 | [Progressive KYC](#-progressive-kyc--trust-ladder) |
 | 🧠 | [ML Role](#-what-ml-does-vs-what-ml-does-not-do) |
-| 📐 | [Calibration Engine](#-internal-calibration-engine) |
+| 📊 | [Threshold References](#-threshold-references-and-why-they-were-chosen) |
+| 📐 | [Parametric Product & Calibration](#-parametric-product-weekly-benefit-plans) |
 | 💼 | [Business Framing](#-business-framing) |
 | 🏗️ | [Architecture](#️-architecture) |
 | 🏆 | [Why Covara One Wins](#-why-covara-one-wins) |
@@ -233,25 +234,57 @@ flowchart TD
 
 ---
 
-## 💰 Coverage Plans
+## 💰 Coverage Plans & IRDAI Compliance
 
-> IRDAI-compliant micro-insurance. Weekly pricing matches gig payout rhythms.
+> [!IMPORTANT]
+> **This is parametric insurance — not fixed/indemnity insurance.** The payout is determined entirely by which **trigger severity band** is crossed, not by an adjuster's estimate of actual loss. Once the threshold is hit and anti-spoofing passes, the pre-agreed band amount is locked. No claims forms. No loss assessment. No adjuster discretion.
+
+### Parametric Benefit Ladder
+
+Let **W** = selected weekly benefit cap. Payout = Band multiplier × W.
 
 <div align="center">
 
-| | 🟢 **Essential** | 🔵 **Plus** |
+| | 🟢 **Essential** (W = ₹3,000) | 🔵 **Plus** (W = ₹4,500) |
 |:--|:--:|:--:|
 | **Weekly Premium** | **₹28** | **₹42** |
-| **Weekly Benefit Cap** | ₹3,000 | ₹4,500 |
-| **Band 1 Payout** (moderate) | ₹750 | ₹1,125 |
-| **Band 2 Payout** (major) | ₹1,500 | ₹2,250 |
-| **Band 3 Payout** (severe) | ₹3,000 | ₹4,500 |
-| Annual premium | ₹1,456 | ₹2,184 |
-| IRDAI ₹10k limit | ✅ | ✅ |
+| **Band 1** — Moderate disruption (0.25 × W) | ₹750 | ₹1,125 |
+| **Band 2** — Major disruption (0.50 × W) | ₹1,500 | ₹2,250 |
+| **Band 3** — Severe disruption (1.00 × W) | ₹3,000 | ₹4,500 |
+| Annual premium (52 weeks) | ₹1,456 | ₹2,184 |
+| **IRDAI ₹10k/year limit** | ✅ Under limit | ✅ Under limit |
 
 </div>
 
-> **Payout = pre-agreed Band × selected plan.** Once the trigger threshold is hit and anti-spoofing passes, the amount is locked — no formula fiddling, no adjuster discretion. That's the parametric promise.
+**Why only two plans?** Essential reduces entry friction for price-sensitive workers. Plus serves as a natural upgrade for experienced riders in tougher zones. Two plans = simple purchase decision, clean risk segmentation, and higher conversion.
+
+### IRDAI Regulatory Alignment
+
+| Requirement | How Covara One complies |
+|:---|:---|
+| **Micro-insurance premium cap** | Annual premiums ₹1,456 (Essential) / ₹2,184 (Plus) — well under IRDAI's ₹10,000/year micro-insurance limit |
+| **Parametric product structure** | Trigger-based, pre-agreed payout bands — no loss adjustment, no subjective assessment |
+| **Weekly pricing cycle** | Matches gig-worker weekly earning rhythm — not forced into annual billing |
+| **Transparent exclusions** | Standard industry exclusions clearly disclosed at enrollment |
+
+### Coverage Boundary & Exclusions
+
+**Covered risk:** Temporary loss of earning opportunity caused by **verified external disruption** — weather, AQI, heatwave, platform outage, traffic collapse, civic closures.
+
+**Not covered** (aligned with standard IRDAI general and parametric insurance guidelines):
+
+| Exclusion | Regulatory basis |
+|:---|:---|
+| ❌ War, invasion, foreign enemy hostilities | IRDAI General Insurance Exclusion Clause 4.1 |
+| ❌ Civil unrest, riot, insurrection | IRDAI Standard Exclusion — civil disturbance |
+| ❌ Nuclear, chemical, biological events | Standard catastrophic exclusion |
+| ❌ Global pandemics (WHO-declared) | Force majeure — non-insurable systemic risk |
+| ❌ Health, hospitalization, accidents | Out of scope — platform insurance / Ayushman Bharat covers these |
+| ❌ Vehicle repair, personal theft | Out of scope — motor insurance / property lines |
+| ❌ Self-inflicted income loss (voluntary no-show) | Moral hazard exclusion |
+
+> [!NOTE]
+> These exclusions follow standard IRDAI parametric and general insurance guidelines. They ensure the product remains commercially viable and regulatorily defensible. The exclusion list is presented to the worker during enrollment for full transparency.
 
 ---
 
@@ -795,20 +828,43 @@ Full identity verification upfront kills conversion. Covara One uses a **progres
 
 ---
 
-## Pricing, Thresholds, and References
+## 📊 Threshold References and Why They Were Chosen
 
-Environmental thresholds (rain, AQI, heat) are anchored to official Indian government classifications — IMD, CPCB, and NDMA. Pricing and payout derivation follow expected-loss premium principles grounded in actuarial literature. The repo separates hazard classification from pricing methodology by design.
+| Parameter | Source | What the source gives us | How we infer our product threshold | Anchoring |
+|-----------|--------|--------------------------|-------------------------------------|-----------|
+| **Rain** | [IMD Rainfall Categories (FAQ)](https://rsmcnewdelhi.imd.gov.in/images/pdf/faq.pdf), [IMD Heavy Rainfall Warning](https://mausam.imd.gov.in/imd_latest/contents/pdf/pubbrochures/Heavy%20Rainfall%20Warning%20Services.pdf) | Heavy rainfall = 64.5–115.5 mm/24h; Very heavy = 115.6–204.4 mm/24h | 48 mm = early-watch (T1). 64.5 mm = claim-trigger anchor (T2). 115.6 mm = escalation (T3). | ✅ Public-source anchored |
+| **AQI** | [CPCB National Air Quality Index](https://www.cpcb.nic.in/national-air-quality-index/), [OGD AQI Dataset](https://www.data.gov.in/resource/real-time-air-quality-index-various-locations) | AQI 201–300 = Poor; 301–400 = Very Poor; 401+ = Severe | 201+ = caution (T5). 301+ = claim threshold (T6). | ✅ Public-source anchored |
+| **Heat** | [IMD Heat Wave Warning](https://mausam.imd.gov.in/imd_latest/contents/pdf/pubbrochures/Heat%20Wave%20Warning%20Services.pdf), [NDMA Heat Wave Guidance](https://ndma.gov.in/Natural-Hazards/Heat-Wave) | Heat-wave = departure ≥ 4.5°C above normal, or absolute ≥ 45°C for plains | 45°C = heat-wave claim (T7). 47°C = severe-heat escalation (T8). | ✅ Public-source anchored |
+| **Traffic** | Internal product threshold | No single public standard for delivery-impairment delay | ≥ 40% travel-time delay = route stress (T12). | ⚙️ Internal operational |
+| **Platform Outage** | Internal product threshold | Platform outage data is not publicly available | ≥ 30 min outage = claim threshold (T13). | ⚙️ Internal operational |
+| **Demand Collapse** | Internal product threshold | Platform order volume is not publicly available | ≥ 35% order drop vs baseline (T14). | ⚙️ Internal operational |
+
+Environmental thresholds are anchored to official Indian government sources. Operational thresholds are product-engineering decisions based on estimated earning-disruption impact — they may be refined as real operating data becomes available.
+
+### Pricing & Reference Links
 
 - **Central reference register** with all sources, threshold inference logic, and formula summary → [docs/README.md](docs/README.md#reference-register)
 - **Threshold basis per trigger family** with source links → [data/README.md](data/README.md#trigger-threshold-reference-table)
 - **ML baseline and feature normalization provenance** → [ml/README.md](ml/README.md#pricing-baseline-and-reference-notes)
 - **Insurance-side trend sources** (IRDAI, IIB) → [docs/README.md](docs/README.md#insurance-side-trend-sources)
 
+### Data Split
+
+The dataset is split into two major entities and joined only after exposure matching.
+
+**worker_data** — Worker-side profile and earning context:
+`worker_id`, `zone_id`, `city`, `shift_window`, `hourly_income`, `active_days`, `bank_verified`, `gps_consistency`, `trust_score`, `prior_claim_rate`
+
+**trigger_data** — Event-side disruption context:
+`trigger_id`, `city`, `zone_id`, `timestamp_start`, `timestamp_end`, `trigger_type`, `raw_value`, `threshold_crossed`, `severity_bucket`, `source_reliability`
+
+**joined_training_data** — Created only after matching `worker_data` ↔ `trigger_data` on `zone_id` + shift/time overlap. Used for EDA, ML experiments, and premium/payout calculations.
+
 ---
 
-## Parametric Product: Weekly Benefit Plans
+## 📐 Parametric Product: Weekly Benefit Plans
 
-> Covara One uses an internal weekly risk-and-pricing model to calibrate fair premiums and benefit levels, while the final worker-facing product remains parametric: once a pre-agreed trigger band is hit and both exposure matching and anti-spoofing verification pass, the payout is released according to the selected weekly benefit plan.
+> Covara One uses an internal weekly risk-and-pricing model to calibrate fair premiums and benefit levels, while the final worker-facing product remains **parametric**: once a pre-agreed trigger band is hit and both exposure matching and anti-spoofing verification pass, the payout is released automatically — no adjuster, no assessment, no discretion.
 
 The formula engine remains an **internal pricing and calibration tool**. The **customer-facing product** is structured as a parametric weekly benefit ladder released only when both the trigger threshold and the anti-spoofing verification checks pass.
 
@@ -859,9 +915,11 @@ Let `W` = selected weekly benefit.
 
 This structure is **much easier to defend as parametric insurance** than a flexible "pay whatever the formula outputs" model. Workers know exactly what they get. Insurers know exactly what they owe.
 
-## 📐 Internal Calibration Engine
+---
 
-The formula engine is retained for **internal use only** — it calibrates fair premiums and benefit sizing. The **public-facing product** is the parametric benefit ladder below.
+### Internal Calibration Engine (Not Public-Facing)
+
+The existing formula engine is retained for **internal use only** — it calibrates whether the Essential and Plus benefit amounts are appropriately sized for the worker segment, whether weekly premiums are actuarially reasonable, and whether synthetic data scenarios produce realistic outcomes. These formulas do **not** determine the worker-facing payout — the parametric ladder above does.
 
 | Formula | Expression | Internal use |
 |---|---|---|
