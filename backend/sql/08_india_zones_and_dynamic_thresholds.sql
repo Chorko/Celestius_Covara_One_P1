@@ -85,9 +85,7 @@ CREATE TABLE IF NOT EXISTS public.zone_monthly_thresholds (
     -- Metadata
     data_source     text            DEFAULT 'dynamic',  -- 'dynamic', 'static_fallback', 'manual_override'
     computed_at     timestamptz     NOT NULL DEFAULT now(),
-    expires_at      timestamptz     GENERATED ALWAYS AS (
-                      date_trunc('month', computed_at) + INTERVAL '2 months'
-                    ) STORED,       -- auto-expires after 2 months for stale cleanup
+    expires_at      timestamptz,    -- set by application on insert
     -- Uniqueness: one threshold set per zone per month per metric
     UNIQUE (zone_id, year_month, metric)
 );
