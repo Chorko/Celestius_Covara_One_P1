@@ -355,94 +355,323 @@ The platform uses a **3-tier trigger architecture**: early warning → claim tri
 ## 🔐 Adversarial Defense & Anti-Spoofing Strategy
 
 > [!CAUTION]
-> **Market-Shift Context:** A sophisticated syndicate of 500 delivery workers coordinated via Telegram to fake GPS locations in severe weather zones while resting at home — draining a beta parametric platform's liquidity pool. Simple GPS verification is officially obsolete. This section documents how Covara One defends against this exact attack vector.
+> **Market-Shift Context:** A sophisticated syndicate of 500 delivery workers in a tier-1 city has successfully exploited a beta parametric insurance platform using coordinated GPS spoofing via Telegram groups — faking locations in severe weather zones while resting at home, triggering mass false payouts and draining the liquidity pool. Simple GPS verification is officially obsolete. This section documents how Covara One defends against this exact attack vector.
+
+```mermaid
+flowchart TD
+    classDef intake fill:#1D4ED8,color:#fff,stroke:#1E3A8A,stroke-width:2px;
+    classDef truth fill:#059669,color:#fff,stroke:#047857,stroke-width:2px;
+    classDef checks fill:#7C3AED,color:#fff,stroke:#5B21B6,stroke-width:2px;
+    classDef checks2 fill:#9333EA,color:#fff,stroke:#7E22CE,stroke-width:2px;
+    classDef checks3 fill:#B45309,color:#fff,stroke:#92400E,stroke-width:2px;
+    classDef score fill:#4F46E5,color:#fff,stroke:#3730A3,stroke-width:3px;
+    classDef pass fill:#16A34A,color:#fff,stroke:#15803D,stroke-width:2px;
+    classDef warn fill:#CA8A04,color:#fff,stroke:#A16207,stroke-width:2px;
+    classDef hold fill:#EA580C,color:#fff,stroke:#C2410C,stroke-width:2px;
+    classDef fail fill:#DC2626,color:#fff,stroke:#991B1B,stroke-width:2px;
+
+    CS{{📋 Claim Submitted}}:::intake
+
+    L1[/🌦️ LAYER 1 — Event Truth/]:::truth
+    L2[/👷 LAYER 2 — Worker Truth/]:::truth
+
+    subgraph L3G ["LAYER 3 — Anti-Spoofing"]
+        direction LR
+        AS1([📍 EXIF vs GPS]):::checks
+        AS2([⏱️ Timestamp freshness]):::checks
+        AS3([🌐 VPN / Proxy IP]):::checks
+        AS4([📱 Device continuity]):::checks
+        AS5([🚀 Impossible travel]):::checks
+    end
+
+    subgraph L4G ["LAYER 4 — Image Forensics"]
+        direction LR
+        IF1([🔍 EXIF integrity]):::checks2
+        IF2([🤖 AI detection]):::checks2
+        IF3([📸 Camera match]):::checks2
+        IF4([🖼️ ELA Analysis]):::checks2
+    end
+
+    subgraph L5G ["LAYER 5 — Behav & Region"]
+        direction LR
+        BR1([📊 Zone affinity]):::checks3
+        BR2([⏰ Pre-trigger presence]):::checks3
+        BR3([🔗 Cluster intel]):::checks3
+        BR4([📈 Zone claim spike]):::checks3
+    end
+
+    SE{{⚖️ Signal Confidence Scoring}}:::score
+
+    D1[[✅ auto_approve]]:::pass
+    D2[[🔎 needs_review]]:::warn
+    D3[[⚠️ hold_for_fraud]]:::hold
+    D4[[🛑 batch_hold]]:::fail
+    D5[[❌ reject_spoof]]:::fail
+
+    CB>🚨 Circuit Breaker]:::fail
+    TS[(📉 Trust Score)]:::hold
+
+    CS --> L1
+    L1 --> L2
+    L2 --> L3G
+    L3G --> L4G
+    L4G --> L5G
+    L5G --> SE
+
+    SE --> D1
+    SE --> D2
+    SE --> D3
+    SE --> D4
+    SE --> D5
+
+    BR4 --> CB
+    D3 --> TS
+    D5 --> TS
+    TS -.->|"future claims<br/>review default"| SE
+```
+
+> **How to read this diagram:** A claim enters at the top and passes through 5 verification layers. Each layer produces weighted signals that feed the scoring engine. The scoring engine maps the composite fraud score to one of 5 decision bands. Circuit-breakers protect the liquidity pool during mass-attack scenarios, and trust score penalties feed back into future claim evaluations.
 
 ### 1. The Differentiation: Genuine Worker vs. Bad Actor
 
-Covara One does **not** trust raw GPS coordinates alone. The platform differentiates genuinely stranded workers from spoofers using **multi-signal verification** — a layered approach where no single data point can trigger or block a payout in isolation.
+Covara One does **not** trust raw GPS coordinates alone. The platform differentiates genuinely stranded delivery partners from spoofers using **multi-signal verification** — a layered approach where no single data point can trigger or block a payout in isolation.
 
 | Signal layer | What it checks | Why GPS alone fails here |
 |---|---|---|
-| **Trigger-event correlation** | Does a verified external disruption exist in the claimed zone at the claimed time? | Spoofers fake location but cannot fake a weather event |
-| **EXIF GPS vs. device GPS** | Does photo evidence GPS match device-reported location? | Spoofing apps change device GPS but cannot alter captured EXIF |
-| **EXIF timestamp freshness** | Was evidence taken within the claim window? | Reused evidence from old events fails freshness checks |
-| **Shift overlap ratio** | Was the worker's shift active during the trigger window? | Spoofers outside their shift schedule are flagged |
-| **Zone consistency** | Does the claim zone match historical operating zone? | Claiming disruption in a never-visited zone is suspicious |
-| **Route plausibility** | Does TomTom Snap-to-Roads confirm a real delivery route? | Spoofed coordinates often land on rooftops, parks, or impossible positions |
-| **Activity continuity** | Was the worker completing orders before disruption hit? | Genuine workers show pre-disruption activity; spoofers show none |
-| **Device continuity** | Is the same device consistently associated with this account? | Fraud rings rotate devices across accounts |
+| **Trigger-event correlation** | Does a verified external disruption (rain, AQI, heat, closure) actually exist in the claimed zone at the claimed time? | Spoofers fake location but cannot fake a weather event |
+| **EXIF GPS vs. browser/device GPS** | Does the photo evidence GPS match the device-reported location? | Spoofing apps change device GPS but cannot alter already-captured EXIF metadata |
+| **EXIF timestamp freshness** | Was the evidence photo taken within the claim window, or days/weeks ago? | Reused evidence from old events fails freshness checks |
+| **Shift overlap ratio** | Was the worker's declared shift active during the trigger window? | Spoofers claiming outside their shift schedule are flagged |
+| **Zone consistency** | Does the worker's claim zone match their assigned/historical operating zone? | Claiming disruption in a zone the worker has never operated in is suspicious |
+| **Route plausibility** | Does TomTom Snap-to-Roads confirm the worker was on a real delivery route? | Spoofed coordinates often land on rooftops, parks, or impossible road positions |
+| **Activity continuity** | Was the worker completing orders before the disruption hit? | A genuinely stranded worker shows pre-disruption delivery activity; a spoofer shows none |
+| **Movement plausibility over time** | Does the GPS trail show realistic movement patterns across multiple time points? | Spoofers show teleportation or perfect stillness — real workers show natural drift |
+| **Device continuity** | Is the same device consistently associated with this worker account? | Fraud rings rotate devices across accounts |
+| **Network / IP / ASN pattern** | Do multiple claimants share the same network fingerprint? | Coordinated rings operating from one location share IP/ASN patterns |
+| **AI-generated image detection** | Was the evidence photo created by an AI model rather than a real camera? | AI-generated "proof" photos bypass traditional photo checks — SynthID and forensic analysis catch them |
+| **EXIF integrity & modification detection** | Has the evidence photo been edited, re-saved, or had metadata tampered with? | Fraudsters edit photos to change GPS coordinates, timestamps, or splice scenes — integrity checks detect this |
+| **Image forensics (ELA / noise)** | Does the pixel-level structure match a genuine camera capture? | AI-generated and manipulated images show anomalous compression artifacts and noise patterns |
+
+A **genuinely stranded worker** will show: pre-disruption delivery activity → trigger event confirmed by external source → GPS trail consistent with operating zone → evidence freshness verified → natural movement pattern → evidence photo taken by real camera with intact metadata. The system scores this as high-confidence and routes to `auto_approve`.
+
+A **spoofing bad actor** will show: no pre-disruption activity → GPS coordinates inconsistent with EXIF and zone history → evidence reused, AI-generated, or modified → movement pattern impossible → network fingerprint shared with other claimants. The system scores this as high-risk and routes to `fraud_escalated_review` or `reject_spoof_risk`.
+
+> [!IMPORTANT]
+> **Signal hierarchy principle:** No single signal — not GPS, not EXIF, not IP — is sufficient to approve or reject a claim in isolation. The system uses a **multi-signal weighted hierarchy** where higher-trust signals (verified trigger events, historical work patterns) carry more weight than lower-trust signals (GPS, IP context). This prevents both false approvals from spoofed GPS and false rejections from stripped EXIF metadata.
 
 ### 1a. Evidence Integrity & AI Image Detection
 
-Sophisticated fraud rings submit **AI-generated photos** as disruption evidence. Covara One defends using multi-layer image forensics:
+Sophisticated fraud rings may submit **AI-generated photos** as disruption evidence, or **edit real photos** to alter GPS coordinates and timestamps. Covara One defends against this using multi-layer image forensics:
+
+#### AI-Generated Image Detection (Gemini + SynthID)
+
+Google embeds **SynthID** — an invisible, robust digital watermark — into images generated by its AI models. This watermark survives compression, cropping, and re-encoding. Covara One leverages this:
 
 | Check | Method | What it catches |
 |---|---|---|
-| **SynthID watermark scan** | Gemini API analyzes evidence for embedded Google SynthID markers | Photos generated by Google AI models are flagged immediately |
-| **AI-generation probability** | Gemini Vision assesses texture uniformity, lighting inconsistencies | Catches AI from non-Google models (DALL-E, Midjourney, etc.) |
-| **EXIF integrity** | Verify DateTimeOriginal, Make, Model, GPS fields — flag editing software in `Software` field | Stripped or tampered EXIF detected |
-| **Error Level Analysis (ELA)** | Re-compress at known quality and compare error — edited regions show anomalous error | Spliced or fabricated evidence detected |
-| **Perceptual hash cross-matching** | Compare evidence photos across all claims in a batch | Identical photos from a fraud ring identified |
+| **SynthID watermark scan** | Gemini API analyzes submitted evidence for embedded SynthID markers | Photos generated by Google's AI models (Imagen, Gemini) are flagged immediately |
+| **AI-generation probability score** | Gemini Vision assesses whether image characteristics are consistent with AI generation (texture uniformity, lighting inconsistencies, artifact patterns) | Catches AI-generated images from non-Google models (DALL-E, Midjourney, Stable Diffusion) that lack SynthID |
+| **Camera vs. AI metadata signature** | Real camera photos contain specific EXIF fields (Make, Model, LensModel, FocalLength, ExposureTime, ISO) that AI-generated images lack | AI images have no genuine camera sensor data — they may have no EXIF at all or use synthetic metadata |
+
+> [!IMPORTANT]
+> **How Covara One uses Gemini for AI image detection:** Since we already integrate Gemini API for claim narrative generation, we extend it to perform evidence analysis. Gemini Vision can detect SynthID watermarks in AI-generated images and assess the probability that an image was synthetically created. This is not a separate integration — it's an extension of our existing Gemini pipeline.
+
+#### EXIF Integrity & Modification Detection
+
+| Check | Method | What it catches |
+|---|---|---|
+| **EXIF completeness** | Verify presence of core EXIF fields: DateTimeOriginal, DateTimeDigitized, Make, Model, GPSLatitude, GPSLongitude, Software | Stripped or missing EXIF suggests tampering or screenshot reuse |
+| **Software field check** | Flag if EXIF `Software` field contains image editors (Photoshop, GIMP, Snapseed, PicsArt) | Photos edited to change location or content are flagged |
+| **Timestamp chain-of-custody** | Compare `DateTimeOriginal` (when shutter fired) vs `DateTimeDigitized` (when sensor captured) vs `ModifyDate` (last save) | Genuine: all three within seconds. Tampered: ModifyDate is hours/days later |
+| **EXIF thumbnail vs. full image** | Compare the embedded EXIF thumbnail against the full-resolution image | If the photo was cropped or edited, the thumbnail may still show the original unedited version |
+| **GPS precision analysis** | Check GPS coordinate decimal precision — real GPS sensors produce 6+ decimal places with slight variance | Manually entered or copied GPS coordinates often have suspiciously round numbers or identical precision across submissions |
+| **Camera-device consistency** | Cross-check EXIF Make/Model against the worker's registered device | If a worker registered a Samsung phone but evidence EXIF shows an iPhone camera, the evidence is flagged |
+
+#### Additional Image Forensic Methods
+
+| Method | How it works | What it catches |
+|---|---|---|
+| **Error Level Analysis (ELA)** | Re-compress the image at a known quality level and compare the error difference across regions — uniform images show uniform error; spliced/edited regions show anomalous error levels | Photoshopped regions, pasted elements, cloned areas where disruption evidence was fabricated |
+| **Noise pattern consistency** | Analyze sensor noise distribution across the image — real cameras produce consistent noise patterns; composites show noise discontinuities | Composite images where a fake weather scene was placed over a real location |
+| **JPEG quantization table analysis** | Examine the JPEG compression tables — images re-saved through editing software have different quantization signatures than camera-original images | Evidence that was downloaded, edited, and re-uploaded rather than captured fresh |
+| **Perceptual hash cross-matching** | Generate perceptual hashes of all evidence photos across the claim batch and compare for similarity | Identical or near-identical photos submitted by different claimants in a fraud ring |
+| **Reverse image search signal** | Hash submitted evidence against a database of previously submitted images | Recycled evidence from previous claims or stock photos used as fake proof |
+
+#### Image verdict integration
+
+The image forensics layer produces a composite **evidence integrity score** that feeds into the fraud engine:
+
+| Evidence integrity | Meaning | Claim routing |
+|---|---|---|
+| **High** (0.8–1.0) | Fresh camera capture, intact EXIF, no AI markers, camera matches device | Normal processing — no evidence-related flags |
+| **Medium** (0.4–0.79) | Some EXIF gaps (e.g., stripped by messaging app) but no tampering indicators | Routes to `needs_review` — human reviewer evaluates holistically |
+| **Low** (0.0–0.39) | AI-generated markers detected, EXIF tampering, or edit signatures found | Routes to `hold_for_fraud` or `reject_spoof_risk` depending on other signals |
 
 > [!NOTE]
-> Workers who submit photos via WhatsApp may have EXIF stripped automatically. This is **not treated as fraud** — it reduces the evidence integrity score to Medium and routes to `needs_review`, never auto-rejects.
+> Workers who submit photos via WhatsApp or Telegram may have EXIF data stripped automatically by the messaging platform. This is **not treated as fraud** — it reduces the evidence integrity score to Medium and routes the claim to `needs_review`, where a human reviewer evaluates the claim using other available signals. The system never auto-rejects based on EXIF absence alone.
 
 ### 1b. Advanced Fraud Vectors & Threat Model
 
-#### Tier 1 — Direct Spoofing
+GPS spoofing is only one attack surface. Covara One defends against a full spectrum of fraud vectors, classified by severity and sophistication:
 
-| Vector | How the attack works | Defense |
+#### Tier 1 — Direct Spoofing (Technology-Based)
+
+| Vector | How the attack works | Covara One defense |
 |---|---|---|
-| **GPS spoofing apps** | Mock-location app fakes device coordinates in a red-alert zone | EXIF cross-check, TomTom route plausibility, impossible-travel velocity |
-| **VPN / proxy routing** | Traffic routed through VPN in disruption zone | VPN/datacenter IP detection — supporting signal, not standalone rejection |
-| **Emulator / app hooking** | App run in emulator with injected fake sensor data | Rooted-device detection, mock-location permission flag, sensor inconsistency |
+| **GPS spoofing apps** | Worker uses a mock-location app (e.g., Fake GPS, iSpoofer) to fake device coordinates in a red-alert zone | EXIF cross-check, TomTom Snap-to-Roads plausibility, movement plausibility over time, impossible-travel velocity checks |
+| **VPN / proxy routing** | Worker routes traffic through a VPN server or proxy located in the disruption zone, masking their real IP | VPN / datacenter / TOR IP detection against known ranges; carrier-IP expectation (Jio, Airtel, Vi); **treated as a supporting fraud signal, not a standalone rejection trigger** |
+| **Emulator / app hooking** | Worker runs the app inside an Android emulator (BlueStacks, Nox) or hooks the app to inject fake sensor data | Rooted-device detection, emulator fingerprint markers, mock-location permission enabled flag, sensor inconsistency (accelerometer/gyroscope absent or static), developer-mode detection |
 
-#### Tier 2 — Identity Misuse
+#### Tier 2 — Identity Misuse (Social-Based)
 
-| Vector | How the attack works | Defense |
+| Vector | How the attack works | Covara One defense |
 |---|---|---|
-| **Buddy login** | Worker A shares OTP; Worker B logs in from red-alert zone | New-device login during red-alert triggers liveness check; zone affinity mismatch |
-| **Account sharing ring** | Multiple people rotate one account | Device-account binding detects multiple device fingerprints per account |
+| **Buddy login (account handoff)** | Worker A (safe zone) shares OTP/password with Worker B (red-alert zone); Worker B logs into Worker A's app and files a claim using real local conditions | First-login-on-new-device during red-alert triggers liveness check (selfie); device fingerprint history mismatch; session continuity break detection; historical zone affinity — Worker A never operated in this zone before |
+| **Account sharing ring** | Multiple people rotate one account to file claims from different zones | Device-account binding detects multiple unique device fingerprints per account; IP/ASN pattern clustering reveals multi-location access |
+| **Credential farming** | Fraudsters create bulk accounts using purchased identities and file claims across many accounts | KYC verification gaps flagged; unusually low historical activity on account; bank verification anomaly; rapid account-to-first-claim interval |
 
 #### Tier 3 — Coordinated / Systemic Abuse
 
-| Vector | How the attack works | Defense |
+| Vector | How the attack works | Covara One defense |
 |---|---|---|
-| **Weather chaser** | Worker travels pre-emptively to zone, waits in café, then claims "stranded" | Pre-trigger presence requirement: must show work activity before trigger fired |
-| **Fraud ring cluster** | 500+ workers submit synchronized claims from near-identical coordinates | DBSCAN clustering; shared payout destinations; network/IP clustering; circuit-breaker |
+| **Weather chaser (pre-emptive zone squatting)** | Worker sees a red-alert forecast, travels to the zone without working, waits in a café during the storm, and claims "stranded on delivery" | Pre-trigger presence requirement: must show work activity in/near the zone before or during the trigger window; historical zone affinity check; evidence of active work intent, not just physical presence |
+| **Activity continuity anomaly (operational mismatch)** | Suspicious claims tied to weak or absent activity continuity — worker claims stranding but has no verifiable pre-disruption delivery trail, or shows unusual acceptance/delivery patterns inconsistent with genuine work | Historical order completion cross-check; shift-activity gap analysis; repeated localized claim bursts with low operational evidence |
+| **Fraud ring cluster behavior** | 50–500+ workers coordinate via Telegram to submit synchronized claims from near-identical coordinates during a trigger event | DBSCAN clustering on timestamps + coordinates; shared payout destinations; evidence similarity scoring; network/IP clustering; circuit-breaker controls |
 
 ### 1c. Signal Confidence Hierarchy
 
+Not all verification signals are equally trustworthy. Covara One evaluates claims using a **weighted signal hierarchy** — higher-trust signals carry more weight in the fraud decision:
+
 | Rank | Signal | Trust level | Rationale |
 |:---:|---|---|---|
-| 1 | **Verified trigger event** | Highest | External source (OpenWeather, CPCB) — cannot be spoofed by the worker |
-| 2 | **Historical work pattern** | High | Long-term baseline — extremely difficult to fabricate |
-| 3 | **Shift / order continuity** | High | Platform-verified delivery activity before disruption |
-| 4 | **Pre-trigger presence** | High | Worker must show presence in zone before trigger opened |
+| 1 | **Verified trigger event** | Highest | External source (OpenWeather, IMD, CPCB) — cannot be spoofed by the worker |
+| 2 | **Historical work pattern** | High | Long-term behavioral baseline — extremely difficult to fabricate |
+| 3 | **Shift / order continuity** | High | Platform-verified delivery activity before disruption — requires real work |
+| 4 | **Pre-trigger presence** | High | Worker must show presence in/near the zone before the trigger window opened |
 | 5 | **Device continuity** | Medium-High | Hardware-bound — harder to spoof than software signals |
-| 6 | **EXIF evidence integrity** | Medium | Strong when present; can be stripped by messaging apps |
-| 7 | **AI image detection** | Medium | Catches AI-generated evidence |
-| 8 | **Browser / device GPS** | Medium-Low | Easily spoofed — never trusted alone |
-| 9 | **IP / network context** | Low | Supporting signal only — VPN use raises suspicion |
+| 6 | **EXIF evidence integrity** | Medium | Strong when present, but can be stripped by messaging apps — absence ≠ fraud |
+| 7 | **AI image detection** | Medium | Catches AI-generated evidence, but sophisticated fakes evolve rapidly |
+| 8 | **Browser / device GPS** | Medium-Low | Easily spoofed by mock-location apps — never trusted alone |
+| 9 | **IP / network context** | Low | Supporting signal only — VPN use increases suspicion but mobile networks can produce unusual IPs |
 
-### Fraud Decision Matrix
+**Why this hierarchy matters:** If GPS (rank 8) is spoofed but the verified trigger event (rank 1), historical work pattern (rank 2), and shift continuity (rank 3) all fail, the system has strong grounds for fraud detection. Conversely, a worker with intact high-trust signals but missing EXIF (rank 6) is routed to review, not rejected.
+
+### 1d. Behavioral Identity & Region Controls
+
+These controls detect fraud that bypasses location spoofing by targeting identity, behavior, and regional anomalies:
+
+| Control | What it detects | How it works |
+|---|---|---|
+| **Impossible travel (velocity check)** | Worker appearance in two distant locations within an impossible timeframe | If Worker A completes an order in Zone 1 at 10:00 AM and files a claim from Zone 2 (50 km away) at 10:05 AM, the system flags mathematically impossible travel speed |
+| **Historical zone affinity** | First-ever appearance in a red-alert zone exactly during a trigger event | If 99% of a worker's deliveries are in South City, and their first-ever login in North City coincides with a flood warning, the claim is held — genuine workers don't randomly switch zones during storms |
+| **Pre-trigger presence requirement** | Sudden appearance at exactly the moment a trigger fires | Worker must demonstrate presence or work continuity in/near the affected zone *before or during* the trigger window — a sudden first appearance exactly at event time is treated as suspicious |
+| **VPN / datacenter IP detection** | Claims routed through non-mobile IP infrastructure | Real gig workers use mobile carrier IPs (Jio, Airtel, Vi). Claims from known VPN endpoints, TOR exit nodes, or cloud datacenter IPs (AWS, Azure, GCP) are flagged as supporting fraud signals |
+| **Device-account binding** | Login from an unregistered device during a trigger event | App bonds to a primary hardware ID. New-device login during a red-alert event triggers biometric liveness check (selfie) — only for high-risk escalated cases, not for all claims |
+| **Emulator / root detection** | App running in a simulated or compromised environment | Detect rooted devices, emulator fingerprints (BlueStacks, Nox), mock-location permission enabled, developer-mode active, and sensor inconsistency (no accelerometer/gyroscope data) |
+| **Dynamic trust score penalties** | Accumulated behavioral anomalies across claims | Sudden IP switches, improbable zone hops, VPN usage, and failed liveness checks feed back into the worker's `trust_score` — lowered trust increases premium at renewal and defaults future claims to `needs_review` |
+| **Region-based claim volume monitoring** | Abnormal claim spikes from specific geographic zones | Per-zone real-time claim rate tracking with dynamic thresholds based on historical patterns and current trigger severity |
+
+> [!IMPORTANT]
+> **Biometric / selfie liveness checks are triggered only for high-risk escalated cases** (new device + red-alert zone + zone affinity mismatch). They are NOT required for normal claims. This prevents unnecessary friction for honest workers.
+
+### 2. The Data: Detecting Coordinated Fraud Rings
+
+Beyond individual spoof detection, Covara One analyzes **cross-claimant patterns** to identify organized fraud rings:
+
+| Data point | What it reveals | Detection method |
+|---|---|---|
+| **Synchronized claim submission timing** | Multiple workers filing claims within a narrow time window suggests coordination | Statistical clustering (DBSCAN) on submission timestamps |
+| **Repeated identical / near-identical coordinates** | Spoofers using shared GPS-spoofing coordinates | Coordinate density analysis — flag when N+ claims share coordinates within a 50m radius |
+| **Shared payout destinations** | Multiple worker accounts routing payouts to the same bank/UPI endpoint | Graph analysis on payout destination overlap |
+| **Shared device fingerprints** | One physical device used across multiple accounts | Device ID and browser fingerprint cross-matching |
+| **Evidence similarity scoring** | Identical or near-identical photos/videos across claimants | Perceptual hash comparison across batch submissions |
+| **Network / IP / ASN overlap** | Coordinated claims from the same physical network suggest co-location | ASN and IP subnet clustering across claim batch |
+| **Low evidence variety** | Fraud rings often submit templated or minimal evidence | Evidence type diversity scoring per claimant |
+| **Weak or absent route continuity** | No verifiable delivery activity before the disruption | Historical order completion cross-check |
+| **Prior suspicious claim rate** | Repeat offenders with elevated fraud history | Bayesian prior weighting on individual fraud scores |
+| **Trigger presence / absence mismatch** | Claims filed for a zone where no trigger event was independently verified | Trigger correlation score: was the disruption real? |
+
+### 3. The UX Balance: Protecting Honest Workers
+
+Anti-spoofing must not punish honest gig workers who experience genuine disruptions with poor network conditions, stripped photo metadata, or imperfect GPS signals.
+
+**Core principle:** No single anomaly auto-rejects a claim unless it is extremely high-confidence fraud. Most signals increase review severity rather than immediately denying a claim.
+
+#### Fraud Decision Matrix
 
 | Signal pattern | Outcome | Action |
 |---|---|---|
-| Trigger match + shift continuity + zone match + anti-spoofing pass | **`auto_approve`** | Instant payout via parametric ladder |
-| Trigger match + missing EXIF + moderate geo uncertainty | **`needs_review`** | Human-assisted review — no penalty |
-| New device + red-alert login + zone anomaly + VPN | **`hold_for_fraud`** | Held pending investigation; liveness check triggered |
-| Mass identical claims + weak activity continuity + high spoof-risk cluster | **`batch_hold`** | Entire cluster held — reviewed separately |
-| No valid trigger + high spoof confidence + strong fraud-ring pattern | **`reject_spoof_risk`** | Rejected — 48-hour appeal window |
+| Trigger match + shift continuity + zone match + anti-spoofing pass + low fraud | **`auto_approve`** | Instant payout via parametric ladder |
+| Trigger match + missing EXIF + moderate geo uncertainty | **`needs_review`** | Human-assisted review (Gemini AI explanation) — no penalty |
+| Missing trigger match + weak activity continuity + moderate spoof signals | **`needs_review`** | Extended review with additional evidence request |
+| New device + red-alert login + zone anomaly + VPN detected | **`hold_for_fraud`** | Held pending investigation — liveness check triggered |
+| Spoof indicators + cluster anomaly + evidence mismatch | **`hold_for_fraud`** | Held with cluster-level screening |
+| Mass identical claims + weak activity continuity + high spoof-risk cluster | **`batch_hold`** | Entire cluster held — individual claims reviewed separately |
+| No valid trigger + high spoof confidence + strong fraud-ring pattern | **`reject_spoof_risk`** | Rejected — 48-hour appeal/resubmit window |
+| Post-approval fraud evidence surfaces after payout | **`post_approval_flagged`** | Trust score downgraded, potential legal escalation |
+
+#### False-Positive / Honest Worker Protection
+
+| Scenario that catches honest workers | Why it happens | How Covara One protects them |
+|---|---|---|
+| **New device** | Worker upgraded their phone or factory-reset | New device alone only triggers review, not rejection; liveness check only during red-alert coincidence |
+| **Missing EXIF metadata** | Photo sent via WhatsApp/Telegram, which strip metadata | Never auto-rejected — routed to `needs_review` with other signals evaluated |
+| **GPS inconsistency** | Bad weather and network drops cause GPS drift/jumps | System recognizes weather-correlated network degradation — not treated as spoofing |
+| **IP range anomaly** | Mobile carrier uses unusual or dynamic IP ranges | IP is a low-trust supporting signal only — never standalone rejection |
+| **City switch** | Worker reassigned to a new zone by platform | If delivery platform data confirms reassignment, zone affinity check is overridden |
+| **Cluster proximity** | Worker happens to be near a fraud ring cluster during a real event | Individual multi-signal evaluation separates genuine from fraudulent within the batch |
+
+**Fairness guarantees:**
+- **Escalation requires convergence**: at least 3+ independent signals must align before a claim is held for fraud
+- Workers can **appeal and resubmit** evidence within a 48-hour grace window from the worker dashboard
+- The system tracks **false-positive rates** per zone and adjusts thresholds to minimize honest-worker friction
+- Biometric / selfie checks are triggered **only for high-risk escalated cases**, not normal claims
+- Trust score penalties are **gradual and reversible** — clean claim history restores the score over time
 
 ### 4. Liquidity Protection & Circuit-Breaker Controls
 
+The 500-worker syndicate attack is fundamentally a **liquidity drain** attack. Covara One defends the payout pool with automated circuit-breakers:
+
 | Control | Trigger condition | Action |
 |---|---|---|
-| **Mass-claim throttling** | > 50 claims from one zone within 1 hour | All new claims enter `needs_review` automatically |
+| **Mass-claim throttling** | > 50 claims from a single zone within 1 hour | All new claims from that zone enter `needs_review` automatically |
 | **Batch hold on anomaly spike** | Cluster analysis detects coordinated submission pattern | Entire batch held pending cluster-level fraud screening |
-| **Emergency admin override** | Manual insurer/admin intervention | Admin can freeze, release, or escalate any claim batch |
+| **Payout release gate** | Extreme events (Band 3 severity in 3+ zones simultaneously) | Payouts released only after cluster-level fraud screening completes |
+| **Post-trigger fraud-ring screening** | Any bulk payout release from a single trigger event | Cluster-level review before funds leave the pool |
+| **Emergency admin override** | Manual insurer/admin intervention | Admin can freeze, release, or escalate any claim batch from the operations dashboard |
 | **Daily zone payout cap** | Cumulative zone payouts exceed 3× historical daily average | Remaining claims queued for next-day release after review |
+| **Spoof-risk payout throttling** | Zone-level spoof-risk score rises sharply | Payout velocity reduced; high-confidence claims still release, uncertain ones queued |
+
+These controls protect the liquidity pool without blocking legitimate claims — genuine mass-disruption events (e.g., city-wide flooding) are still processed, but with an additional verification layer.
+
+### 5. Fraud-Ring Scenario: The 500-Worker Syndicate
+
+To demonstrate the system's defense capability, consider the exact attack described in the market-shift briefing:
+
+| Step | What happens | Covara One response |
+|---|---|---|
+| 1. **Coordination** | 500 workers in one zone coordinate via Telegram to spoof GPS during a red-alert weather warning | — |
+| 2. **Mass submission** | Claims flood in within a 20-minute window, all from near-identical coordinates | **Circuit-breaker fires**: mass-claim throttling activates for the zone |
+| 3. **Cluster detection** | DBSCAN clustering identifies the batch: 500 claims, < 100m coordinate spread, synchronized timing | **Entire batch moved to `hold_for_fraud`** |
+| 4. **Individual screening** | Each claim is cross-checked: no pre-disruption delivery activity, no route plausibility, EXIF missing or inconsistent, shared IP/ASN patterns | **490 claims flagged as `reject_spoof_risk`** |
+| 5. **Genuine workers preserved** | 10 workers in the batch had real delivery activity, valid EXIF, and unique network patterns | **10 claims routed to `needs_review`** for human verification |
+| 6. **Liquidity protected** | Zero unauthorized payouts released; pool remains intact | **Admin dashboard shows the full audit trail** |
+
+The key insight: even within a coordinated fraud ring, the system preserves genuine workers by evaluating each claim on multi-signal evidence, not batch-level assumptions.
+
+### 6. Basis-Risk Acknowledgment
+
+As a parametric insurance product, Covara One explicitly acknowledges **basis risk** — the gap between trigger activation and individual impact:
+
+- A trigger may fire (e.g., 72mm rain in a zone) but not every worker in that zone suffers equally — some may have already completed their shift
+- A worker may suffer genuine disruption even when the trigger value is borderline (e.g., 63mm rain, just below the 64.5mm threshold)
+- The system mitigates basis risk through:
+  - **Tiered trigger thresholds** (watch → claim → escalation) that capture a range of severity
+  - **Exposure matching** that verifies individual shift/zone overlap with the event
+  - **Anti-spoofing verification** that validates genuine presence
+  - **Review routing** that escalates uncertain cases for human judgment rather than auto-rejecting
+
+This acknowledgment is critical for regulatory defensibility and insurer credibility.
 
 ---
 
@@ -565,6 +794,70 @@ Full identity verification upfront kills conversion. Covara One uses a **progres
 - **ML model** = supporting signal for probability estimation, anomaly detection, review routing
 
 ---
+
+## Pricing, Thresholds, and References
+
+Environmental thresholds (rain, AQI, heat) are anchored to official Indian government classifications — IMD, CPCB, and NDMA. Pricing and payout derivation follow expected-loss premium principles grounded in actuarial literature. The repo separates hazard classification from pricing methodology by design.
+
+- **Central reference register** with all sources, threshold inference logic, and formula summary → [docs/README.md](docs/README.md#reference-register)
+- **Threshold basis per trigger family** with source links → [data/README.md](data/README.md#trigger-threshold-reference-table)
+- **ML baseline and feature normalization provenance** → [ml/README.md](ml/README.md#pricing-baseline-and-reference-notes)
+- **Insurance-side trend sources** (IRDAI, IIB) → [docs/README.md](docs/README.md#insurance-side-trend-sources)
+
+---
+
+## Parametric Product: Weekly Benefit Plans
+
+> Covara One uses an internal weekly risk-and-pricing model to calibrate fair premiums and benefit levels, while the final worker-facing product remains parametric: once a pre-agreed trigger band is hit and both exposure matching and anti-spoofing verification pass, the payout is released according to the selected weekly benefit plan.
+
+The formula engine remains an **internal pricing and calibration tool**. The **customer-facing product** is structured as a parametric weekly benefit ladder released only when both the trigger threshold and the anti-spoofing verification checks pass.
+
+### Two Plans Only: Essential & Plus
+
+Covara One offers exactly **two** worker-facing plans to keep the purchase decision simple and transparent:
+
+| Plan | Weekly benefit (W) | Target worker | Indicative weekly premium |
+|---|---:|---|---|
+| **Essential** | ₹3,000 | Lower premium / wider adoption / cost-sensitive workers | Baseline calibrated |
+| **Plus** | ₹4,500 | Higher protection / experienced workers / tougher zones | Baseline × 1.35–1.50 |
+
+**Why only two plans?**
+- **Essential** reduces entry friction and improves conversion for price-sensitive workers — the affordable starting point
+- **Plus** gives a higher weekly benefit and serves as a natural upgrade path for workers who want stronger protection
+- This creates a clean, ethical ladder: low-friction entry option + higher-margin upgrade option
+- It helps the **insurer** by improving risk segmentation
+- It helps the **worker** by giving a simple choice between affordability and strength of cover
+- Too many plans reduce conversion, confuse workers, and slow purchase decisions
+
+### Parametric Payout Ladder
+
+The public payout is based on **trigger severity band** × **selected plan benefit** — not a flexible formula output:
+
+Let `W` = selected weekly benefit.
+
+| Trigger / exposure band | Description | Parametric payout |
+|---|---|---:|
+| **Band 1** — Moderate disruption | Watch-level trigger confirmed with partial exposure | `0.25 × W` |
+| **Band 2** — Major disruption | Claim-level trigger confirmed with strong exposure | `0.50 × W` |
+| **Band 3** — Severe disruption | Escalation-level trigger with full exposure match | `1.00 × W` |
+
+#### Example: Essential plan (W = ₹3,000)
+
+| Band | Payout |
+|---|---:|
+| Band 1 | ₹750 |
+| Band 2 | ₹1,500 |
+| Band 3 | ₹3,000 |
+
+#### Example: Plus plan (W = ₹4,500)
+
+| Band | Payout |
+|---|---:|
+| Band 1 | ₹1,125 |
+| Band 2 | ₹2,250 |
+| Band 3 | ₹4,500 |
+
+This structure is **much easier to defend as parametric insurance** than a flexible "pay whatever the formula outputs" model. Workers know exactly what they get. Insurers know exactly what they owe.
 
 ## 📐 Internal Calibration Engine
 
