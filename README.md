@@ -31,39 +31,64 @@
 
 ---
 
-## 💡 The Vision
+<br>
 
-India's **12.7 million gig workers** are the backbone of the digital economy, yet **80% have zero savings**. When torrential rain, extreme heat, or toxic AQI hits, platforms pause and workers earn **₹0**. 
+<div align="center">
 
-**Covara One** is the solution: A **fully parametric, AI-hardened insurance engine** that pays workers automatically the moment a climate disaster is verified. No adjusters, no paperwork—just liquidity when it's needed most.
+<img src="https://capsule-render.vercel.app/api?type=rect&color=0:FF4B2B,100:FF416C&height=120&text=🔥%2012.7M%20Workers%20Unprotected&fontColor=ffffff&fontSize=40&desc=The%20Climate%20Crisis%20is%20an%20Income%20Crisis&descSize=16&descAlignY=75" width="100%" />
+
+</div>
+
+<br>
+
+## 📉 The Reality of Climate Disruption
+
+| 🌧️ The Shock | 🛑 The Response | 💸 The Impact |
+|:---|:---|:---|
+| **Mumbai 157mm Flood** | Zomato/Swiggy pause zones. | **₹0 Income** for 3 days. |
+| **Delhi AQI 485 (Toxic)** | GRAP Stage IV restricts bikes. | **₹0 Income** for a week. |
+| **Kolkata 47°C Heatwave** | Deliveries collapse mid-day. | **₹0 Income** during peak hours. |
+
+> Platforms cover **accidents**. The government covers **hospitalization**.  
+> **Nobody** covers income lost when the city shuts down.  
+> **Covara One** fills this gap with 100% automated, zero-touch parametric payouts.
 
 ---
 
-## 👤 Our Persona — Arjun, the Monsoon Rider
+## 👤 The Face of the Crisis: Arjun, The Monsoon Rider
 
-<table>
-<tr>
-<td width="60%">
-
-### Arjun, 29
-**Swiggy Rider | Andheri West, Mumbai**
-- 🛵 **Shift:** 5 PM – 1 AM (Late-night peak window)
-- 💰 **Income:** ₹19,000/month (Zero savings)
-- 🌩️ **The Crisis:** During the Oct '24 floods, Andheri saw 157mm in 6h. Platforms paused. **Arjun earned ₹0 for 3 days.** 
-
-> *“₹1,900 lost is my entire fuel budget for the month gone.”*
-
-</td>
-<td width="40%" align="center">
-
-**The Solution**
 <br>
-🪙 **Micro-Premium**<br>₹28/week — less than one delivery trip.
-<br><br>
-⚡ **Zero-Touch**<br>IMD logs rain → Money in UPI.
-<br><br>
-🛡️ **Trust Factor**<br>Verified via route-purity and EXIF data.
 
+<table align="center" width="100%">
+<tr>
+<td width="25%" align="center">
+  <img src="https://api.dicebear.com/7.x/notionists/svg?seed=ArjunBike&backgroundColor=f8f9fa&radius=50" width="150px" style="border-radius:20px;"/>
+  <br><br>
+  <b>Arjun (29)</b><br>
+  <i>Mumbai, Andheri West</i>
+</td>
+<td width="45%">
+  <h3>The Vulnerability</h3>
+  <ul>
+    <li>🛵 <b>Shift:</b> 5 PM – 1 AM (Late-night peak)</li>
+    <li>💰 <b>Earnings:</b> ₹19,000/month</li>
+    <li>💳 <b>Savings:</b> ₹0 (Lives paycheck-to-paycheck)</li>
+  </ul>
+  <blockquote>
+    <i>"When the monsoon hit in October, the app went dark for 3 days. I lost ₹1,900. That was my entire fuel budget for the month."</i>
+  </blockquote>
+</td>
+<td width="30%" align="left">
+  <h3>The Covara Remedy</h3>
+  <br>
+  <b>🪙 Micro-Pricing</b><br>
+  <span style="color:gray;font-size:14px">₹28/week. Costs less than a single delivery fee.</span>
+  <br><br>
+  <b>⚡ Immediate Liquidity</b><br>
+  <span style="color:gray;font-size:14px">IMD verifies rain > 64.5mm. Money hits UPI instantly.</span>
+  <br><br>
+  <b>🚫 Zero Paperwork</b><br>
+  <span style="color:gray;font-size:14px">No phone calls. No PDFs. Just deterministic trust.</span>
 </td>
 </tr>
 </table>
