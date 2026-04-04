@@ -55,7 +55,10 @@ async def get_overlapping(
     return {"zone_id": zone_id, "overlapping_triggers": results, "count": len(results)}
 
 
+from fastapi_cache.decorator import cache
+
 @router.get("/live")
+@cache(expire=300)
 async def get_live_triggers(
     city: Optional[str] = None, zone_id: Optional[str] = None
 ):

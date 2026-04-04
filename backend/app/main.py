@@ -28,6 +28,7 @@ from backend.app.routers import (
     analytics,
     ingest,
     kyc,
+    mock_data,
 )
 from backend.app.seed import seed_all
 
@@ -45,6 +46,19 @@ async def lifespan(app: FastAPI):
     else:
         print(f"OK: Config loaded. Supabase: {settings.supabase_url}")
         print(f"   Environment: {settings.app_env}")
+        
+    try:
+        from fastapi_cache import FastAPICache
+        from fastapi_cache.backends.redis import RedisBackend
+        from redis import asyncio as aioredis
+        import os
+        redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
+        redis = aioredis.from_url(redis_url, encoding="utf8", decode_responses=False)
+        FastAPICache.init(RedisBackend(redis), prefix="covara-cache")
+        print("OK: Redis cache initialized")
+    except Exception as e:
+        print(f"WARN: Redis cache initialization failed: {e}")
+        
     yield
 
 
@@ -82,6 +96,7 @@ app.include_router(policies.router)
 app.include_router(analytics.router)
 app.include_router(ingest.router)
 app.include_router(kyc.router)
+app.include_router(mock_data.router)
 
 
 # ── Root & Health ─────────────────────────────────────────────────

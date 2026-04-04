@@ -4,6 +4,10 @@ import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { Activity, PlayCircle, AlertTriangle, Zap, Radio, MapPin, Clock, Globe, Cpu } from 'lucide-react'
 
+interface Zone {
+  id: string; city: string; zone_name: string; pincode?: string
+}
+
 interface TriggerEvent {
   id: string; city: string; zone_id?: string; trigger_family: string; trigger_code: string
   observed_value: number; severity_band: string; source_type?: string; started_at: string
@@ -15,6 +19,7 @@ export default function AdminTriggers() {
   const supabase = createClient()
   const [triggers, setTriggers] = useState<TriggerEvent[]>([])
   const [historyTriggers, setHistoryTriggers] = useState<TriggerEvent[]>([])
+  const [zones, setZones] = useState<Zone[]>([])
   const [showHistory, setShowHistory] = useState(true)
   const [simResult, setSimResult] = useState<{ ok: boolean; msg: string } | null>(null)
   const [isSimulating, setIsSimulating] = useState(false)
@@ -35,7 +40,19 @@ export default function AdminTriggers() {
     } catch (e) { console.error('Could not load history', e) }
   }, [supabase])
 
-  useEffect(() => { loadTriggers(); loadHistoryTriggers() }, [loadTriggers, loadHistoryTriggers])
+  const loadZones = useCallback(async () => {
+    try {
+      const { data } = await supabase.from('zones').select('id, city, zone_name, pincode').order('city')
+      const zoneList = data || []
+      setZones(zoneList)
+      // Auto-set the first zone as default
+      if (zoneList.length > 0 && !simForm.zone_id) {
+        setSimForm(s => ({ ...s, zone_id: zoneList[0].id, city: zoneList[0].city }))
+      }
+    } catch (e) { console.error('Could not load zones', e) }
+  }, [supabase]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { loadTriggers(); loadHistoryTriggers(); loadZones() }, [loadTriggers, loadHistoryTriggers, loadZones])
 
   const handleSimulate = async (e: React.FormEvent) => {
     e.preventDefault(); setIsSimulating(true); setSimResult(null)
@@ -124,8 +141,23 @@ export default function AdminTriggers() {
                   <input type="text" value={simForm.city} onChange={e => setSimForm({ ...simForm, city: e.target.value })} className="input-field" />
                 </div>
                 <div>
-                  <label className="text-xs uppercase tracking-wider block mb-1.5 font-medium" style={{ color: 'var(--text-tertiary)' }}>Zone ID</label>
-                  <input type="text" value={simForm.zone_id} onChange={e => setSimForm({ ...simForm, zone_id: e.target.value })} className="input-field" placeholder="UUID" required />
+                  <label className="text-xs uppercase tracking-wider block mb-1.5 font-medium" style={{ color: 'var(--text-tertiary)' }}>Zone</label>
+                  <select
+                    value={simForm.zone_id}
+                    onChange={e => {
+                      const selected = zones.find(z => z.id === e.target.value)
+                      setSimForm({ ...simForm, zone_id: e.target.value, city: selected?.city || simForm.city })
+                    }}
+                    className="input-field-select"
+                    required
+                  >
+                    <option value="">Select zone…</option>
+                    {zones.map(z => (
+                      <option key={z.id} value={z.id}>
+                        {z.city} / {z.zone_name}{z.pincode ? ` (${z.pincode})` : ''}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <button type="submit" disabled={isSimulating} className="btn-primary w-full py-3 text-sm font-semibold flex items-center justify-center gap-2"

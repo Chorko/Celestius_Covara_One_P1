@@ -52,6 +52,7 @@ def evaluate_fraud_risk(
     device_context: dict = None,
     zone_claims_last_hour: int = 0,
     zone_avg_hourly: float = 5.0,
+    recent_claims_batch: list = None,
 ) -> dict:
     """
     Evaluates fraud across 5 layers using the signal confidence hierarchy.
@@ -211,16 +212,72 @@ def evaluate_fraud_risk(
     # ════════════════════════════════════════════════════════════════════
     # In production: DBSCAN clustering on timestamps + coordinates,
     # shared payout destinations, evidence similarity scoring.
-    # Here we use zone claim volume as a proxy.
     cluster_risk = 0.0
-    if zone_claims_last_hour > 50:
-        cluster_risk = 0.9
-        flags.append("mass_claim_zone_spike")
-    elif zone_claims_last_hour > 20:
-        cluster_risk = 0.5
-        flags.append("elevated_zone_claims")
-    elif zone_claims_last_hour > 10:
-        cluster_risk = 0.2
+    batch_timing_similarity = None
+
+    if recent_claims_batch and len(recent_claims_batch) >= 3:
+        try:
+            import numpy as np
+            from sklearn.cluster import DBSCAN
+            from datetime import datetime
+            
+            data = []
+            for c in recent_claims_batch:
+                lat = c.get('stated_lat') or c.get('lat')
+                lng = c.get('stated_lng') or c.get('lng')
+                ts = c.get('created_at') or c.get('timestamp')
+                if lat is not None and lng is not None and ts is not None:
+                    try:
+                        dt = datetime.fromisoformat(str(ts).replace('Z', '+00:00'))
+                        mins = dt.timestamp() / 60.0
+                        data.append([float(lat), float(lng), mins])
+                    except Exception:
+                        pass
+                        
+            if len(data) >= 3:
+                X = np.array(data)
+                # Normalize minutes to lat/lng scale (1 min ~ 0.001 deg)
+                X[:, 2] = X[:, 2] * 0.001
+                
+                db = DBSCAN(eps=0.005, min_samples=3).fit(X)
+                labels = db.labels_
+                
+                claim_lat = (claim_data or {}).get("stated_lat") or (claim_data or {}).get("lat")
+                claim_lng = (claim_data or {}).get("stated_lng") or (claim_data or {}).get("lng")
+                claim_ts = (claim_data or {}).get("created_at") or (claim_data or {}).get("timestamp")
+                
+                if claim_lat and claim_lng and claim_ts:
+                    cdt = datetime.fromisoformat(str(claim_ts).replace('Z', '+00:00'))
+                    cmins = cdt.timestamp() / 60.0
+                    c_pt = np.array([[float(claim_lat), float(claim_lng), cmins * 0.001]])
+                    
+                    from sklearn.metrics import pairwise_distances
+                    if np.any(labels != -1):
+                        dists = pairwise_distances(c_pt, X[labels != -1])
+                        if dists.min() < 0.005:
+                            cluster_risk = 0.95
+                            flags.append("dbscan_fraud_cluster_match")
+                            flags.append("mass_claim_zone_spike")
+                            
+                            # Get std dev of timestamps in that cluster
+                            nearest_idx = np.argmin(pairwise_distances(c_pt, X))
+                            cluster_id = labels[nearest_idx]
+                            if cluster_id != -1:
+                                cluster_times = X[labels == cluster_id][:, 2] / 0.001
+                                batch_timing_similarity = float(np.std(cluster_times))
+        except ImportError:
+            pass
+
+    # Fallback to volume proxy if DBSCAN didn't flag
+    if cluster_risk == 0.0:
+        if zone_claims_last_hour > 50:
+            cluster_risk = 0.9
+            flags.append("mass_claim_zone_spike")
+        elif zone_claims_last_hour > 20:
+            cluster_risk = 0.5
+            flags.append("elevated_zone_claims")
+        elif zone_claims_last_hour > 10:
+            cluster_risk = 0.2
 
     cluster_score = 1.0 - cluster_risk  # Higher = safer
 
@@ -383,7 +440,7 @@ def evaluate_fraud_risk(
         "route_plausibility_score": route_plausibility_score,  # Live TomTom Routing API
         "historical_order_continuity": historical_orders,
         "repeated_coord_density": zone_claims_last_hour,
-        "batch_timing_similarity": None,  # DBSCAN placeholder
+        "batch_timing_similarity": batch_timing_similarity,
         "trigger_correlation_score": 1.0 if has_trigger else 0.0,
         "evidence_completeness": avg_integrity,
         "prior_suspicious_rate": prior_claim_rate,

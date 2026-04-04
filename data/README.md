@@ -13,8 +13,8 @@
 | Variable dictionary | 📝 Documented |
 | Threshold reference table | 📝 Documented |
 | Seed CSV files | ✅ Present | `data/samples/*.csv` (3 files, 8 rows each) |
-| Synthetic data generator script | 📋 Planned |
-| Mock-data API endpoint | 📋 Planned |
+| Synthetic data generator (DB re-seed) | ✅ Implemented (`POST /simulate/mock-data/generate`) |
+| Claim scenario simulation endpoint | ✅ Implemented (`POST /simulate/claim-scenario` — full 8-stage pipeline, no DB write) |
 
 ---
 
@@ -177,7 +177,7 @@ The seed dataset is available as actual CSV files in `data/samples/`:
 | **Rain** | 48 mm watch / 64.5 mm heavy / 115.6 mm very heavy | [IMD Rainfall FAQ](https://rsmcnewdelhi.imd.gov.in/images/pdf/faq.pdf), [IMD Heavy Rainfall Warning](https://mausam.imd.gov.in/imd_latest/contents/pdf/pubbrochures/Heavy%20Rainfall%20Warning%20Services.pdf) | IMD defines heavy rainfall at 64.5 mm and very heavy at 115.6 mm. We introduce 48 mm as an earlier product watch threshold to begin elevated monitoring before the claim level. | ✅ Public |
 | **AQI** | 201+ caution / 301+ severe / 401+ extreme | [CPCB National AQI](https://www.cpcb.nic.in/national-air-quality-index/), [OGD AQI Dataset](https://www.data.gov.in/resource/real-time-air-quality-index-various-locations) | CPCB defines Poor (201–300), Very Poor (301–400), Severe (401+). We map 201+ as caution and 301+ as claim threshold because these bands impair outdoor delivery work. | ✅ Public |
 | **Heat** | 45°C heat-wave / 47°C severe | [IMD Heat Wave Warning](https://mausam.imd.gov.in/imd_latest/contents/pdf/pubbrochures/Heat%20Wave%20Warning%20Services.pdf), [NDMA Heat Wave](https://ndma.gov.in/Natural-Hazards/Heat-Wave) | IMD/NDMA define heat-wave at ≥ 45°C for plains regions. We use 45°C as claim threshold and 47°C as severe escalation. | ✅ Public |
-| **Traffic** | ≥ 40% travel delay | Internal | No single public standard for delivery-impairment delay. 40% delay threshold is a product-engineering decision estimating the point where routes become undeliverable. | ⚙️ Operational |
+| **Traffic** | ≥ 40% travel delay | [TomTom Traffic Flow API](https://developer.tomtom.com/traffic-api/documentation/traffic-flow/flow-segment-data) | 40% delay threshold is a product-engineering decision estimating the point where routes become undeliverable. TomTom live data provides proxy. *(Planned: Google Maps Distance Matrix API)* | ⚙️ TomTom live + Operational |
 | **Platform outage** | ≥ 30 minutes | Internal | Platform data is not publicly available. 30-minute threshold estimates loss of material earning opportunity during a shift. | ⚙️ Operational |
 | **Demand collapse** | ≥ 35% order drop vs baseline | Internal | Order volume is not publicly available. 35% drop estimates the threshold where earning opportunity falls below viable levels. | ⚙️ Operational |
 
@@ -199,25 +199,24 @@ The seed dataset is available as actual CSV files in `data/samples/`:
 
 ---
 
-## Planned Generator Endpoint
-
-> **📋 Status:** Planned / target architecture
+## Simulation Endpoints (Implemented)
 
 ```
-GET /mock-data/generate?city=<city>&days=<n>
-Returns:
-  - worker_data.csv
-  - trigger_data.csv
-  - joined_training_data.csv
-  - summary.json
+POST /simulate/mock-data/generate
+  Runs seed_all() to re-populate the DB with synthetic data.
+  Returns: { status, details }
+  Auth: insurer_admin only
 
-GET /simulate/claim-scenario?worker_id=<id>&trigger_id=<id>
-Returns:
-  - trigger evaluation
-  - premium before/after
-  - payout recommendation
-  - fraud confidence
-  - claim decision trace
+POST /simulate/claim-scenario
+  Body: { worker_id, zone_id, trigger_family, raw_value }
+  Returns:
+    - worker_metrics (B, E, C)
+    - ml_probability (live RF inference)
+    - fraud_engine (5-layer full breakdown)
+    - payout_calculation
+    - recommended_action
+  Auth: insurer_admin only
+  Note: Does NOT write to the database. Safe for demo use.
 ```
 
 ---
@@ -226,10 +225,9 @@ Returns:
 
 | File | Status | Purpose |
 |------|--------|---------|
-| `worker_data.csv` | 📋 Planned | Worker profiles for analysis |
-| `trigger_data.csv` | 📋 Planned | Trigger events for analysis |
-| `joined_training_data.csv` | 📋 Planned | Matched dataset for ML training |
-| `summary.json` | 📋 Planned | Aggregate statistics |
+| `worker_data_seed.csv` | ✅ Present | Seed / demo worker profiles |
+| `trigger_data_seed.csv` | ✅ Present | Seed / demo trigger events |
+| `joined_training_data_seed.csv` | ✅ Present | Matched seed data used for RF training |
 | Variable dictionary | 📝 Documented (this README) | Field definitions |
 | Threshold reference table | 📝 Documented (this README) | Public threshold citations |
 

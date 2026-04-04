@@ -23,6 +23,7 @@ from ..services.trigger_evaluator import (
     evaluate_traffic_data,
     scan_all_zones_async,
 )
+from ..services.dynamic_threshold_engine import compute_and_upsert_monthly_thresholds
 
 router = APIRouter(prefix="/ingest", tags=["Data Ingestion"])
 
@@ -135,4 +136,19 @@ async def scan_all_zones():
     """
     sb = get_supabase_admin()
     result = await scan_all_zones_async(sb)
+    return result
+
+
+@router.post(
+    "/compute-dynamic-thresholds",
+    dependencies=[Depends(require_insurer_admin)],
+)
+async def compute_dynamic_thresholds():
+    """
+    Computes and upserts dynamic environmental thresholds for all zones
+    for the current month based on historical API data simulations.
+    Admin only.
+    """
+    sb = get_supabase_admin()
+    result = compute_and_upsert_monthly_thresholds(sb)
     return result
