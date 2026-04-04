@@ -44,8 +44,11 @@
 | Docker multi-stage build | ✅ Implemented |
 | GitHub Actions CI/CD (3-job pipeline) | ✅ Implemented |
 | Automated pytest suite (61 tests, 100% pass) | ✅ Implemented |
-| Redis caching layer | ✅ Defined (docker-compose) |
-| ML live inference | ⚠️ Hardcoded p=0.15 baseline |
+| Redis caching layer (`fastapi-cache2`) | ✅ Implemented (TTL decorators on `/triggers/live`, `/analytics/summary`, `/zones/`, `/policies/quote`) |
+| ML live inference | ✅ Implemented (`get_claim_probability()` — lazy-loads `severity_rf.joblib`, falls back to p=0.15 if model missing) |
+| DBSCAN cluster intelligence (Layer 4) | ✅ Implemented (`sklearn.cluster.DBSCAN` on lat/lng/timestamp batch) |
+| Simulation & mock-data endpoints | ✅ Implemented (`/simulate/claim-scenario`, `/simulate/mock-data/generate`) |
+| Payment gateway service | ✅ Implemented (mock `payment_mock.py` — RazorpayX-format async UPI payout simulation) |
 
 ---
 
@@ -117,6 +120,9 @@ flowchart TD
     CO --> AS
     CO --> GM
     PS & PR & CO & FS & PO & AS --> DB
+    RC[("Redis")] --> CO
+    RC --> TM
+    RC --> AS
 
     style AUTH fill:#4a9eff,color:#fff
     style CO fill:#e74c3c,color:#fff
@@ -166,10 +172,17 @@ flowchart TD
 
 | Method | Endpoint | Purpose | Status |
 |--------|----------|---------|--------|
-| `GET` | `/zones` | List zones, optionally by city | ✅ Implemented |
+| `GET` | `/zones` | List zones, optionally by city (cached 1hr) | ✅ Implemented |
 | `GET` | `/zones/{id}` | Zone detail with polygon | ✅ Implemented |
 | `GET` | `/zones/cities/list` | Distinct cities with zones | ✅ Implemented |
-| `GET` | `/analytics/summary` | Admin KPI metrics | ✅ Implemented |
+| `GET` | `/analytics/summary` | Admin KPI metrics (cached 2min) | ✅ Implemented |
+
+### Simulation & Dev Endpoints
+
+| Method | Endpoint | Purpose | Status |
+|--------|----------|---------|--------|
+| `POST` | `/simulate/claim-scenario` | Simulate a full 8-stage claim pipeline run without persisting to DB | ✅ Implemented |
+| `POST` | `/simulate/mock-data/generate` | Regenerate synthetic seed data into the DB | ✅ Implemented |
 
 ---
 
@@ -211,4 +224,6 @@ flowchart TD
 | **Trigger Evaluator** | `trigger_evaluator.py` | Threshold evaluation bridge for all 15+ trigger families. |
 | **Zone Coordinates** | `zone_coordinates.py` | Zone-to-coordinate mapping for batch scanning. |
 | **Auto Claim Engine** | `auto_claim_engine.py` | Zero-touch claim initiation from verified trigger events. |
+| **Payment Mock** | `payment_mock.py` | Async UPI payout simulation (RazorpayX-format). Returns transaction ID + status. Used by claim pipeline post-approval flow. |
+| **ML Training** | `ml_training.py` | RandomForestClassifier training script. Reads `joined_training_data_seed.csv`, exports `ml/model_artifacts/severity_rf.joblib`. |
 

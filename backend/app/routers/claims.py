@@ -427,3 +427,72 @@ async def auto_process_claims(lookback_hours: int = 6):
         "lookback_hours": lookback_hours,
         **result,
     }
+
+
+# ── Offline Sync (Dark Zone Correlation) ──────────────────────────────
+
+
+class OfflineSyncPayload(BaseModel):
+    stated_lat: float
+    stated_lng: float
+    offline_timestamp: str
+    claim_reason: str = "Dark Zone Offline Sync"
+
+
+class OfflineSyncRequest(BaseModel):
+    sync_payloads: list[OfflineSyncPayload]
+    plan: str = "essential"
+
+
+@router.post(
+    "/offline-sync",
+    summary="Offline Claim Sync ('Dark Zone')",
+    description=(
+        "Called when a worker regains internet connectivity after being in a 'Dark Zone' "
+        "(e.g., cell towers knocked out during a storm). Batches offline GPS timestamps. "
+        "Claims are marked 'soft_hold_verification' to allow DBSCAN and regional correlation "
+        "to verify if the zone actually experienced a network outage."
+    ),
+)
+async def sync_offline_claims(
+    body: OfflineSyncRequest, user: dict = Depends(get_current_user)
+):
+    """Sync batched offline claims."""
+    sb = get_supabase_admin()
+
+    # Validate worker
+    worker_resp = (
+        sb.table("worker_profiles").select("profile_id").eq("profile_id", user["id"]).maybe_single().execute()
+    )
+    if not worker_resp.data:
+        raise HTTPException(status_code=400, detail="Worker profile required.")
+
+    synced_claim_ids = []
+
+    for payload in body.sync_payloads:
+        claim_insert = {
+            "worker_profile_id": user["id"],
+            "claim_mode": "manual", # Technically auto/offline, but requires manual fraud verification
+            "claim_reason": f"[OFFLINE SYNC @ {payload.offline_timestamp}] {payload.claim_reason}",
+            "stated_lat": payload.stated_lat,
+            "stated_lng": payload.stated_lng,
+            "claim_status": "soft_hold_verification", # Force hold for regional anomaly check
+        }
+        ins_resp = sb.table("manual_claims").insert(claim_insert).execute()
+        synced_claim_ids.append(ins_resp.data[0]["id"])
+
+        # Also write an audit event for regional correlation tracing
+        sb.table("audit_events").insert({
+            "entity_type": "claim",
+            "entity_id": ins_resp.data[0]["id"],
+            "action_type": "dark_zone_offline_sync",
+            "actor_profile_id": user["id"],
+            "event_payload": payload.model_dump(),
+        }).execute()
+
+    return {
+        "status": "synced",
+        "synced_count": len(synced_claim_ids),
+        "claim_ids": synced_claim_ids,
+        "message": "Offline claims synced and held for regional anomaly correlation.",
+    }

@@ -1,0 +1,266 @@
+-- ══════════════════════════════════════════════════════════════════════
+-- Covara One — Master Consolidated Patch (07 + 08 combined)
+-- ══════════════════════════════════════════════════════════════════════
+-- Run in Supabase SQL Editor ONCE.
+-- Safe to re-run (uses IF NOT EXISTS / OR REPLACE / ON CONFLICT).
+--
+-- Fixes and Features:
+--   1. RLS policy violation on claim_reviews INSERT fixed
+--   2. insurer_profiles RLS policies fixed
+--   3. Adds pincode, state, zone_type, and tier columns to zones table
+--   4. Creates zone_monthly_thresholds table for dynamic calculations
+--   5. Populates 65 explicit zones across 15 Indian cities
+-- ══════════════════════════════════════════════════════════════════════
+
+
+-- ┌──────────────────────────────────────────────────────────────────┐
+-- │  §1  FIX: claim_reviews RLS violation                            │
+-- └──────────────────────────────────────────────────────────────────┘
+DROP POLICY IF EXISTS "Reviews: Admins can read all" ON public.claim_reviews;
+DROP POLICY IF EXISTS "Reviews: Admins can insert" ON public.claim_reviews;
+DROP POLICY IF EXISTS "Reviews: Service role bypass" ON public.claim_reviews;
+
+CREATE POLICY "Reviews: Admins can read all"
+  ON public.claim_reviews FOR SELECT TO authenticated
+  USING (public.current_user_role() = 'insurer_admin');
+
+CREATE POLICY "Reviews: Admins can insert"
+  ON public.claim_reviews FOR INSERT TO authenticated
+  WITH CHECK (
+    public.current_user_role() = 'insurer_admin'
+    AND EXISTS (
+      SELECT 1 FROM public.insurer_profiles
+      WHERE profile_id = reviewer_profile_id
+    )
+  );
+
+CREATE POLICY "Reviews: Service role bypass"
+  ON public.claim_reviews FOR ALL TO service_role
+  USING (true) WITH CHECK (true);
+
+
+-- ┌──────────────────────────────────────────────────────────────────┐
+-- │  §2  FIX: insurer_profiles policies                              │
+-- └──────────────────────────────────────────────────────────────────┘
+DROP POLICY IF EXISTS "InsurerProfiles: Admins can insert own" ON public.insurer_profiles;
+
+CREATE POLICY "InsurerProfiles: Admins can insert own"
+  ON public.insurer_profiles FOR INSERT TO authenticated
+  WITH CHECK (
+    public.current_user_role() = 'insurer_admin'
+    AND profile_id = auth.uid()
+  );
+
+DROP POLICY IF EXISTS "InsurerProfiles: Service role bypass" ON public.insurer_profiles;
+CREATE POLICY "InsurerProfiles: Service role bypass"
+  ON public.insurer_profiles FOR ALL TO service_role
+  USING (true) WITH CHECK (true);
+
+
+-- ┌──────────────────────────────────────────────────────────────────┐
+-- │  §3  SCHEMA EXTENSIONS on public.zones                           │
+-- └──────────────────────────────────────────────────────────────────┘
+ALTER TABLE public.zones ADD COLUMN IF NOT EXISTS pincode TEXT;
+COMMENT ON COLUMN public.zones.pincode IS '6-digit India Post PIN code (e.g. 400053 for Andheri-W, Mumbai).';
+
+ALTER TABLE public.zones ADD COLUMN IF NOT EXISTS state TEXT;
+COMMENT ON COLUMN public.zones.state IS 'Indian state/UT code: MH=Maharashtra, DL=Delhi, KA=Karnataka, TG=Telangana...';
+
+ALTER TABLE public.zones ADD COLUMN IF NOT EXISTS zone_type TEXT CHECK (zone_type IN ('urban_core', 'mixed', 'peri_urban'));
+COMMENT ON COLUMN public.zones.zone_type IS 'Zone type for threshold calibration.';
+
+ALTER TABLE public.zones ADD COLUMN IF NOT EXISTS tier TEXT CHECK (tier IN ('metro', 'tier1', 'tier2', 'tier3'));
+COMMENT ON COLUMN public.zones.tier IS 'City tier: metro=8 major metros. tier1=major commercial hubs.';
+
+
+-- ┌──────────────────────────────────────────────────────────────────┐
+-- │  §4  zone_monthly_thresholds TABLE                               │
+-- └──────────────────────────────────────────────────────────────────┘
+CREATE TABLE IF NOT EXISTS public.zone_monthly_thresholds (
+    id              uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+    zone_id         uuid        NOT NULL REFERENCES public.zones(id) ON DELETE CASCADE,
+    year_month      text        NOT NULL CHECK (year_month ~ '^\d{4}-\d{2}$'),
+    metric          text        NOT NULL CHECK (metric IN ('aqi', 'pm25', 'pm10', 'rainfall_mm_24h', 'temp_c')),
+    observed_mean   numeric(8,2),
+    observed_stddev numeric(8,2),
+    observed_p25    numeric(8,2),
+    observed_p50    numeric(8,2),
+    observed_p75    numeric(8,2),
+    observed_p90    numeric(8,2),
+    observed_p99    numeric(8,2),
+    sample_count    integer,
+    watch_threshold   numeric(8,2)  NOT NULL,
+    claim_threshold   numeric(8,2)  NOT NULL,
+    extreme_threshold numeric(8,2)  NOT NULL,
+    data_source     text            DEFAULT 'dynamic',
+    computed_at     timestamptz     NOT NULL DEFAULT now(),
+    expires_at      timestamptz,
+    UNIQUE (zone_id, year_month, metric)
+);
+
+CREATE INDEX IF NOT EXISTS idx_zone_thresholds_lookup ON public.zone_monthly_thresholds (zone_id, year_month, metric);
+CREATE INDEX IF NOT EXISTS idx_zone_thresholds_expires ON public.zone_monthly_thresholds (expires_at);
+
+ALTER TABLE public.zone_monthly_thresholds ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "ThresholdTable: Read all authenticated" ON public.zone_monthly_thresholds;
+DROP POLICY IF EXISTS "ThresholdTable: Service role bypass"    ON public.zone_monthly_thresholds;
+
+CREATE POLICY "ThresholdTable: Read all authenticated"
+  ON public.zone_monthly_thresholds FOR SELECT TO authenticated USING (true);
+
+CREATE POLICY "ThresholdTable: Service role bypass"
+  ON public.zone_monthly_thresholds FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+GRANT SELECT ON public.zone_monthly_thresholds TO authenticated;
+GRANT ALL    ON public.zone_monthly_thresholds TO service_role;
+
+
+-- ┌──────────────────────────────────────────────────────────────────┐
+-- │  §5  VERIFY: Ensure admin demo user has insurer_profile row      │
+-- └──────────────────────────────────────────────────────────────────┘
+DO $$
+DECLARE
+  admin_id UUID;
+BEGIN
+  SELECT p.id INTO admin_id FROM public.profiles p WHERE p.role = 'insurer_admin' LIMIT 1;
+  IF admin_id IS NOT NULL THEN
+    INSERT INTO public.insurer_profiles (profile_id, company_name, job_title)
+    VALUES (admin_id, 'Covara One Insurance', 'Risk Operations Manager')
+    ON CONFLICT (profile_id) DO NOTHING;
+  END IF;
+END $$;
+
+
+-- ┌──────────────────────────────────────────────────────────────────┐
+-- │  §6  COMPREHENSIVE INDIA ZONES (65 zones / 15 cities)            │
+-- └──────────────────────────────────────────────────────────────────┘
+INSERT INTO public.zones
+  (id, city, zone_name, center_lat, center_lng, pincode, state, zone_type, tier)
+VALUES
+
+-- MUMBAI (Maharashtra) — 8 zones
+('b7a1c2d3-e4f5-5678-abcd-200000000001','Mumbai','Andheri-W',       19.136400, 72.829600,'400058','MH','mixed',      'metro'),
+('b7a1c2d3-e4f5-5678-abcd-200000000002','Mumbai','Bandra-Kurla',    19.059600, 72.865600,'400051','MH','urban_core', 'metro'),
+('b7a1c2d3-e4f5-5678-abcd-200000000003','Mumbai','Dadar',           19.018200, 72.843400,'400014','MH','urban_core', 'metro'),
+('b7a1c2d3-e4f5-5678-abcd-200000000004','Mumbai','Powai',           19.117300, 72.905800,'400076','MH','mixed',      'metro'),
+('b7a1c2d3-e4f5-5678-abcd-200000000005','Mumbai','Borivali',        19.228300, 72.858800,'400066','MH','mixed',      'metro'),
+('b7a1c2d3-e4f5-5678-abcd-200000000006','Mumbai','Lower-Parel',     18.993900, 72.829200,'400013','MH','urban_core', 'metro'),
+('b7a1c2d3-e4f5-5678-abcd-200000000007','Mumbai','Thane-West',      19.213700, 72.978500,'400601','MH','mixed',      'metro'),
+('b7a1c2d3-e4f5-5678-abcd-200000000008','Mumbai','Navi-Mumbai-Vashi',19.076300,73.009900,'400703','MH','mixed',      'metro'),
+
+-- DELHI (Delhi UT) — 8 zones
+('b7a1c2d3-e4f5-5678-abcd-200000000011','Delhi','Connaught-Place',  28.631500, 77.216700,'110001','DL','urban_core', 'metro'),
+('b7a1c2d3-e4f5-5678-abcd-200000000012','Delhi','Saket',            28.524400, 77.206600,'110017','DL','mixed',      'metro'),
+('b7a1c2d3-e4f5-5678-abcd-200000000013','Delhi','Lajpat-Nagar',     28.566900, 77.243200,'110024','DL','mixed',      'metro'),
+('b7a1c2d3-e4f5-5678-abcd-200000000014','Delhi','Karol-Bagh',       28.651900, 77.190000,'110005','DL','urban_core', 'metro'),
+('b7a1c2d3-e4f5-5678-abcd-200000000015','Delhi','Dwarka-Sec10',     28.581700, 77.045600,'110075','DL','mixed',      'metro'),
+('b7a1c2d3-e4f5-5678-abcd-200000000016','Delhi','Rohini',           28.699700, 77.132600,'110085','DL','mixed',      'metro'),
+('b7a1c2d3-e4f5-5678-abcd-200000000017','Delhi','Noida-Sec18',      28.570100, 77.321300,'201301','UP','urban_core', 'metro'),
+('b7a1c2d3-e4f5-5678-abcd-200000000018','Delhi','Gurugram-Cyber',   28.494100, 77.090100,'122002','HR','urban_core', 'metro'),
+
+-- BANGALORE (Karnataka) — 7 zones
+('b7a1c2d3-e4f5-5678-abcd-200000000021','Bangalore','Koramangala',   12.935200, 77.624500,'560034','KA','mixed',      'metro'),
+('b7a1c2d3-e4f5-5678-abcd-200000000022','Bangalore','Indiranagar',   12.978400, 77.640800,'560038','KA','mixed',      'metro'),
+('b7a1c2d3-e4f5-5678-abcd-200000000023','Bangalore','HSR-Layout',    12.912000, 77.642300,'560102','KA','mixed',      'metro'),
+('b7a1c2d3-e4f5-5678-abcd-200000000024','Bangalore','Whitefield',    12.969700, 77.749800,'560066','KA','peri_urban', 'metro'),
+('b7a1c2d3-e4f5-5678-abcd-200000000025','Bangalore','Electronic-City',12.844000,77.665500,'560100','KA','peri_urban', 'metro'),
+('b7a1c2d3-e4f5-5678-abcd-200000000026','Bangalore','Marathahalli',  12.956400, 77.701200,'560037','KA','mixed',      'metro'),
+('b7a1c2d3-e4f5-5678-abcd-200000000027','Bangalore','Jayanagar',     12.930800, 77.582700,'560011','KA','mixed',      'metro'),
+
+-- HYDERABAD (Telangana) — 6 zones
+('b7a1c2d3-e4f5-5678-abcd-200000000031','Hyderabad','Madhapur',     17.448600, 78.390800,'500081','TG','urban_core', 'metro'),
+('b7a1c2d3-e4f5-5678-abcd-200000000032','Hyderabad','Gachibowli',   17.440100, 78.348900,'500032','TG','urban_core', 'metro'),
+('b7a1c2d3-e4f5-5678-abcd-200000000033','Hyderabad','Banjara-Hills',17.413900, 78.448000,'500034','TG','urban_core', 'metro'),
+('b7a1c2d3-e4f5-5678-abcd-200000000034','Hyderabad','Kukatpally',   17.484400, 78.395200,'500072','TG','mixed',      'metro'),
+('b7a1c2d3-e4f5-5678-abcd-200000000035','Hyderabad','Secunderabad',  17.443800, 78.498600,'500003','TG','mixed',      'metro'),
+('b7a1c2d3-e4f5-5678-abcd-200000000036','Hyderabad','LB-Nagar',     17.347200, 78.552900,'500074','TG','peri_urban', 'metro'),
+
+-- CHENNAI (Tamil Nadu) — 6 zones
+('b7a1c2d3-e4f5-5678-abcd-200000000041','Chennai','T-Nagar',        13.040100, 80.233600,'600017','TN','urban_core', 'metro'),
+('b7a1c2d3-e4f5-5678-abcd-200000000042','Chennai','Anna-Nagar',     13.085600, 80.209800,'600040','TN','mixed',      'metro'),
+('b7a1c2d3-e4f5-5678-abcd-200000000043','Chennai','Velachery',      12.977800, 80.220000,'600042','TN','mixed',      'metro'),
+('b7a1c2d3-e4f5-5678-abcd-200000000044','Chennai','OMR-Sholinganallur',12.900600,80.227300,'600119','TN','peri_urban','metro'),
+('b7a1c2d3-e4f5-5678-abcd-200000000045','Chennai','Nungambakkam',   13.060700, 80.243200,'600034','TN','urban_core', 'metro'),
+('b7a1c2d3-e4f5-5678-abcd-200000000046','Chennai','Perambur',       13.116100, 80.238800,'600011','TN','mixed',      'metro'),
+
+-- KOLKATA (West Bengal) — 5 zones
+('b7a1c2d3-e4f5-5678-abcd-200000000051','Kolkata','Park-Street',    22.553200, 88.351800,'700016','WB','urban_core', 'metro'),
+('b7a1c2d3-e4f5-5678-abcd-200000000052','Kolkata','Salt-Lake-Sec5', 22.578900, 88.418400,'700064','WB','urban_core', 'metro'),
+('b7a1c2d3-e4f5-5678-abcd-200000000053','Kolkata','New-Town',       22.593300, 88.468400,'700156','WB','mixed',      'metro'),
+('b7a1c2d3-e4f5-5678-abcd-200000000054','Kolkata','Howrah',         22.588100, 88.312300,'711101','WB','mixed',      'metro'),
+('b7a1c2d3-e4f5-5678-abcd-200000000055','Kolkata','Jadavpur',       22.497300, 88.370600,'700032','WB','peri_urban', 'metro'),
+
+-- PUNE (Maharashtra) — 5 zones
+('b7a1c2d3-e4f5-5678-abcd-200000000061','Pune','Koregaon-Park',    18.536700, 73.894400,'411001','MH','mixed',      'tier1'),
+('b7a1c2d3-e4f5-5678-abcd-200000000062','Pune','Kothrud',           18.507100, 73.810200,'411038','MH','mixed',      'tier1'),
+('b7a1c2d3-e4f5-5678-abcd-200000000063','Pune','Hinjawadi',         18.591600, 73.738500,'411057','MH','peri_urban', 'tier1'),
+('b7a1c2d3-e4f5-5678-abcd-200000000064','Pune','Viman-Nagar',       18.567800, 73.914500,'411014','MH','mixed',      'tier1'),
+('b7a1c2d3-e4f5-5678-abcd-200000000065','Pune','Hadapsar',          18.502300, 73.942900,'411028','MH','peri_urban', 'tier1'),
+
+-- AHMEDABAD (Gujarat) — 4 zones
+('b7a1c2d3-e4f5-5678-abcd-200000000071','Ahmedabad','Navrangpura',  23.030300, 72.560300,'380009','GJ','urban_core', 'tier1'),
+('b7a1c2d3-e4f5-5678-abcd-200000000072','Ahmedabad','Satellite',    23.016100, 72.529400,'380015','GJ','mixed',      'tier1'),
+('b7a1c2d3-e4f5-5678-abcd-200000000073','Ahmedabad','Bopal',        23.041200, 72.455400,'380058','GJ','peri_urban', 'tier1'),
+('b7a1c2d3-e4f5-5678-abcd-200000000074','Ahmedabad','Prahlad-Nagar',23.007800, 72.504300,'380015','GJ','urban_core', 'tier1'),
+
+-- SURAT (Gujarat) — 3 zones
+('b7a1c2d3-e4f5-5678-abcd-200000000081','Surat','Adajan',           21.205100, 72.802800,'395009','GJ','mixed',      'tier1'),
+('b7a1c2d3-e4f5-5678-abcd-200000000082','Surat','Vesu',             21.163500, 72.785200,'395007','GJ','mixed',      'tier1'),
+('b7a1c2d3-e4f5-5678-abcd-200000000083','Surat','Udhna',            21.164700, 72.840900,'394210','GJ','peri_urban', 'tier1'),
+
+-- JAIPUR (Rajasthan) — 3 zones
+('b7a1c2d3-e4f5-5678-abcd-200000000091','Jaipur','Malviya-Nagar',   26.850000, 75.804100,'302017','RJ','mixed',      'tier2'),
+('b7a1c2d3-e4f5-5678-abcd-200000000092','Jaipur','Vaishali-Nagar',  26.912400, 75.738200,'302021','RJ','mixed',      'tier2'),
+('b7a1c2d3-e4f5-5678-abcd-200000000093','Jaipur','Civil-Lines',     26.904400, 75.812300,'302006','RJ','urban_core', 'tier2'),
+
+-- LUCKNOW (Uttar Pradesh) — 3 zones
+('b7a1c2d3-e4f5-5678-abcd-200000000101','Lucknow','Hazratganj',     26.848700, 80.944000,'226001','UP','urban_core', 'tier2'),
+('b7a1c2d3-e4f5-5678-abcd-200000000102','Lucknow','Gomti-Nagar',    26.839200, 81.002700,'226010','UP','mixed',      'tier2'),
+('b7a1c2d3-e4f5-5678-abcd-200000000103','Lucknow','Indira-Nagar',   26.873800, 81.010100,'226016','UP','mixed',      'tier2'),
+
+-- NAGPUR (Maharashtra) — 2 zones
+('b7a1c2d3-e4f5-5678-abcd-200000000111','Nagpur','Dharampeth',      21.137400, 79.063500,'440010','MH','urban_core', 'tier2'),
+('b7a1c2d3-e4f5-5678-abcd-200000000112','Nagpur','Sitabuldi',       21.152200, 79.079800,'440012','MH','urban_core', 'tier2'),
+
+-- INDORE (Madhya Pradesh) — 2 zones
+('b7a1c2d3-e4f5-5678-abcd-200000000121','Indore','Palasia',         22.724100, 75.872900,'452001','MP','urban_core', 'tier2'),
+('b7a1c2d3-e4f5-5678-abcd-200000000122','Indore','Vijay-Nagar',     22.756700, 75.840300,'452010','MP','mixed',      'tier2'),
+
+-- CHANDIGARH (UT) — 2 zones
+('b7a1c2d3-e4f5-5678-abcd-200000000131','Chandigarh','Sector-17',   30.741800, 76.778600,'160017','CH','urban_core', 'tier2'),
+('b7a1c2d3-e4f5-5678-abcd-200000000132','Chandigarh','Sector-35',   30.724800, 76.760100,'160022','CH','mixed',      'tier2'),
+
+-- KOCHI (Kerala) — 3 zones
+('b7a1c2d3-e4f5-5678-abcd-200000000141','Kochi','Ernakulam-South',   9.966200, 76.285700,'682016','KL','urban_core', 'tier2'),
+('b7a1c2d3-e4f5-5678-abcd-200000000142','Kochi','Edapally',          10.012900,76.311100,'682024','KL','mixed',      'tier2'),
+('b7a1c2d3-e4f5-5678-abcd-200000000143','Kochi','Kakkanad',          10.004400,76.341900,'682030','KL','peri_urban', 'tier2'),
+
+-- VISAKHAPATNAM (Andhra Pradesh) — 2 zones
+('b7a1c2d3-e4f5-5678-abcd-200000000151','Visakhapatnam','Dwaraka-Nagar',17.729900,83.318500,'530016','AP','urban_core','tier2'),
+('b7a1c2d3-e4f5-5678-abcd-200000000152','Visakhapatnam','Gajuwaka',    17.681200,83.212900,'530026','AP','peri_urban','tier2')
+
+ON CONFLICT (id) DO UPDATE SET
+  pincode    = EXCLUDED.pincode,
+  state      = EXCLUDED.state,
+  zone_type  = EXCLUDED.zone_type,
+  tier       = EXCLUDED.tier,
+  center_lat = EXCLUDED.center_lat,
+  center_lng = EXCLUDED.center_lng;
+
+-- ┌──────────────────────────────────────────────────────────────────┐
+-- │  §7  Update original 8 seed zones with new columns               │
+-- └──────────────────────────────────────────────────────────────────┘
+UPDATE public.zones SET pincode='400058', state='MH', zone_type='mixed',      tier='metro' WHERE id='b7a1c2d3-e4f5-5678-abcd-100000000001';
+UPDATE public.zones SET pincode='400051', state='MH', zone_type='urban_core', tier='metro' WHERE id='b7a1c2d3-e4f5-5678-abcd-100000000002';
+UPDATE public.zones SET pincode='110001', state='DL', zone_type='urban_core', tier='metro' WHERE id='b7a1c2d3-e4f5-5678-abcd-100000000003';
+UPDATE public.zones SET pincode='110017', state='DL', zone_type='mixed',      tier='metro' WHERE id='b7a1c2d3-e4f5-5678-abcd-100000000004';
+UPDATE public.zones SET pincode='560034', state='KA', zone_type='mixed',      tier='metro' WHERE id='b7a1c2d3-e4f5-5678-abcd-100000000005';
+UPDATE public.zones SET pincode='560038', state='KA', zone_type='mixed',      tier='metro' WHERE id='b7a1c2d3-e4f5-5678-abcd-100000000006';
+UPDATE public.zones SET pincode='500081', state='TG', zone_type='urban_core', tier='metro' WHERE id='b7a1c2d3-e4f5-5678-abcd-100000000007';
+UPDATE public.zones SET pincode='500032', state='TG', zone_type='urban_core', tier='metro' WHERE id='b7a1c2d3-e4f5-5678-abcd-100000000008';
+
+
+-- ══════════════════════════════════════════════════════════════════════
+-- Reload PostgREST schema cache
+-- ══════════════════════════════════════════════════════════════════════
+NOTIFY pgrst, 'reload schema';

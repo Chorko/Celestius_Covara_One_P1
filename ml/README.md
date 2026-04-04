@@ -19,10 +19,11 @@
 | ML training scripts | ✅ Implemented (`ml_training.py`) |
 | Anti-spoofing feature engineering | ✅ Documented (13 features, output by `fraud_engine.py`) |
 | What ML Does vs Does Not Do | ✅ Documented |
-| EDA notebooks | 📋 Planned |
-| XGBoost comparison | 📋 Planned |
-| ML live inference wired to claims | ⚠️ Hardcoded p=0.15 (model exists, wiring pending) |
-| Feedback loop implementation | 📋 Planned |
+| EDA notebook | ✅ Implemented (`ml/notebooks/eda.ipynb`) |
+| XGBoost benchmark comparison | ✅ Implemented (`ml/xgboost_benchmark.py`) |
+| ML live inference wired to claims | ✅ Implemented (`get_claim_probability()` lazy-loads model, falls back to p=0.15 if artifact missing) |
+| DBSCAN batch clustering | ✅ Implemented (`fraud_engine.py` — `recent_claims_batch` parameter) |
+| Feedback loop implementation | 📋 Planned (requires production claim outcome data) |
 
 > **Pricing note:** Bootstrap median was ₹218.7/week on high-income assumptions. Final IRDAI-aligned fixed rates are ₹28/week (Essential) and ₹42/week (Plus) — both compliant with the ₹10,000/year IRDAI micro-insurance limit.
 
@@ -277,9 +278,9 @@ These features are designed for a review-routing classifier with four output lab
 |------|---------|
 | Python | Primary language |
 | pandas, numpy | Data handling and transformation |
-| scikit-learn | `RandomForestClassifier` baseline, train/test split |
+| scikit-learn | `RandomForestClassifier` baseline, `DBSCAN` clustering, train/test split |
 | matplotlib | Boxplots, feature importance charts, EDA visuals |
-| XGBoost (future) | Benchmark comparison if data complexity warrants it |
+| XGBoost | Benchmark comparison (`ml/xgboost_benchmark.py`) |
 
 ---
 

@@ -26,7 +26,7 @@ interface EvidenceItem { storage_path?: string; evidence_type?: string; exif_lat
 interface DetailData { claim: ClaimRecord; payout_recommendation: PayoutRecommendation | null; evidence: EvidenceItem[] }
 
 export default function AdminReviews() {
-  const { user } = useUserStore()
+  const { user, profile } = useUserStore()
   const supabase = createClient()
   const [claims, setClaims] = useState<ClaimRecord[]>([])
   const [selectedClaim, setSelectedClaim] = useState<string | null>(null)
@@ -58,7 +58,9 @@ export default function AdminReviews() {
     const claimId = detailData.claim.id; setActionLoading(decision); setActionError(null)
     try {
       const newStatus = decision === 'approve' ? 'approved' : decision === 'reject' ? 'rejected' : decision === 'flag_post_approval' ? 'post_approval_flagged' : decision === 'escalate' ? 'fraud_escalated_review' : 'soft_hold_verification'
-      const { error: revErr } = await supabase.from('claim_reviews').insert({ claim_id: claimId, reviewer_profile_id: user?.id, decision, decision_reason: decisionReason || `Admin review — ${decision}`, reviewed_at: new Date().toISOString() })
+      const reviewerId = profile?.id ?? user?.id
+      if (!reviewerId) { setActionError('Could not identify reviewer — please refresh and try again.'); setActionLoading(null); return }
+      const { error: revErr } = await supabase.from('claim_reviews').insert({ claim_id: claimId, reviewer_profile_id: reviewerId, decision, decision_reason: decisionReason || `Admin review — ${decision}`, reviewed_at: new Date().toISOString() })
       if (revErr) { setActionError(revErr.message); setActionLoading(null); return }
       const { error: updErr } = await supabase.from('manual_claims').update({ claim_status: newStatus }).eq('id', claimId)
       if (updErr) { setActionError(updErr.message); setActionLoading(null); return }

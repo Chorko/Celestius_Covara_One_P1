@@ -101,7 +101,7 @@ flowchart TD
 | Weather cross-check | Compare claimed rain/AQI/heat against OpenWeather and IMD/CPCB feeds |
 | Closure verification | Confirm official closure flag from source; cross-reference NewsAPI for civic context |
 | Outage confirmation | Verify platform outage duration from heartbeat data |
-| Traffic validation | Cross-check traffic delay via TomTom Traffic API |
+| Traffic validation | Cross-check traffic delay via TomTom Traffic API *(Planned: Google Maps)* |
 
 ### Layer 2 — Worker Truth
 **Question:** Was this worker actually affected?

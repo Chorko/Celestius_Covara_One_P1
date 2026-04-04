@@ -11,7 +11,10 @@ from backend.app.supabase_client import get_supabase_admin
 router = APIRouter(prefix="/zones", tags=["Zones"])
 
 
+from fastapi_cache.decorator import cache
+
 @router.get("/")
+@cache(expire=3600)
 async def list_zones(city: str | None = None):
     """List operational zones, optionally filtered by city.
 
