@@ -87,6 +87,8 @@ temp/
 # Temporary Folders
 # ==========================
 TEMP_WILL_BE_DELETED/
+test_venv/
+test_venv*/
 
 # ==========================
 # Antigravity / Gemini IDE
