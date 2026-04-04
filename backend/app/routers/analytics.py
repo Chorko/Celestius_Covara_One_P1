@@ -39,14 +39,22 @@ async def get_dashboard_summary():
         1 for c in claims_resp.data if c["claim_status"] in APPROVED_STATES
     )
 
-    # 2. Financials (Payouts)
+    # 2. Financials (Payouts & Actuarial Metrics)
     payout_resp = (
         sb.table("payout_recommendations")
-        .select("expected_payout, recommended_payout")
+        .select("expected_payout, recommended_payout, gross_premium")
         .execute()
     )
-    total_expected = sum(p["expected_payout"] or 0 for p in payout_resp.data)
-    total_payouts = sum(p["recommended_payout"] or 0 for p in payout_resp.data)
+    total_expected = sum(p.get("expected_payout") or 0 for p in payout_resp.data)
+    total_payouts = sum(p.get("recommended_payout") or 0 for p in payout_resp.data)
+    total_premium = sum(p.get("gross_premium") or 0 for p in payout_resp.data)
+    
+    # Actuarial Calculations
+    # Target BCR implies how much of premium goes to expected claims (0.55 - 0.70)
+    burning_cost_rate = (total_expected / total_premium) if total_premium > 0 else 0.0
+    # Loss ratio is actual payouts vs premium
+    loss_ratio = (total_payouts / total_premium) if total_premium > 0 else 0.0
+
 
     # 3. Triggers Mix
     trigger_resp = (
@@ -68,6 +76,8 @@ async def get_dashboard_summary():
             "approved_claims": approved_claims,
             "total_expected_payout_inr": round(total_expected, 2),
             "total_recommended_payout_inr": round(total_payouts, 2),
+            "loss_ratio": round(loss_ratio, 3),
+            "burning_cost_rate": round(burning_cost_rate, 3),
             "active_workers": active_workers,
         },
         "charts": {"trigger_mix": trigger_counts},

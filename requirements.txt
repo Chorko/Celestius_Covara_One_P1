@@ -1,42 +1,47 @@
 # Covara One — Python Dependencies
-# Production backend requirements for the parametric insurance platform.
+# Production requirements for the parametric insurance platform.
+# Verified working in Python 3.12.7 (.venv)
+# Last synced: 2026-04-04
 
-# Backend API
+# ── Backend API ───────────────────────────────────────────────
 fastapi>=0.104.0
 uvicorn>=0.24.0
 pydantic[email]>=2.5.0
 
-# Supabase
+# ── Supabase ──────────────────────────────────────────────────
 supabase>=2.0.0
 
-# Environment
+# ── Environment ───────────────────────────────────────────────
 python-dotenv>=1.0.0
 
-# Database (retained for future direct DB access if needed)
+# ── Database (direct access if needed) ───────────────────────
 sqlalchemy>=2.0.0
 psycopg2-binary>=2.9.0
+
+# ── Caching ───────────────────────────────────────────────────
 redis>=5.0.0
 fastapi-cache2[redis]>=0.2.1
 
-# Data Science & ML
+# ── Data Science & ML ─────────────────────────────────────────
 pandas>=2.1.0
 numpy>=1.26.0
-scikit-learn>=1.3.0
-matplotlib>=3.8.0
+scikit-learn>=1.3.0          # Random Forest (live inference) + DBSCAN clustering
+xgboost>=1.7.0               # XGBoost benchmark + stress test simulator
+matplotlib>=3.8.0             # EDA charting
 
-# Image / Evidence processing
+# ── Image / Evidence Processing ───────────────────────────────
 Pillow>=10.0.0
 piexif>=1.1.3
 
-# HTTP client (for external API calls)
+# ── HTTP Client (external API calls) ─────────────────────────
 httpx>=0.25.0
 
-# Gemini AI
+# ── Gemini AI (claim narrative + evidence analysis) ───────────
 google-generativeai>=0.3.0
 
-# Twilio (OTP + WhatsApp notifications)
+# ── Twilio (OTP + WhatsApp notifications) ────────────────────
 twilio>=9.0.0
 
-# Testing
+# ── Testing ───────────────────────────────────────────────────
 pytest>=7.4.0
 pytest-asyncio>=0.23.0
