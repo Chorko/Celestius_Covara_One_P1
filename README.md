@@ -38,39 +38,6 @@
 
 ---
 
-## 📑 Table of Contents
-
-<details open>
-<summary><b>Click to navigate</b></summary>
-
-| # | Section |
-|:-|---------|
-| 🔥 | [The Crisis](#-the-crisis) |
-| 👤 | [Our Persona](#-our-persona--arjun-the-monsoon-rider) |
-| 🎬 | [Live Scenarios](#-live-scenarios) |
-| ⚡ | [How It Works](#-how-it-works) |
-| 💰 | [Coverage Plans & IRDAI Compliance](#-coverage-plans--irdai-compliance) |
-| 🛡️ | [The Fraud Fortress](#️-the-fraud-fortress) |
-| ⚡ | [15-Trigger Library](#-the-15-trigger-library) |
-| 🔐 | [Adversarial Defense](#-adversarial-defense--anti-spoofing-strategy) |
-| 🔒 | [Payout Safety](#-payout-safety--duplicate-prevention) |
-| 📋 | [Claim State Machine](#-claim-state-machine) |
-| 🚦 | [Region Fast-Lane](#-region-validation-cache--fast-lane-approvals) |
-| 🚨 | [Post-Approval Controls](#-post-approval-fraud-controls) |
-| 🪪 | [Progressive KYC](#-progressive-kyc--trust-ladder) |
-| 🧠 | [ML Role](#-what-ml-does-vs-what-ml-does-not-do) |
-| 📊 | [Threshold References](#-threshold-references-and-why-they-were-chosen) |
-| 📐 | [Parametric Product & Calibration](#-parametric-product-weekly-benefit-plans) |
-| 💼 | [Business Framing](#-business-framing) |
-| 🏗️ | [Architecture](#️-architecture) |
-| 🏆 | [Why Covara One Wins](#-why-covara-one-wins) |
-| 🚀 | [Quick Start](#-quick-start) |
-| 📚 | [Deep Dive Docs](#-deep-dive-docs) |
-
-</details>
-
----
-
 ## 🔥 The Crisis
 
 <div align="center">
@@ -99,6 +66,7 @@ India's **12.7 million gig workers** power the digital economy. Yet **80% have z
 | Delhi AQI > 400 days per winter | **30–50** | CPCB |
 
 ---
+
 
 
 ## 👤 Our Persona — Arjun, the Monsoon Rider
@@ -140,6 +108,7 @@ India's **12.7 million gig workers** power the digital economy. Yet **80% have z
 </table>
 
 ---
+
 
 
 ## 🎬 Live Scenarios
@@ -198,6 +167,7 @@ sequenceDiagram
 
 ---
 
+
 ## ⚡ How It Works
 
 ```mermaid
@@ -233,6 +203,7 @@ flowchart TD
 | 8 | Zero-Touch Payout executed to verified UPI | Receipt + audit trail |
 
 ---
+
 
 ## 💰 Coverage Plans & IRDAI Compliance
 
@@ -287,6 +258,251 @@ Let **W** = selected weekly benefit cap. Payout = Band multiplier × W.
 > These exclusions follow standard IRDAI parametric and general insurance guidelines. They ensure the product remains commercially viable and regulatorily defensible. The exclusion list is presented to the worker during enrollment for full transparency.
 
 ---
+
+
+## 🏗️ Architecture
+
+```mermaid
+flowchart TD
+    classDef input fill:#7C3AED,color:#fff,stroke:#5B21B6,stroke-width:2px
+    classDef ui fill:#1D4ED8,color:#fff,stroke:#1E3A8A,stroke-width:2px
+    classDef engine fill:#059669,color:#fff,stroke:#047857,stroke-width:2px
+    classDef defense fill:#9333EA,color:#fff,stroke:#7E22CE,stroke-width:2px
+    classDef data fill:#4F46E5,color:#fff,stroke:#3730A3,stroke-width:2px
+    classDef admin fill:#B45309,color:#fff,stroke:#92400E,stroke-width:2px
+
+    subgraph SIG ["🌐 External Signals"]
+        WX[/"☁️ OpenWeather + IMD"/]:::input
+        AQ[/"🌫️ CPCB AQI (511 stations)"/]:::input
+        TR[/"🚦 TomTom Traffic + Routing"/]:::input
+        NW[/"📰 NewsAPI Civic"/]:::input
+    end
+
+    subgraph CORE ["⚙️ Main Processing Pipeline"]
+        direction TB
+        SI{{"Signal Ingestion"}}:::engine
+        TE{{"Trigger Engine (T1–T15)"}}:::engine
+        CE{{"8-Stage Claim Engine"}}:::engine
+        FE{{"Ghost Shift Detector"}}:::defense
+        PS{{"Payout Safety Layer"}}:::defense
+        PO[["Zero-Touch Payout"]]:::defense
+        SI --> TE --> CE --> FE --> PS --> PO
+    end
+
+    subgraph WRK ["👤 Worker (Next.js 16)"]
+        WD[["Worker Dashboard"]]:::ui
+        WC[["Claim Submission"]]:::ui
+    end
+
+    subgraph INS ["🏢 Insurer (Admin Portal)"]
+        ID[["Operations Dashboard"]]:::admin
+        RQ[["Review Queue + AI"]]:::admin
+        TG[["Trigger Engine"]]:::admin
+    end
+
+    subgraph DAT ["💾 Data Layer"]
+        DB[("Supabase Postgres<br>14 Tables + RLS")]:::data
+        RC[("Redis Cache<br>fastapi-cache2")]:::data
+        ML{{"Random Forest<br>Live Inference"}}:::data
+    end
+
+    WX & AQ & TR & NW --> SI
+    WD & WC --> CE
+    PO --> WD
+    CE --> RQ
+    FE --> ID
+    ML --> CE
+    DB <--> CORE
+    RC --> TE
+```
+
+<div align="center">
+
+| Layer | Technology | Status |
+|:-----:|:----------:|:------:|
+| **Frontend** | Next.js 16, Tailwind CSS v4, Recharts, Zustand | ✅ Live |
+| **Backend** | FastAPI, Python 3.12, fastapi-cache2 + Redis | ✅ Live |
+| **Auth** | Supabase Auth (Google OAuth + email), Edge SSR Middleware | ✅ Live |
+| **Database** | Supabase Postgres, 14 tables, Row-Level Security | ✅ Live |
+| **ML** | scikit-learn Random Forest (live predict_proba), DBSCAN | ✅ Live |
+| **Infrastructure** | Docker multi-stage, GitHub Actions CI/CD, K8s manifests | ✅ Ready |
+| **Payments** | UPI mock (RazorpayX-format, async, failure simulation) | ✅ Mock |
+
+</div>
+
+---
+
+
+## ⚡ The 15-Trigger Library
+
+The platform uses a **3-tier trigger architecture**: early warning → claim trigger → severe escalation.
+
+### Environmental Triggers
+
+| ID | Trigger | Threshold | Tier | Action |
+|----|---------|-----------|------|--------|
+| T1 | Rain Watch | 24h rain ≥ 48 mm | Early Warning | Raise risk score, notify worker |
+| T2 | Heavy Rain Claim | 24h rain ≥ 64.5 mm | Claim Trigger | Open claim candidate if zone + shift overlap |
+| T3 | Extreme Rain Escalation | 24h rain ≥ 115.6 mm | Severe Escalation | Escalate severity band and payout cap |
+| T5 | AQI Caution | AQI 201–300 | Early Warning | Warn worker, raise premium sensitivity |
+| T6 | AQI Severe Exposure | AQI ≥ 301 + active shift | Claim Trigger | Open claim candidate |
+| T7 | Heat Wave | Temp ≥ 45°C or IMD heat-wave | Claim Trigger | Open claim candidate |
+| T8 | Severe Heat | Temp ≥ 47°C | Severe Escalation | Escalated claim severity |
+| T9 | Heat Persistence | 2 consecutive hot-risk days | Early Warning | Raise weekly risk loading |
+
+### Operational and Civic Triggers
+
+| ID | Trigger | Threshold | Tier | Action |
+|----|---------|-----------|------|--------|
+| T4 | Waterlogging Mobility | Accessibility score ≤ 0.40 | Claim Trigger | Claim candidate for blocked routes |
+| T10 | Local Zone Closure | Official closure flag = 1 | Claim Trigger | Auto-escalate to claim review |
+| T11 | Curfew / Strike Closure | Restriction window ≥ 4h | Claim Trigger | Claim candidate if pickup/drop blocked |
+| T12 | Traffic Collapse | Travel delay ≥ 40% | Early Warning | Raise exposure and route stress |
+| T13 | Platform Outage | Outage ≥ 30 min | Claim Trigger | Claim candidate for verified active workers |
+| T14 | Demand Collapse | Orders drop ≥ 35% vs baseline | Early Warning | Raise loss-of-income probability |
+| T15 | Composite Disruption | Composite score ≥ 0.70 | Severe Escalation | Fast-track claim escalation |
+
+**Threshold sources:** IMD heavy-rain and heat-wave bands, CPCB AQI category thresholds, IMD/NDMA heat-wave guidance. Traffic, outage, and demand thresholds are internal operational thresholds.
+
+---
+
+
+## 📊 Threshold References and Why They Were Chosen
+
+| Parameter | Source | What the source gives us | How we infer our product threshold | Anchoring |
+|-----------|--------|--------------------------|-------------------------------------|-----------|
+| **Rain** | [IMD Rainfall Categories (FAQ)](https://rsmcnewdelhi.imd.gov.in/images/pdf/faq.pdf), [IMD Heavy Rainfall Warning](https://mausam.imd.gov.in/imd_latest/contents/pdf/pubbrochures/Heavy%20Rainfall%20Warning%20Services.pdf) | Heavy rainfall = 64.5–115.5 mm/24h; Very heavy = 115.6–204.4 mm/24h | 48 mm = early-watch (T1). 64.5 mm = claim-trigger anchor (T2). 115.6 mm = escalation (T3). | ✅ Public-source anchored |
+| **AQI** | [CPCB National Air Quality Index](https://www.cpcb.nic.in/national-air-quality-index/), [OGD AQI Dataset](https://www.data.gov.in/resource/real-time-air-quality-index-various-locations) | AQI 201–300 = Poor; 301–400 = Very Poor; 401+ = Severe | 201+ = caution (T5). 301+ = claim threshold (T6). | ✅ Public-source anchored |
+| **Heat** | [IMD Heat Wave Warning](https://mausam.imd.gov.in/imd_latest/contents/pdf/pubbrochures/Heat%20Wave%20Warning%20Services.pdf), [NDMA Heat Wave Guidance](https://ndma.gov.in/Natural-Hazards/Heat-Wave) | Heat-wave = departure ≥ 4.5°C above normal, or absolute ≥ 45°C for plains | 45°C = heat-wave claim (T7). 47°C = severe-heat escalation (T8). | ✅ Public-source anchored |
+| **Traffic** | [TomTom Traffic Flow API](https://developer.tomtom.com/traffic-api/documentation/traffic-flow/flow-segment-data) (live) · *(Planned: Google Maps Distance Matrix API for enhanced multi-route corridor analysis)* | No single public standard; TomTom real-time flow data used as delivery-impairment proxy | ≥ 40% travel-time delay vs. free-flow baseline = route stress threshold (T12). TomTom Snap-to-Roads also validates route plausibility in the fraud layer. | ⚙️ TomTom live + internal threshold |
+| **Platform Outage** | Internal product threshold | Platform outage data is not publicly available | ≥ 30 min outage = claim threshold (T13). | ⚙️ Internal operational |
+| **Demand Collapse** | Internal product threshold | Platform order volume is not publicly available | ≥ 35% order drop vs baseline (T14). | ⚙️ Internal operational |
+
+Environmental thresholds are anchored to official Indian government sources. Operational thresholds are product-engineering decisions based on estimated earning-disruption impact — they may be refined as real operating data becomes available.
+
+### Pricing & Reference Links
+
+- **Central reference register** with all sources, threshold inference logic, and formula summary → [docs/README.md](docs/README.md#reference-register)
+- **Threshold basis per trigger family** with source links → [data/README.md](data/README.md#trigger-threshold-reference-table)
+- **ML baseline and feature normalization provenance** → [ml/README.md](ml/README.md#pricing-baseline-and-reference-notes)
+- **Insurance-side trend sources** (IRDAI, IIB) → [docs/README.md](docs/README.md#insurance-side-trend-sources)
+
+### Data Split
+
+The dataset is split into two major entities and joined only after exposure matching.
+
+**worker_data** — Worker-side profile and earning context:
+`worker_id`, `zone_id`, `city`, `shift_window`, `hourly_income`, `active_days`, `bank_verified`, `gps_consistency`, `trust_score`, `prior_claim_rate`
+
+**trigger_data** — Event-side disruption context:
+`trigger_id`, `city`, `zone_id`, `timestamp_start`, `timestamp_end`, `trigger_type`, `raw_value`, `threshold_crossed`, `severity_bucket`, `source_reliability`
+
+**joined_training_data** — Created only after matching `worker_data` ↔ `trigger_data` on `zone_id` + shift/time overlap. Used for EDA, ML experiments, and premium/payout calculations.
+
+---
+
+
+## 📐 Parametric Product: Weekly Benefit Plans
+
+> Covara One uses an internal weekly risk-and-pricing model to calibrate fair premiums and benefit levels, while the final worker-facing product remains **parametric**: once a pre-agreed trigger band is hit and both exposure matching and anti-spoofing verification pass, the payout is released automatically — no adjuster, no assessment, no discretion.
+
+The formula engine remains an **internal pricing and calibration tool**. The **customer-facing product** is structured as a parametric weekly benefit ladder released only when both the trigger threshold and the anti-spoofing verification checks pass.
+
+### Two Plans Only: Essential & Plus
+
+Covara One offers exactly **two** worker-facing plans to keep the purchase decision simple and transparent:
+
+| Plan | Weekly benefit (W) | Target worker | Indicative weekly premium |
+|---|---:|---|---|
+| **Essential** | ₹3,000 | Lower premium / wider adoption / cost-sensitive workers | Baseline calibrated |
+| **Plus** | ₹4,500 | Higher protection / experienced workers / tougher zones | Baseline × 1.35–1.50 |
+
+**Why only two plans?**
+- **Essential** reduces entry friction and improves conversion for price-sensitive workers — the affordable starting point
+- **Plus** gives a higher weekly benefit and serves as a natural upgrade path for workers who want stronger protection
+- This creates a clean, ethical ladder: low-friction entry option + higher-margin upgrade option
+- It helps the **insurer** by improving risk segmentation
+- It helps the **worker** by giving a simple choice between affordability and strength of cover
+- Too many plans reduce conversion, confuse workers, and slow purchase decisions
+
+### Parametric Payout Ladder
+
+The public payout is based on **trigger severity band** × **selected plan benefit** — not a flexible formula output:
+
+Let `W` = selected weekly benefit.
+
+| Trigger / exposure band | Description | Parametric payout |
+|---|---|---:|
+| **Band 1** — Moderate disruption | Watch-level trigger confirmed with partial exposure | `0.25 × W` |
+| **Band 2** — Major disruption | Claim-level trigger confirmed with strong exposure | `0.50 × W` |
+| **Band 3** — Severe disruption | Escalation-level trigger with full exposure match | `1.00 × W` |
+
+#### Example: Essential plan (W = ₹3,000)
+
+| Band | Payout |
+|---|---:|
+| Band 1 | ₹750 |
+| Band 2 | ₹1,500 |
+| Band 3 | ₹3,000 |
+
+#### Example: Plus plan (W = ₹4,500)
+
+| Band | Payout |
+|---|---:|
+| Band 1 | ₹1,125 |
+| Band 2 | ₹2,250 |
+| Band 3 | ₹4,500 |
+
+This structure is **much easier to defend as parametric insurance** than a flexible "pay whatever the formula outputs" model. Workers know exactly what they get. Insurers know exactly what they owe.
+
+---
+
+### Internal Calibration Engine (Not Public-Facing)
+
+The existing formula engine is retained for **internal use only** — it calibrates whether the Essential and Plus benefit amounts are appropriately sized for the worker segment, whether weekly premiums are actuarially reasonable, and whether synthetic data scenarios produce realistic outcomes. These formulas do **not** determine the worker-facing payout — the parametric ladder above does.
+
+| Formula | Expression | Internal use |
+|---|---|---|
+| Covered Income (B) | `0.70 × hourly_income × shift_hours × 6` | Plan benefit calibration |
+| Severity Score (S) | Weighted composite of 8 components | Trigger band mapping |
+| Exposure (E) | `clip(0.45 + 0.30×(shift_hours/12) + 0.25×(1−accessibility_score), 0.35, 1.00)` | Exposure verification |
+| Confidence (C) | `clip(0.50 + 0.30×trust + 0.10×gps + 0.10×bank, 0.45, 1.00) × (1 − 0.70×fraud_penalty)` | Review routing |
+| Expected Payout | `p × B × S × E × C × (1 − FH)` | Premium calibration |
+| Gross Premium | `[Expected Payout / (1 − 0.12 − 0.10)] × U` | Weekly premium pricing |
+
+### Sample Scenario (Parametric)
+
+**Worker:** Plus plan (W = ₹4,500), shift = 11h, zone = MU-WE-01, trust = 0.82
+
+**Trigger:** rain = 72mm in zone MU-WE-01, AQI = 240, temp = 41°C
+
+**Decision flow:**
+1. Rain 72mm exceeds 64.5mm → **T2 fires** (claim-level trigger)
+2. AQI 240 → T5 fires (caution, contributes to composite)
+3. Composite severity maps to **Band 2** (major disruption)
+4. Anti-spoofing: EXIF GPS matches zone, shift overlap confirmed, route plausibility verified ✅
+5. Fraud score: 0.12 → `auto_approve`
+6. **Payout: ₹2,250** (0.50 × ₹4,500)
+
+---
+
+
+## 💼 Business Framing
+
+Covara One is positioned as an **insurer-facing platform** — not a fully licensed insurer. We provide the parametric underwriting engine, claims orchestration, and fraud detection that a licensed insurer embeds into their gig-worker distribution channel.
+
+### Insurer Value Proposition
+
+| Benefit | How Covara One delivers it |
+|---|---|
+| **Reduced manual claim handling** | 8-stage automated pipeline + region fast-lane |
+| **Lower Loss Adjustment Expense (LAE)** | Parametric trigger-based decisions replace manual adjuster visits |
+| **Fraud leakage reduction** | 5-layer Ghost Shift Detector + post-approval controls |
+| **Validated-incident batching** | Region cache groups same-zone claims into event-level exposure views |
+| **Actuarial visibility** | Live BCR and Loss Ratio tracked in the Admin Dashboard |
+
+---
+
 
 ## 🛡️ The Fraud Fortress
 
@@ -352,38 +568,6 @@ flowchart TD
 
 ---
 
-## ⚡ The 15-Trigger Library
-
-The platform uses a **3-tier trigger architecture**: early warning → claim trigger → severe escalation.
-
-### Environmental Triggers
-
-| ID | Trigger | Threshold | Tier | Action |
-|----|---------|-----------|------|--------|
-| T1 | Rain Watch | 24h rain ≥ 48 mm | Early Warning | Raise risk score, notify worker |
-| T2 | Heavy Rain Claim | 24h rain ≥ 64.5 mm | Claim Trigger | Open claim candidate if zone + shift overlap |
-| T3 | Extreme Rain Escalation | 24h rain ≥ 115.6 mm | Severe Escalation | Escalate severity band and payout cap |
-| T5 | AQI Caution | AQI 201–300 | Early Warning | Warn worker, raise premium sensitivity |
-| T6 | AQI Severe Exposure | AQI ≥ 301 + active shift | Claim Trigger | Open claim candidate |
-| T7 | Heat Wave | Temp ≥ 45°C or IMD heat-wave | Claim Trigger | Open claim candidate |
-| T8 | Severe Heat | Temp ≥ 47°C | Severe Escalation | Escalated claim severity |
-| T9 | Heat Persistence | 2 consecutive hot-risk days | Early Warning | Raise weekly risk loading |
-
-### Operational and Civic Triggers
-
-| ID | Trigger | Threshold | Tier | Action |
-|----|---------|-----------|------|--------|
-| T4 | Waterlogging Mobility | Accessibility score ≤ 0.40 | Claim Trigger | Claim candidate for blocked routes |
-| T10 | Local Zone Closure | Official closure flag = 1 | Claim Trigger | Auto-escalate to claim review |
-| T11 | Curfew / Strike Closure | Restriction window ≥ 4h | Claim Trigger | Claim candidate if pickup/drop blocked |
-| T12 | Traffic Collapse | Travel delay ≥ 40% | Early Warning | Raise exposure and route stress |
-| T13 | Platform Outage | Outage ≥ 30 min | Claim Trigger | Claim candidate for verified active workers |
-| T14 | Demand Collapse | Orders drop ≥ 35% vs baseline | Early Warning | Raise loss-of-income probability |
-| T15 | Composite Disruption | Composite score ≥ 0.70 | Severe Escalation | Fast-track claim escalation |
-
-**Threshold sources:** IMD heavy-rain and heat-wave bands, CPCB AQI category thresholds, IMD/NDMA heat-wave guidance. Traffic, outage, and demand thresholds are internal operational thresholds.
-
----
 
 ## 🔐 Adversarial Defense & Anti-Spoofing Strategy
 
@@ -708,6 +892,7 @@ This acknowledgment is critical for regulatory defensibility and insurer credibi
 
 ---
 
+
 ## 🔒 Payout Safety & Duplicate Prevention
 
 > [!IMPORTANT]
@@ -722,6 +907,7 @@ This acknowledgment is critical for regulatory defensibility and insurer credibi
 | **Retry-safe requests** | Payout execution is idempotent — retrying returns the existing result, never creates a second payment. |
 
 ---
+
 
 ## 📋 Claim State Machine
 
@@ -757,6 +943,7 @@ stateDiagram-v2
 
 ---
 
+
 ## 🚦 Region Validation Cache & Fast-Lane Approvals
 
 When a disruption affects many workers simultaneously, forcing every claim through manual review is inefficient.
@@ -772,6 +959,7 @@ When a disruption affects many workers simultaneously, forcing every claim throu
 > **Cluster spike liquidity protection:** If > 50 claims/hour from one zone, the platform switches to **cluster-level validation** — protecting the liquidity pool before mass payouts execute. Fast-lane auto-release is paused until the cluster is validated.
 
 ---
+
 
 ## 🚨 Post-Approval Fraud Controls
 
@@ -795,6 +983,7 @@ Fraud detection doesn't stop at the approval gate. Covara One provides controls 
 
 ---
 
+
 ## 🪪 Progressive KYC / Trust Ladder
 
 Full identity verification upfront kills conversion. Covara One uses a **progressive KYC ladder** — stronger verification is triggered by increasing payout exposure or fraud risk.
@@ -808,6 +997,7 @@ Full identity verification upfront kills conversion. Covara One uses a **progres
 | **Level 5** | Selfie / document path | Fraud escalation only |
 
 ---
+
 
 ## 🧠 What ML Does vs. What ML Does Not Do
 
@@ -828,211 +1018,6 @@ Full identity verification upfront kills conversion. Covara One uses a **progres
 
 ---
 
-## 📊 Threshold References and Why They Were Chosen
-
-| Parameter | Source | What the source gives us | How we infer our product threshold | Anchoring |
-|-----------|--------|--------------------------|-------------------------------------|-----------|
-| **Rain** | [IMD Rainfall Categories (FAQ)](https://rsmcnewdelhi.imd.gov.in/images/pdf/faq.pdf), [IMD Heavy Rainfall Warning](https://mausam.imd.gov.in/imd_latest/contents/pdf/pubbrochures/Heavy%20Rainfall%20Warning%20Services.pdf) | Heavy rainfall = 64.5–115.5 mm/24h; Very heavy = 115.6–204.4 mm/24h | 48 mm = early-watch (T1). 64.5 mm = claim-trigger anchor (T2). 115.6 mm = escalation (T3). | ✅ Public-source anchored |
-| **AQI** | [CPCB National Air Quality Index](https://www.cpcb.nic.in/national-air-quality-index/), [OGD AQI Dataset](https://www.data.gov.in/resource/real-time-air-quality-index-various-locations) | AQI 201–300 = Poor; 301–400 = Very Poor; 401+ = Severe | 201+ = caution (T5). 301+ = claim threshold (T6). | ✅ Public-source anchored |
-| **Heat** | [IMD Heat Wave Warning](https://mausam.imd.gov.in/imd_latest/contents/pdf/pubbrochures/Heat%20Wave%20Warning%20Services.pdf), [NDMA Heat Wave Guidance](https://ndma.gov.in/Natural-Hazards/Heat-Wave) | Heat-wave = departure ≥ 4.5°C above normal, or absolute ≥ 45°C for plains | 45°C = heat-wave claim (T7). 47°C = severe-heat escalation (T8). | ✅ Public-source anchored |
-| **Traffic** | Internal product threshold | No single public standard for delivery-impairment delay | ≥ 40% travel-time delay = route stress (T12). | ⚙️ Internal operational |
-| **Platform Outage** | Internal product threshold | Platform outage data is not publicly available | ≥ 30 min outage = claim threshold (T13). | ⚙️ Internal operational |
-| **Demand Collapse** | Internal product threshold | Platform order volume is not publicly available | ≥ 35% order drop vs baseline (T14). | ⚙️ Internal operational |
-
-Environmental thresholds are anchored to official Indian government sources. Operational thresholds are product-engineering decisions based on estimated earning-disruption impact — they may be refined as real operating data becomes available.
-
-### Pricing & Reference Links
-
-- **Central reference register** with all sources, threshold inference logic, and formula summary → [docs/README.md](docs/README.md#reference-register)
-- **Threshold basis per trigger family** with source links → [data/README.md](data/README.md#trigger-threshold-reference-table)
-- **ML baseline and feature normalization provenance** → [ml/README.md](ml/README.md#pricing-baseline-and-reference-notes)
-- **Insurance-side trend sources** (IRDAI, IIB) → [docs/README.md](docs/README.md#insurance-side-trend-sources)
-
-### Data Split
-
-The dataset is split into two major entities and joined only after exposure matching.
-
-**worker_data** — Worker-side profile and earning context:
-`worker_id`, `zone_id`, `city`, `shift_window`, `hourly_income`, `active_days`, `bank_verified`, `gps_consistency`, `trust_score`, `prior_claim_rate`
-
-**trigger_data** — Event-side disruption context:
-`trigger_id`, `city`, `zone_id`, `timestamp_start`, `timestamp_end`, `trigger_type`, `raw_value`, `threshold_crossed`, `severity_bucket`, `source_reliability`
-
-**joined_training_data** — Created only after matching `worker_data` ↔ `trigger_data` on `zone_id` + shift/time overlap. Used for EDA, ML experiments, and premium/payout calculations.
-
----
-
-## 📐 Parametric Product: Weekly Benefit Plans
-
-> Covara One uses an internal weekly risk-and-pricing model to calibrate fair premiums and benefit levels, while the final worker-facing product remains **parametric**: once a pre-agreed trigger band is hit and both exposure matching and anti-spoofing verification pass, the payout is released automatically — no adjuster, no assessment, no discretion.
-
-The formula engine remains an **internal pricing and calibration tool**. The **customer-facing product** is structured as a parametric weekly benefit ladder released only when both the trigger threshold and the anti-spoofing verification checks pass.
-
-### Two Plans Only: Essential & Plus
-
-Covara One offers exactly **two** worker-facing plans to keep the purchase decision simple and transparent:
-
-| Plan | Weekly benefit (W) | Target worker | Indicative weekly premium |
-|---|---:|---|---|
-| **Essential** | ₹3,000 | Lower premium / wider adoption / cost-sensitive workers | Baseline calibrated |
-| **Plus** | ₹4,500 | Higher protection / experienced workers / tougher zones | Baseline × 1.35–1.50 |
-
-**Why only two plans?**
-- **Essential** reduces entry friction and improves conversion for price-sensitive workers — the affordable starting point
-- **Plus** gives a higher weekly benefit and serves as a natural upgrade path for workers who want stronger protection
-- This creates a clean, ethical ladder: low-friction entry option + higher-margin upgrade option
-- It helps the **insurer** by improving risk segmentation
-- It helps the **worker** by giving a simple choice between affordability and strength of cover
-- Too many plans reduce conversion, confuse workers, and slow purchase decisions
-
-### Parametric Payout Ladder
-
-The public payout is based on **trigger severity band** × **selected plan benefit** — not a flexible formula output:
-
-Let `W` = selected weekly benefit.
-
-| Trigger / exposure band | Description | Parametric payout |
-|---|---|---:|
-| **Band 1** — Moderate disruption | Watch-level trigger confirmed with partial exposure | `0.25 × W` |
-| **Band 2** — Major disruption | Claim-level trigger confirmed with strong exposure | `0.50 × W` |
-| **Band 3** — Severe disruption | Escalation-level trigger with full exposure match | `1.00 × W` |
-
-#### Example: Essential plan (W = ₹3,000)
-
-| Band | Payout |
-|---|---:|
-| Band 1 | ₹750 |
-| Band 2 | ₹1,500 |
-| Band 3 | ₹3,000 |
-
-#### Example: Plus plan (W = ₹4,500)
-
-| Band | Payout |
-|---|---:|
-| Band 1 | ₹1,125 |
-| Band 2 | ₹2,250 |
-| Band 3 | ₹4,500 |
-
-This structure is **much easier to defend as parametric insurance** than a flexible "pay whatever the formula outputs" model. Workers know exactly what they get. Insurers know exactly what they owe.
-
----
-
-### Internal Calibration Engine (Not Public-Facing)
-
-The existing formula engine is retained for **internal use only** — it calibrates whether the Essential and Plus benefit amounts are appropriately sized for the worker segment, whether weekly premiums are actuarially reasonable, and whether synthetic data scenarios produce realistic outcomes. These formulas do **not** determine the worker-facing payout — the parametric ladder above does.
-
-| Formula | Expression | Internal use |
-|---|---|---|
-| Covered Income (B) | `0.70 × hourly_income × shift_hours × 6` | Plan benefit calibration |
-| Severity Score (S) | Weighted composite of 8 components | Trigger band mapping |
-| Exposure (E) | `clip(0.45 + 0.30×(shift_hours/12) + 0.25×(1−accessibility_score), 0.35, 1.00)` | Exposure verification |
-| Confidence (C) | `clip(0.50 + 0.30×trust + 0.10×gps + 0.10×bank, 0.45, 1.00) × (1 − 0.70×fraud_penalty)` | Review routing |
-| Expected Payout | `p × B × S × E × C × (1 − FH)` | Premium calibration |
-| Gross Premium | `[Expected Payout / (1 − 0.12 − 0.10)] × U` | Weekly premium pricing |
-
-### Sample Scenario (Parametric)
-
-**Worker:** Plus plan (W = ₹4,500), shift = 11h, zone = MU-WE-01, trust = 0.82
-
-**Trigger:** rain = 72mm in zone MU-WE-01, AQI = 240, temp = 41°C
-
-**Decision flow:**
-1. Rain 72mm exceeds 64.5mm → **T2 fires** (claim-level trigger)
-2. AQI 240 → T5 fires (caution, contributes to composite)
-3. Composite severity maps to **Band 2** (major disruption)
-4. Anti-spoofing: EXIF GPS matches zone, shift overlap confirmed, route plausibility verified ✅
-5. Fraud score: 0.12 → `auto_approve`
-6. **Payout: ₹2,250** (0.50 × ₹4,500)
-
----
-
-## 💼 Business Framing
-
-Covara One is positioned as an **insurer-facing platform** — not a fully licensed insurer. We provide the parametric underwriting engine, claims orchestration, and fraud detection that a licensed insurer embeds into their gig-worker distribution channel.
-
-### Insurer Value Proposition
-
-| Benefit | How Covara One delivers it |
-|---|---|
-| **Reduced manual claim handling** | 8-stage automated pipeline + region fast-lane |
-| **Lower Loss Adjustment Expense (LAE)** | Parametric trigger-based decisions replace manual adjuster visits |
-| **Fraud leakage reduction** | 5-layer Ghost Shift Detector + post-approval controls |
-| **Validated-incident batching** | Region cache groups same-zone claims into event-level exposure views |
-| **Actuarial visibility** | Live BCR and Loss Ratio tracked in the Admin Dashboard |
-
----
-
-## 🏗️ Architecture
-
-```mermaid
-flowchart TD
-    classDef input fill:#7C3AED,color:#fff,stroke:#5B21B6,stroke-width:2px
-    classDef ui fill:#1D4ED8,color:#fff,stroke:#1E3A8A,stroke-width:2px
-    classDef engine fill:#059669,color:#fff,stroke:#047857,stroke-width:2px
-    classDef defense fill:#9333EA,color:#fff,stroke:#7E22CE,stroke-width:2px
-    classDef data fill:#4F46E5,color:#fff,stroke:#3730A3,stroke-width:2px
-    classDef admin fill:#B45309,color:#fff,stroke:#92400E,stroke-width:2px
-
-    subgraph SIG ["🌐 External Signals"]
-        WX[/"☁️ OpenWeather + IMD"/]:::input
-        AQ[/"🌫️ CPCB AQI (511 stations)"/]:::input
-        TR[/"🚦 TomTom Traffic + Routing"/]:::input
-        NW[/"📰 NewsAPI Civic"/]:::input
-    end
-
-    subgraph CORE ["⚙️ Main Processing Pipeline"]
-        direction TB
-        SI{{"Signal Ingestion"}}:::engine
-        TE{{"Trigger Engine (T1–T15)"}}:::engine
-        CE{{"8-Stage Claim Engine"}}:::engine
-        FE{{"Ghost Shift Detector"}}:::defense
-        PS{{"Payout Safety Layer"}}:::defense
-        PO[["Zero-Touch Payout"]]:::defense
-        SI --> TE --> CE --> FE --> PS --> PO
-    end
-
-    subgraph WRK ["👤 Worker (Next.js 16)"]
-        WD[["Worker Dashboard"]]:::ui
-        WC[["Claim Submission"]]:::ui
-    end
-
-    subgraph INS ["🏢 Insurer (Admin Portal)"]
-        ID[["Operations Dashboard"]]:::admin
-        RQ[["Review Queue + AI"]]:::admin
-        TG[["Trigger Engine"]]:::admin
-    end
-
-    subgraph DAT ["💾 Data Layer"]
-        DB[("Supabase Postgres<br>14 Tables + RLS")]:::data
-        RC[("Redis Cache<br>fastapi-cache2")]:::data
-        ML{{"Random Forest<br>Live Inference"}}:::data
-    end
-
-    WX & AQ & TR & NW --> SI
-    WD & WC --> CE
-    PO --> WD
-    CE --> RQ
-    FE --> ID
-    ML --> CE
-    DB <--> CORE
-    RC --> TE
-```
-
-<div align="center">
-
-| Layer | Technology | Status |
-|:-----:|:----------:|:------:|
-| **Frontend** | Next.js 16, Tailwind CSS v4, Recharts, Zustand | ✅ Live |
-| **Backend** | FastAPI, Python 3.12, fastapi-cache2 + Redis | ✅ Live |
-| **Auth** | Supabase Auth (Google OAuth + email), Edge SSR Middleware | ✅ Live |
-| **Database** | Supabase Postgres, 14 tables, Row-Level Security | ✅ Live |
-| **ML** | scikit-learn Random Forest (live predict_proba), DBSCAN | ✅ Live |
-| **Infrastructure** | Docker multi-stage, GitHub Actions CI/CD, K8s manifests | ✅ Ready |
-| **Payments** | UPI mock (RazorpayX-format, async, failure simulation) | ✅ Mock |
-
-</div>
-
----
 
 ## 🏆 Why Covara One Wins
 
@@ -1094,6 +1079,7 @@ flowchart TD
 
 ---
 
+
 ## 🎬 Judge's Demo Walkthrough
 
 > Follow this exact sequence to reproduce the demo video in under 2 minutes.
@@ -1150,6 +1136,7 @@ flowchart TD
 
 ---
 
+
 ## 📅 Development Timeline
 
 ```mermaid
@@ -1175,6 +1162,7 @@ gantt
 ```
 
 ---
+
 
 ## 🚀 Quick Start
 
@@ -1250,6 +1238,7 @@ Celestius_DEVTrails_P1/
 
 ---
 
+
 ## 📚 Deep Dive Docs
 
 | Document | What's inside |
@@ -1283,3 +1272,37 @@ Celestius_DEVTrails_P1/
 ![Footer](https://capsule-render.vercel.app/api?type=waving&color=0:0F0C29,50:302B63,100:24243E&height=120&section=footer)
 
 </div>
+
+
+## 📑 Table of Contents
+
+<details open>
+<summary><b>Click to navigate</b></summary>
+
+| # | Section |
+|:-|---------|
+| 🔥 | [The Crisis](#-the-crisis) |
+| 👤 | [Our Persona](#-our-persona--arjun-the-monsoon-rider) |
+| 🎬 | [Live Scenarios](#-live-scenarios) |
+| ⚡ | [How It Works](#-how-it-works) |
+| 💰 | [Coverage Plans & IRDAI Compliance](#-coverage-plans--irdai-compliance) |
+| 🛡️ | [The Fraud Fortress](#️-the-fraud-fortress) |
+| ⚡ | [15-Trigger Library](#-the-15-trigger-library) |
+| 🔐 | [Adversarial Defense](#-adversarial-defense--anti-spoofing-strategy) |
+| 🔒 | [Payout Safety](#-payout-safety--duplicate-prevention) |
+| 📋 | [Claim State Machine](#-claim-state-machine) |
+| 🚦 | [Region Fast-Lane](#-region-validation-cache--fast-lane-approvals) |
+| 🚨 | [Post-Approval Controls](#-post-approval-fraud-controls) |
+| 🪪 | [Progressive KYC](#-progressive-kyc--trust-ladder) |
+| 🧠 | [ML Role](#-what-ml-does-vs-what-ml-does-not-do) |
+| 📊 | [Threshold References](#-threshold-references-and-why-they-were-chosen) |
+| 📐 | [Parametric Product & Calibration](#-parametric-product-weekly-benefit-plans) |
+| 💼 | [Business Framing](#-business-framing) |
+| 🏗️ | [Architecture](#️-architecture) |
+| 🏆 | [Why Covara One Wins](#-why-covara-one-wins) |
+| 🚀 | [Quick Start](#-quick-start) |
+| 📚 | [Deep Dive Docs](#-deep-dive-docs) |
+
+</details>
+
+---
