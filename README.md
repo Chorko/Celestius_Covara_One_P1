@@ -33,6 +33,39 @@
 
 ---
 
+## 📑 Table of Contents
+
+<details open>
+<summary><b>Click to navigate</b></summary>
+
+| # | Section |
+|:-|---------|
+| 🔥 | [The Crisis](#-the-crisis) |
+| 👤 | [Our Persona](#-our-persona--arjun-the-monsoon-rider) |
+| 🎬 | [Live Scenarios](#-live-scenarios) |
+| ⚡ | [How It Works](#-how-it-works) |
+| 💰 | [Coverage Plans & IRDAI Compliance](#-coverage-plans--irdai-compliance) |
+| 🛡️ | [The Fraud Fortress](#️-the-fraud-fortress) |
+| ⚡ | [15-Trigger Library](#-the-15-trigger-library) |
+| 🔐 | [Adversarial Defense](#-adversarial-defense--anti-spoofing-strategy) |
+| 🔒 | [Payout Safety](#-payout-safety--duplicate-prevention) |
+| 📋 | [Claim State Machine](#-claim-state-machine) |
+| 🚦 | [Region Fast-Lane](#-region-validation-cache--fast-lane-approvals) |
+| 🚨 | [Post-Approval Controls](#-post-approval-fraud-controls) |
+| 🪪 | [Progressive KYC](#-progressive-kyc--trust-ladder) |
+| 🧠 | [ML Role](#-what-ml-does-vs-what-ml-does-not-do) |
+| 📊 | [Threshold References](#-threshold-references-and-why-they-were-chosen) |
+| 📐 | [Parametric Product & Calibration](#-parametric-product-weekly-benefit-plans) |
+| 💼 | [Business Framing](#-business-framing) |
+| 🏗️ | [Architecture](#️-architecture) |
+| 🏆 | [Why Covara One Wins](#-why-covara-one-wins) |
+| 🚀 | [Quick Start](#-quick-start) |
+| 📚 | [Deep Dive Docs](#-deep-dive-docs) |
+
+</details>
+
+---
+
 > [!IMPORTANT]
 > **What is Parametric Insurance?** Unlike traditional insurance where you file a claim and wait for an adjuster, parametric insurance pays **automatically** when a measurable threshold is crossed. If IMD rainfall data shows ≥ 64.5mm in your zone — you get paid. No paperwork. No waiting.
 
@@ -1273,36 +1306,3 @@ Celestius_DEVTrails_P1/
 
 </div>
 
-
-## 📑 Table of Contents
-
-<details open>
-<summary><b>Click to navigate</b></summary>
-
-| # | Section |
-|:-|---------|
-| 🔥 | [The Crisis](#-the-crisis) |
-| 👤 | [Our Persona](#-our-persona--arjun-the-monsoon-rider) |
-| 🎬 | [Live Scenarios](#-live-scenarios) |
-| ⚡ | [How It Works](#-how-it-works) |
-| 💰 | [Coverage Plans & IRDAI Compliance](#-coverage-plans--irdai-compliance) |
-| 🛡️ | [The Fraud Fortress](#️-the-fraud-fortress) |
-| ⚡ | [15-Trigger Library](#-the-15-trigger-library) |
-| 🔐 | [Adversarial Defense](#-adversarial-defense--anti-spoofing-strategy) |
-| 🔒 | [Payout Safety](#-payout-safety--duplicate-prevention) |
-| 📋 | [Claim State Machine](#-claim-state-machine) |
-| 🚦 | [Region Fast-Lane](#-region-validation-cache--fast-lane-approvals) |
-| 🚨 | [Post-Approval Controls](#-post-approval-fraud-controls) |
-| 🪪 | [Progressive KYC](#-progressive-kyc--trust-ladder) |
-| 🧠 | [ML Role](#-what-ml-does-vs-what-ml-does-not-do) |
-| 📊 | [Threshold References](#-threshold-references-and-why-they-were-chosen) |
-| 📐 | [Parametric Product & Calibration](#-parametric-product-weekly-benefit-plans) |
-| 💼 | [Business Framing](#-business-framing) |
-| 🏗️ | [Architecture](#️-architecture) |
-| 🏆 | [Why Covara One Wins](#-why-covara-one-wins) |
-| 🚀 | [Quick Start](#-quick-start) |
-| 📚 | [Deep Dive Docs](#-deep-dive-docs) |
-
-</details>
-
----
