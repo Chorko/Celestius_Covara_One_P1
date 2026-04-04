@@ -13,8 +13,8 @@
 | Variable dictionary | 📝 Documented |
 | Threshold reference table | 📝 Documented |
 | Seed CSV files | ✅ Present | `data/samples/*.csv` (3 files, 8 rows each) |
-| Synthetic data generator script | 📋 Planned |
-| Mock-data API endpoint | 📋 Planned |
+| Synthetic data generator (DB re-seed) | ✅ Implemented (`POST /simulate/mock-data/generate`) |
+| Claim scenario simulation endpoint | ✅ Implemented (`POST /simulate/claim-scenario` — full 8-stage pipeline, no DB write) |
 
 ---
 
@@ -199,25 +199,24 @@ The seed dataset is available as actual CSV files in `data/samples/`:
 
 ---
 
-## Planned Generator Endpoint
-
-> **📋 Status:** Planned / target architecture
+## Simulation Endpoints (Implemented)
 
 ```
-GET /mock-data/generate?city=<city>&days=<n>
-Returns:
-  - worker_data.csv
-  - trigger_data.csv
-  - joined_training_data.csv
-  - summary.json
+POST /simulate/mock-data/generate
+  Runs seed_all() to re-populate the DB with synthetic data.
+  Returns: { status, details }
+  Auth: insurer_admin only
 
-GET /simulate/claim-scenario?worker_id=<id>&trigger_id=<id>
-Returns:
-  - trigger evaluation
-  - premium before/after
-  - payout recommendation
-  - fraud confidence
-  - claim decision trace
+POST /simulate/claim-scenario
+  Body: { worker_id, zone_id, trigger_family, raw_value }
+  Returns:
+    - worker_metrics (B, E, C)
+    - ml_probability (live RF inference)
+    - fraud_engine (5-layer full breakdown)
+    - payout_calculation
+    - recommended_action
+  Auth: insurer_admin only
+  Note: Does NOT write to the database. Safe for demo use.
 ```
 
 ---
@@ -226,10 +225,9 @@ Returns:
 
 | File | Status | Purpose |
 |------|--------|---------|
-| `worker_data.csv` | 📋 Planned | Worker profiles for analysis |
-| `trigger_data.csv` | 📋 Planned | Trigger events for analysis |
-| `joined_training_data.csv` | 📋 Planned | Matched dataset for ML training |
-| `summary.json` | 📋 Planned | Aggregate statistics |
+| `worker_data_seed.csv` | ✅ Present | Seed / demo worker profiles |
+| `trigger_data_seed.csv` | ✅ Present | Seed / demo trigger events |
+| `joined_training_data_seed.csv` | ✅ Present | Matched seed data used for RF training |
 | Variable dictionary | 📝 Documented (this README) | Field definitions |
 | Threshold reference table | 📝 Documented (this README) | Public threshold citations |
 

@@ -17,7 +17,7 @@
 | Admin review queue (claim detail, AI summary, approve/reject) | ✅ Implemented |
 | Admin trigger engine (live feed, mock injection) | ✅ Implemented |
 | Client-side route guards | ✅ Implemented |
-| SSR middleware route protection | 📋 Planned |
+| SSR middleware route protection | ✅ Implemented (`frontend/src/middleware.ts` — Edge-level Supabase session check, blocks `/worker/*` and `/admin/*` for unauthenticated users) |
 
 ---
 
@@ -64,6 +64,7 @@ Then open http://localhost:3000
 | Admin Dashboard | `/admin/dashboard` | KPI cards (total claims, avg payout, fraud rate), trigger mix pie chart | ✅ Implemented |
 | Review Queue | `/admin/reviews` | Claim list, claim detail panel with payout recommendation, fraud scores, Gemini AI summary, approve/hold/reject/flag actions, 8 claim states | ✅ Implemented |
 | Trigger Engine | `/admin/triggers` | Live trigger feed, mock trigger injection for testing | ✅ Implemented |
+| User Management | `/admin/users` | Worker lookup by name/email/city, worker profile viewer with trust score and claim history | ✅ Implemented |
 
 ---
 
@@ -79,7 +80,9 @@ Google OAuth / Email Login
       insurer → /admin/dashboard
 ```
 
-Route guards in `worker/layout.tsx` and `admin/layout.tsx` check session and role client-side, redirecting unauthorized users.
+Route protection operates at two levels:
+1. **Edge (SSR):** `frontend/src/middleware.ts` intercepts all requests to `/worker/*` and `/admin/*` using `@supabase/ssr`. Runs at the Next.js Edge runtime before the page renders — no client-side flash.
+2. **Client-side:** `worker/layout.tsx` and `admin/layout.tsx` perform a secondary session check and role validation after hydration, redirecting unauthorized users with full state-awareness.
 
 ---
 

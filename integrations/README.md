@@ -16,7 +16,7 @@
 | KYC — Sandbox.co.in | ✅ Implemented (Aadhaar OTP, PAN, Bank verify) |
 | Twilio WhatsApp + OTP | ✅ Implemented (7 templates, sandboxed) |
 | Gemini API integration | ✅ Implemented |
-| Payment sandbox | 📋 Planned |
+| Payment gateway mock service | ✅ Implemented (`services/payment_mock.py` — async UPI simulation, RazorpayX-format transaction IDs) |
 
 ---
 
@@ -35,7 +35,7 @@
 | 9 | **Platform Outage Feed** | Platform | Delivery platform | Mock | Platform APIs are unavailable; simulate outage events |
 | 10 | **Demand Drop Signal** | Platform | Delivery platform | Mock | Platform APIs are unavailable; simulate order drops |
 | 11 | **Zone Closure Feed** | Civic | Municipal / police | Mock | No real-time API; simulate closure flags |
-| 12 | **Payment Gateway** | Payout | UPI / payment sandbox | Mock | Actual payment integration not required for demo |
+| 12 | **Payment Gateway Mock** | Payout | UPI (RazorpayX-format simulation) | **Implemented** | `payment_mock.py` — async, returns realistic transaction IDs and payout status |
 
 ---
 
@@ -137,10 +137,12 @@ Platform-specific APIs (delivery order volume, outage heartbeats, GPS traces) ar
 - **Triggers fed:** T13, T14
 - **Assumption:** Based on typical gig-platform disruption patterns
 
-### Payment Gateway (Mock)
-- **Purpose:** Simulate UPI/gateway payout confirmation
-- **Output:** Payment status (success/pending/failed), transaction ID
-- **Consumer:** Payout service, worker dashboard
+### Payment Gateway (Mock — `payment_mock.py`)
+- **Purpose:** Simulate UPI payout confirmation with realistic async behaviour.
+- **Implementation:** `backend/app/services/payment_mock.py` — `async mock_upi_payout(profile_id, amount, upi_id)`
+- **Output:** RazorpayX-format response: `transaction_id`, `status` (`processed`/`failed`), `amount`, `currency`, `processed_at`, `gateway`.
+- **Failure simulation:** If `upi_id` contains `"fail"`, returns `status = "failed"` — enabling negative-path testing without a live gateway.
+- **Consumer:** Claim pipeline post-approval stage, worker dashboard payout confirmation.
 
 ### Bank Verification (Mock)
 - **Purpose:** Simulate bank account verification

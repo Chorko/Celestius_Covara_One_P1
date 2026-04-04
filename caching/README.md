@@ -11,8 +11,8 @@
 | Cache strategy definition | 📝 Documented |
 | TTL policy specification | 📝 Documented |
 | Invalidation rules | 📝 Documented |
-| Redis integration | 📋 Planned |
-| Cache middleware | 📋 Planned |
+| Redis integration (`fastapi-cache2[redis]`) | ✅ Implemented (wired in `main.py` lifespan, falls back gracefully if Redis unavailable) |
+| Cache middleware decorators | ✅ Implemented (`@cache(expire=N)` on `/triggers/live`, `/analytics/summary`, `/zones/`, `/policies/quote`) |
 
 ---
 
@@ -101,4 +101,8 @@ The cached response is returned to **backend services** and then surfaced to the
 
 ## Why This Folder Exists
 
-This folder exists so we do not repeatedly fetch or recompute the same environmental signal logic during demos. When a judge refreshes the dashboard or re-runs a scenario, the response should be fast and consistent. The caching layer makes the demo flow faster and more realistic during hackathon evaluation.
+This folder exists so we do not repeatedly fetch or recompute the same environmental signal logic during demos. When a judge refreshes the dashboard or re-runs a scenario, the response should be fast and consistent.
+
+**Implementation detail:** `fastapi-cache2[redis]` is initialized in `backend/app/main.py` lifespan. If Redis is unavailable (e.g. localhost without Docker), the app logs a warning and continues serving live traffic — all cached endpoints degrade gracefully to direct DB queries. This ensures zero downtime on cache failures.
+
+The caching layer makes the demo flow faster and more realistic during hackathon evaluation, and provides a production-hardened TTL pattern ready for scale.
