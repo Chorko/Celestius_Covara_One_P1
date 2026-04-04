@@ -44,14 +44,24 @@
 <summary><b>Click to navigate</b></summary>
 
 | # | Section |
-|:-:|---------|
+|:-|---------|
 | 🔥 | [The Crisis](#-the-crisis) |
 | 👤 | [Our Persona](#-our-persona--arjun-the-monsoon-rider) |
 | 🎬 | [Live Scenarios](#-live-scenarios) |
 | ⚡ | [How It Works](#-how-it-works) |
 | 💰 | [Coverage Plans](#-coverage-plans) |
 | 🛡️ | [The Fraud Fortress](#️-the-fraud-fortress) |
-| 🏗️ | [Architecture](#-architecture) |
+| ⚡ | [15-Trigger Library](#-the-15-trigger-library) |
+| 🔐 | [Adversarial Defense](#-adversarial-defense--anti-spoofing-strategy) |
+| 🔒 | [Payout Safety](#-payout-safety--duplicate-prevention) |
+| 📋 | [Claim State Machine](#-claim-state-machine) |
+| 🚦 | [Region Fast-Lane](#-region-validation-cache--fast-lane-approvals) |
+| 🚨 | [Post-Approval Controls](#-post-approval-fraud-controls) |
+| 🪪 | [Progressive KYC](#-progressive-kyc--trust-ladder) |
+| 🧠 | [ML Role](#-what-ml-does-vs-what-ml-does-not-do) |
+| 📐 | [Calibration Engine](#-internal-calibration-engine) |
+| 💼 | [Business Framing](#-business-framing) |
+| 🏗️ | [Architecture](#️-architecture) |
 | 🏆 | [Why Covara One Wins](#-why-covara-one-wins) |
 | 🚀 | [Quick Start](#-quick-start) |
 | 📚 | [Deep Dive Docs](#-deep-dive-docs) |
@@ -306,6 +316,298 @@ flowchart TD
 **Key differentiator:** GPS is only **1 of 9 signals**. Spoofers fool GPS and nothing else. Our architecture checks route plausibility (TomTom), Gemini SynthID for AI-generated photos, and DBSCAN clustering on batch submission timing. The 500-worker syndicate gets caught before a single payout.
 
 → *Full fraud deep-dive: [fraud/README.md](fraud/README.md) · [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md)*
+
+---
+
+## ⚡ The 15-Trigger Library
+
+The platform uses a **3-tier trigger architecture**: early warning → claim trigger → severe escalation.
+
+### Environmental Triggers
+
+| ID | Trigger | Threshold | Tier | Action |
+|----|---------|-----------|------|--------|
+| T1 | Rain Watch | 24h rain ≥ 48 mm | Early Warning | Raise risk score, notify worker |
+| T2 | Heavy Rain Claim | 24h rain ≥ 64.5 mm | Claim Trigger | Open claim candidate if zone + shift overlap |
+| T3 | Extreme Rain Escalation | 24h rain ≥ 115.6 mm | Severe Escalation | Escalate severity band and payout cap |
+| T5 | AQI Caution | AQI 201–300 | Early Warning | Warn worker, raise premium sensitivity |
+| T6 | AQI Severe Exposure | AQI ≥ 301 + active shift | Claim Trigger | Open claim candidate |
+| T7 | Heat Wave | Temp ≥ 45°C or IMD heat-wave | Claim Trigger | Open claim candidate |
+| T8 | Severe Heat | Temp ≥ 47°C | Severe Escalation | Escalated claim severity |
+| T9 | Heat Persistence | 2 consecutive hot-risk days | Early Warning | Raise weekly risk loading |
+
+### Operational and Civic Triggers
+
+| ID | Trigger | Threshold | Tier | Action |
+|----|---------|-----------|------|--------|
+| T4 | Waterlogging Mobility | Accessibility score ≤ 0.40 | Claim Trigger | Claim candidate for blocked routes |
+| T10 | Local Zone Closure | Official closure flag = 1 | Claim Trigger | Auto-escalate to claim review |
+| T11 | Curfew / Strike Closure | Restriction window ≥ 4h | Claim Trigger | Claim candidate if pickup/drop blocked |
+| T12 | Traffic Collapse | Travel delay ≥ 40% | Early Warning | Raise exposure and route stress |
+| T13 | Platform Outage | Outage ≥ 30 min | Claim Trigger | Claim candidate for verified active workers |
+| T14 | Demand Collapse | Orders drop ≥ 35% vs baseline | Early Warning | Raise loss-of-income probability |
+| T15 | Composite Disruption | Composite score ≥ 0.70 | Severe Escalation | Fast-track claim escalation |
+
+**Threshold sources:** IMD heavy-rain and heat-wave bands, CPCB AQI category thresholds, IMD/NDMA heat-wave guidance. Traffic, outage, and demand thresholds are internal operational thresholds.
+
+---
+
+## 🔐 Adversarial Defense & Anti-Spoofing Strategy
+
+> [!CAUTION]
+> **Market-Shift Context:** A sophisticated syndicate of 500 delivery workers coordinated via Telegram to fake GPS locations in severe weather zones while resting at home — draining a beta parametric platform's liquidity pool. Simple GPS verification is officially obsolete. This section documents how Covara One defends against this exact attack vector.
+
+### 1. The Differentiation: Genuine Worker vs. Bad Actor
+
+Covara One does **not** trust raw GPS coordinates alone. The platform differentiates genuinely stranded workers from spoofers using **multi-signal verification** — a layered approach where no single data point can trigger or block a payout in isolation.
+
+| Signal layer | What it checks | Why GPS alone fails here |
+|---|---|---|
+| **Trigger-event correlation** | Does a verified external disruption exist in the claimed zone at the claimed time? | Spoofers fake location but cannot fake a weather event |
+| **EXIF GPS vs. device GPS** | Does photo evidence GPS match device-reported location? | Spoofing apps change device GPS but cannot alter captured EXIF |
+| **EXIF timestamp freshness** | Was evidence taken within the claim window? | Reused evidence from old events fails freshness checks |
+| **Shift overlap ratio** | Was the worker's shift active during the trigger window? | Spoofers outside their shift schedule are flagged |
+| **Zone consistency** | Does the claim zone match historical operating zone? | Claiming disruption in a never-visited zone is suspicious |
+| **Route plausibility** | Does TomTom Snap-to-Roads confirm a real delivery route? | Spoofed coordinates often land on rooftops, parks, or impossible positions |
+| **Activity continuity** | Was the worker completing orders before disruption hit? | Genuine workers show pre-disruption activity; spoofers show none |
+| **Device continuity** | Is the same device consistently associated with this account? | Fraud rings rotate devices across accounts |
+
+### 1a. Evidence Integrity & AI Image Detection
+
+Sophisticated fraud rings submit **AI-generated photos** as disruption evidence. Covara One defends using multi-layer image forensics:
+
+| Check | Method | What it catches |
+|---|---|---|
+| **SynthID watermark scan** | Gemini API analyzes evidence for embedded Google SynthID markers | Photos generated by Google AI models are flagged immediately |
+| **AI-generation probability** | Gemini Vision assesses texture uniformity, lighting inconsistencies | Catches AI from non-Google models (DALL-E, Midjourney, etc.) |
+| **EXIF integrity** | Verify DateTimeOriginal, Make, Model, GPS fields — flag editing software in `Software` field | Stripped or tampered EXIF detected |
+| **Error Level Analysis (ELA)** | Re-compress at known quality and compare error — edited regions show anomalous error | Spliced or fabricated evidence detected |
+| **Perceptual hash cross-matching** | Compare evidence photos across all claims in a batch | Identical photos from a fraud ring identified |
+
+> [!NOTE]
+> Workers who submit photos via WhatsApp may have EXIF stripped automatically. This is **not treated as fraud** — it reduces the evidence integrity score to Medium and routes to `needs_review`, never auto-rejects.
+
+### 1b. Advanced Fraud Vectors & Threat Model
+
+#### Tier 1 — Direct Spoofing
+
+| Vector | How the attack works | Defense |
+|---|---|---|
+| **GPS spoofing apps** | Mock-location app fakes device coordinates in a red-alert zone | EXIF cross-check, TomTom route plausibility, impossible-travel velocity |
+| **VPN / proxy routing** | Traffic routed through VPN in disruption zone | VPN/datacenter IP detection — supporting signal, not standalone rejection |
+| **Emulator / app hooking** | App run in emulator with injected fake sensor data | Rooted-device detection, mock-location permission flag, sensor inconsistency |
+
+#### Tier 2 — Identity Misuse
+
+| Vector | How the attack works | Defense |
+|---|---|---|
+| **Buddy login** | Worker A shares OTP; Worker B logs in from red-alert zone | New-device login during red-alert triggers liveness check; zone affinity mismatch |
+| **Account sharing ring** | Multiple people rotate one account | Device-account binding detects multiple device fingerprints per account |
+
+#### Tier 3 — Coordinated / Systemic Abuse
+
+| Vector | How the attack works | Defense |
+|---|---|---|
+| **Weather chaser** | Worker travels pre-emptively to zone, waits in café, then claims "stranded" | Pre-trigger presence requirement: must show work activity before trigger fired |
+| **Fraud ring cluster** | 500+ workers submit synchronized claims from near-identical coordinates | DBSCAN clustering; shared payout destinations; network/IP clustering; circuit-breaker |
+
+### 1c. Signal Confidence Hierarchy
+
+| Rank | Signal | Trust level | Rationale |
+|:---:|---|---|---|
+| 1 | **Verified trigger event** | Highest | External source (OpenWeather, CPCB) — cannot be spoofed by the worker |
+| 2 | **Historical work pattern** | High | Long-term baseline — extremely difficult to fabricate |
+| 3 | **Shift / order continuity** | High | Platform-verified delivery activity before disruption |
+| 4 | **Pre-trigger presence** | High | Worker must show presence in zone before trigger opened |
+| 5 | **Device continuity** | Medium-High | Hardware-bound — harder to spoof than software signals |
+| 6 | **EXIF evidence integrity** | Medium | Strong when present; can be stripped by messaging apps |
+| 7 | **AI image detection** | Medium | Catches AI-generated evidence |
+| 8 | **Browser / device GPS** | Medium-Low | Easily spoofed — never trusted alone |
+| 9 | **IP / network context** | Low | Supporting signal only — VPN use raises suspicion |
+
+### Fraud Decision Matrix
+
+| Signal pattern | Outcome | Action |
+|---|---|---|
+| Trigger match + shift continuity + zone match + anti-spoofing pass | **`auto_approve`** | Instant payout via parametric ladder |
+| Trigger match + missing EXIF + moderate geo uncertainty | **`needs_review`** | Human-assisted review — no penalty |
+| New device + red-alert login + zone anomaly + VPN | **`hold_for_fraud`** | Held pending investigation; liveness check triggered |
+| Mass identical claims + weak activity continuity + high spoof-risk cluster | **`batch_hold`** | Entire cluster held — reviewed separately |
+| No valid trigger + high spoof confidence + strong fraud-ring pattern | **`reject_spoof_risk`** | Rejected — 48-hour appeal window |
+
+### 4. Liquidity Protection & Circuit-Breaker Controls
+
+| Control | Trigger condition | Action |
+|---|---|---|
+| **Mass-claim throttling** | > 50 claims from one zone within 1 hour | All new claims enter `needs_review` automatically |
+| **Batch hold on anomaly spike** | Cluster analysis detects coordinated submission pattern | Entire batch held pending cluster-level fraud screening |
+| **Emergency admin override** | Manual insurer/admin intervention | Admin can freeze, release, or escalate any claim batch |
+| **Daily zone payout cap** | Cumulative zone payouts exceed 3× historical daily average | Remaining claims queued for next-day release after review |
+
+---
+
+## 🔒 Payout Safety & Duplicate Prevention
+
+> [!IMPORTANT]
+> Every disruption window gets a **deterministic event ID** (hash of zone + trigger family + window start). The system enforces **one payout per worker per event** — retries and duplicate trigger-firings never produce repeated payouts.
+
+| Safety control | How it works |
+|---|---|
+| **Event-ID idempotency** | Each disruption window has a unique `event_id`. Re-firing the same trigger returns the existing event — no duplicate created. |
+| **Worker-event uniqueness** | Partial unique index ensures no worker has more than one approved/paid claim per event. Duplicates rejected at DB level. |
+| **Atomic state transitions** | Claim status transitions are validated against the allowed state machine — invalid transitions rejected. |
+| **No partial payouts** | **Soft hold** approach: money never moves until verification completes. Avoids clawback risk, accounting complexity, and trust erosion. |
+| **Retry-safe requests** | Payout execution is idempotent — retrying returns the existing result, never creates a second payment. |
+
+---
+
+## 📋 Claim State Machine
+
+Claims follow a strict state machine. Money only moves after verification is complete.
+
+```mermaid
+stateDiagram-v2
+    [*] --> submitted
+    submitted --> auto_approved : Low fraud + trigger match
+    submitted --> soft_hold_verification : Medium risk
+    submitted --> fraud_escalated_review : High fraud signals
+    soft_hold_verification --> approved : Verification passes
+    soft_hold_verification --> fraud_escalated_review : Fraud signals emerge
+    fraud_escalated_review --> approved : Admin clears
+    fraud_escalated_review --> rejected : Admin rejects
+    auto_approved --> paid : Payout executed
+    approved --> paid : Payout executed
+    paid --> post_approval_flagged : Later fraud evidence
+    rejected --> [*]
+    post_approval_flagged --> [*]
+```
+
+| State | Meaning | Money movement |
+|---|---|---|
+| `submitted` | Initial intake | ❌ None |
+| `auto_approved` | Parametric auto-approve (low fraud, trigger match) | ✅ Queued for payout |
+| `soft_hold_verification` | Silent verification in progress | ❌ None — no partial payout |
+| `fraud_escalated_review` | Fraud-driven human/AI review | ❌ None |
+| `approved` | Verified and cleared | ✅ Queued for payout |
+| `rejected` | Denied (48h appeal window) | ❌ None |
+| `paid` | Payout executed | ✅ Complete |
+| `post_approval_flagged` | Post-approval fraud evidence | ⚠️ Trust score downgraded |
+
+---
+
+## 🚦 Region Validation Cache & Fast-Lane Approvals
+
+When a disruption affects many workers simultaneously, forcing every claim through manual review is inefficient.
+
+**How it works:**
+1. System detects an unusual claim spike in a region/time-window
+2. Regional incident validated via **trusted workers** (3+), **admin confirmation**, **news feed**, or **public API**
+3. Incident marked as **validated** in the region cache
+4. Later claims from same zone/trigger/window fast-tracked — skip repeated manual review
+5. **Individual anti-fraud checks are never bypassed** — identity continuity, EXIF, spoof-risk, device continuity still apply
+
+> [!WARNING]
+> **Cluster spike liquidity protection:** If > 50 claims/hour from one zone, the platform switches to **cluster-level validation** — protecting the liquidity pool before mass payouts execute. Fast-lane auto-release is paused until the cluster is validated.
+
+---
+
+## 🚨 Post-Approval Fraud Controls
+
+Fraud detection doesn't stop at the approval gate. Covara One provides controls for fraud evidence that surfaces **after** a claim has been approved or paid.
+
+| Control | Action | Effect |
+|---|---|---|
+| **Post-approval flag** | Admin flags a previously approved/paid claim | Claim status → `post_approval_flagged` |
+| **Trust score downgrade** | Graduated penalty applied | Future claims default to `soft_hold_verification` |
+| **Legal escalation** | Severe/critical fraud | Routed to compliance/platform risk team |
+| **Account review** | Critical fraud | Worker suspended pending investigation |
+
+### Trust Score Penalties
+
+| Fraud severity | Trust score penalty | Additional action |
+|---|---:|---|
+| Minor (evidence quality issue) | −0.05 | None |
+| Moderate (timing inconsistency) | −0.15 | Future claims reviewed |
+| Severe (coordinated fraud) | −0.30 | Legal escalation flag |
+| Critical (systematic abuse) | −0.50 | Full account review |
+
+---
+
+## 🪪 Progressive KYC / Trust Ladder
+
+Full identity verification upfront kills conversion. Covara One uses a **progressive KYC ladder** — stronger verification is triggered by increasing payout exposure or fraud risk.
+
+| Level | Verification | When triggered |
+|---|---|---|
+| **Level 1** | Phone OTP | Sign-up |
+| **Level 2** | Partner / platform ID validation | First policy activation |
+| **Level 3** | Bank / UPI ownership match (₹1 penny-drop) | First payout |
+| **Level 4** | Optional DigiLocker-backed identity verification | High-value claims or escalation |
+| **Level 5** | Selfie / document path | Fraud escalation only |
+
+---
+
+## 🧠 What ML Does vs. What ML Does Not Do
+
+> ML supports classification, anomaly ranking, and review routing, but **does not independently authorize payout**.
+
+| ML does | ML does not |
+|---|---|
+| Estimate claim probability `p` via `predict_proba()` | Directly authorize or block payout |
+| DBSCAN cluster detection for fraud rings | Set the final payout amount |
+| Anomaly and cluster scoring | Replace the parametric payout ladder |
+| Zone-level trend detection | Replace underwriting judgment |
+| Power `needs_review` classification | Act as a black-box decision engine |
+
+**Correct architecture:**
+- **Parametric payout ladder** = public-facing insurance logic (trigger band → pre-agreed benefit)
+- **Formula engine** = internal premium and benefit calibration
+- **ML model** = supporting signal for probability estimation, anomaly detection, review routing
+
+---
+
+## 📐 Internal Calibration Engine
+
+The formula engine is retained for **internal use only** — it calibrates fair premiums and benefit sizing. The **public-facing product** is the parametric benefit ladder below.
+
+| Formula | Expression | Internal use |
+|---|---|---|
+| Covered Income (B) | `0.70 × hourly_income × shift_hours × 6` | Plan benefit calibration |
+| Severity Score (S) | Weighted composite of 8 components | Trigger band mapping |
+| Exposure (E) | `clip(0.45 + 0.30×(shift_hours/12) + 0.25×(1−accessibility_score), 0.35, 1.00)` | Exposure verification |
+| Confidence (C) | `clip(0.50 + 0.30×trust + 0.10×gps + 0.10×bank, 0.45, 1.00) × (1 − 0.70×fraud_penalty)` | Review routing |
+| Expected Payout | `p × B × S × E × C × (1 − FH)` | Premium calibration |
+| Gross Premium | `[Expected Payout / (1 − 0.12 − 0.10)] × U` | Weekly premium pricing |
+
+### Sample Scenario (Parametric)
+
+**Worker:** Plus plan (W = ₹4,500), shift = 11h, zone = MU-WE-01, trust = 0.82
+
+**Trigger:** rain = 72mm in zone MU-WE-01, AQI = 240, temp = 41°C
+
+**Decision flow:**
+1. Rain 72mm exceeds 64.5mm → **T2 fires** (claim-level trigger)
+2. AQI 240 → T5 fires (caution, contributes to composite)
+3. Composite severity maps to **Band 2** (major disruption)
+4. Anti-spoofing: EXIF GPS matches zone, shift overlap confirmed, route plausibility verified ✅
+5. Fraud score: 0.12 → `auto_approve`
+6. **Payout: ₹2,250** (0.50 × ₹4,500)
+
+---
+
+## 💼 Business Framing
+
+Covara One is positioned as an **insurer-facing platform** — not a fully licensed insurer. We provide the parametric underwriting engine, claims orchestration, and fraud detection that a licensed insurer embeds into their gig-worker distribution channel.
+
+### Insurer Value Proposition
+
+| Benefit | How Covara One delivers it |
+|---|---|
+| **Reduced manual claim handling** | 8-stage automated pipeline + region fast-lane |
+| **Lower Loss Adjustment Expense (LAE)** | Parametric trigger-based decisions replace manual adjuster visits |
+| **Fraud leakage reduction** | 5-layer Ghost Shift Detector + post-approval controls |
+| **Validated-incident batching** | Region cache groups same-zone claims into event-level exposure views |
+| **Actuarial visibility** | Live BCR and Loss Ratio tracked in the Admin Dashboard |
 
 ---
 
