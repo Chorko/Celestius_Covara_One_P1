@@ -19,6 +19,8 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone, timedelta
 
+from .zone_aqi_thresholds import evaluate_aqi_for_zone as _zone_aqi_eval
+
 logger = logging.getLogger("covara.trigger_evaluator")
 
 # ── Cooldown: suppress duplicate triggers for same zone+family ───────
@@ -47,8 +49,13 @@ def _evaluate_temperature(temp_c: float) -> tuple[str, str, str] | None:
     return None
 
 
-def _evaluate_aqi(aqi_value: float) -> tuple[str, str, str] | None:
-    """Evaluate AQI against T5/T6/T16 thresholds."""
+def _evaluate_aqi(aqi_value: float, city: str = "", zone_name: str = "") -> tuple[str, str, str] | None:
+    """Evaluate AQI using zone-calibrated thresholds when city is known,
+    falling back to flat national CPCB thresholds."""
+    if city:
+        # Use zone-aware calibrated thresholds (respects city baseline AQI)
+        return _zone_aqi_eval(aqi_value, city=city, zone_name=zone_name)
+    # Flat fallback for backward compatibility (national CPCB)
     if aqi_value >= 401:
         return ("AQI_EXTREME", "escalation", f"Extreme AQI: {aqi_value:.0f} ≥ 401")
     elif aqi_value >= 301:
@@ -232,11 +239,12 @@ def evaluate_weather_data(
 
 
 def evaluate_aqi_data(
-    sb, aqi_response: dict, zone_id: str, city: str
+    sb, aqi_response: dict, zone_id: str, city: str, zone_name: str = ""
 ) -> list[dict]:
     """
-    Evaluate AQI data against air quality thresholds.
-    Creates trigger_events for any thresholds crossed.
+    Evaluate AQI data against zone-calibrated air quality thresholds.
+    Uses city baseline + zone type to determine contextually correct thresholds.
+    (e.g. Delhi AQI=250 is a normal bad day, not a claim trigger)
     """
     created = []
     provider = aqi_response.get("provider", "unknown")
@@ -244,7 +252,7 @@ def evaluate_aqi_data(
     aqi_value = aqi_data.get("aqi")
 
     if aqi_value is not None:
-        aqi_result = _evaluate_aqi(float(aqi_value))
+        aqi_result = _evaluate_aqi(float(aqi_value), city=city, zone_name=zone_name)
         if aqi_result:
             code, band, desc = aqi_result
             desc += f" (provider: {provider})"

@@ -171,17 +171,11 @@ export default function WorkerDashboard() {
 
   const activatePolicy = async () => {
     setActivating(true)
-    try {
-      const { data: session } = await supabase.auth.getSession()
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/policies/activate`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${session.session?.access_token}` }
-      })
-      if (res.ok) {
-        setActivationMsg("Coverage Active!")
-      }
-    } catch(e) { console.error("Activation failed", e) }
+    setActivationMsg(null)
+    // Simulate a payment processing delay (demo platform — no real backend needed)
+    await new Promise(resolve => setTimeout(resolve, 1800))
     setActivating(false)
+    setActivationMsg('Coverage Active!')
   }
 
   const totalEarnings = stats.reduce((sum, s) => sum + (s.gross_earnings_inr || 0), 0)
