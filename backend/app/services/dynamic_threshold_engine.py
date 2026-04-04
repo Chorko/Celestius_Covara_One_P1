@@ -13,7 +13,7 @@ realistic statistical distributions per city to calculate the p50/p75/p90 percen
 
 from __future__ import annotations
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import numpy as np
 
 # Use the established city baselines to generate realistic historical distributions
@@ -32,7 +32,11 @@ def compute_and_upsert_monthly_thresholds(sb) -> dict:
     if not zones:
         return {"status": "error", "message": "No zones found in database."}
 
-    current_month = datetime.now(timezone.utc).strftime("%Y-%m")
+    current_time = datetime.now(timezone.utc)
+    current_month = current_time.strftime("%Y-%m")
+    expires_time = current_time + timedelta(days=60)
+    expires_at_iso = expires_time.isoformat()
+    
     upsert_data = []
 
     for zone in zones:
@@ -96,7 +100,9 @@ def compute_and_upsert_monthly_thresholds(sb) -> dict:
             "watch_threshold": round(float(watch_final), 2),
             "claim_threshold": round(float(claim_final), 2),
             "extreme_threshold": round(float(extreme_final), 2),
-            "data_source": "dynamic_simulation"
+            "data_source": "dynamic_simulation",
+            "computed_at": current_time.isoformat(),
+            "expires_at": expires_at_iso
         })
 
     # Upsert to Supabase

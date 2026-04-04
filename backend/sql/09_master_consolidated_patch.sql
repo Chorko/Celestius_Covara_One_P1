@@ -94,7 +94,7 @@ CREATE TABLE IF NOT EXISTS public.zone_monthly_thresholds (
     extreme_threshold numeric(8,2)  NOT NULL,
     data_source     text            DEFAULT 'dynamic',
     computed_at     timestamptz     NOT NULL DEFAULT now(),
-    expires_at      timestamptz     GENERATED ALWAYS AS (date_trunc('month', computed_at) + INTERVAL '2 months') STORED,
+    expires_at      timestamptz,
     UNIQUE (zone_id, year_month, metric)
 );
 
