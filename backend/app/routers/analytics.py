@@ -11,7 +11,10 @@ from backend.app.supabase_client import get_supabase_admin
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
 
+from fastapi_cache.decorator import cache
+
 @router.get("/summary", dependencies=[Depends(require_insurer_admin)])
+@cache(expire=120)
 async def get_dashboard_summary():
     """
     Returns aggregate metrics for the admin dashboard.

@@ -39,7 +39,7 @@ export default function WorkerDashboard() {
   const [claimsLoading, setClaimsLoading] = useState(true)
   const [quoteLoading, setQuoteLoading] = useState(true)
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const loadDashboardData = useCallback(async () => {
     const controller = new AbortController()
     const tid = setTimeout(() => controller.abort(), 10000)

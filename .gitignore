@@ -38,6 +38,7 @@ build/
 *.h5
 *.pkl
 *.joblib
+!ml/model_artifacts/severity_rf.joblib
 *.model
 
 # ==========================

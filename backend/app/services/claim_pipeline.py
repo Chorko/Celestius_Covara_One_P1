@@ -24,6 +24,55 @@ from backend.app.services.fraud_engine import evaluate_fraud_risk
 from backend.app.services.manual_claim_verifier import evaluate_manual_claim
 from backend.app.services.region_validation_cache import should_fast_lane
 
+# ── ML Model Lazy Loading ────────────────────────────────────────────────
+_ML_MODEL = None
+
+def get_ml_model():
+    global _ML_MODEL
+    if _ML_MODEL is None:
+        try:
+            import os
+            import joblib
+            model_path = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
+                "ml", "model_artifacts", "severity_rf.joblib"
+            )
+            if os.path.exists(model_path):
+                _ML_MODEL = joblib.load(model_path)
+        except Exception as e:
+            import logging
+            logging.getLogger("covara.claim_pipeline").error(f"Failed to load ML model: {e}")
+    return _ML_MODEL
+
+def get_claim_probability(trigger_context: dict | None, worker_context: dict) -> float:
+    if not trigger_context:
+        return 0.15
+    model = get_ml_model()
+    if not model:
+        return 0.15
+        
+    import pandas as pd
+    t_family = trigger_context.get("trigger_family")
+    t_val = trigger_context.get("raw_value")
+    
+    row = {
+        "rain_mm": t_val if t_family == "heavy_rain" else 0,
+        "aqi": t_val if t_family == "aqi" else 0,
+        "temp_c": t_val if t_family in ["heat_wave", "extreme_heat"] else 0,
+        "traffic_delay_pct": t_val if t_family == "traffic_delay" else 0,
+        "outage_min": t_val if t_family == "platform_outage" else 0,
+        "demand_drop_pct": t_val if t_family == "demand_collapse" else 0,
+        "accessibility_score": 1.0,
+        "trust_score": worker_context.get("trust_score", 0.8),
+        "gps_consistency": worker_context.get("gps_consistency_score", 0.8)
+    }
+    df = pd.DataFrame([row])
+    try:
+        proba = model.predict_proba(df)[0][1]
+        return round(float(proba), 4)
+    except Exception:
+        return 0.15
+
 # ── Parametric Payout Bands ──────────────────────────────────────────────
 PLAN_WEEKLY_BENEFITS = {
     "essential": 3000,  # ₹3,000/week
@@ -236,7 +285,7 @@ def run_claim_pipeline(
         exposure_e=base_metrics["exposure_e"],
         confidence_base=base_metrics["confidence_base"],
         fraud_penalty=fraud_res["fraud_penalty"],
-        claim_probability_p=0.15,
+        claim_probability_p=get_claim_probability(trigger_context, worker_context),
     )
 
     # --- 7. Claim Decision (5-Tier Matrix) ---
