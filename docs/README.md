@@ -185,7 +185,7 @@ Environmental trigger thresholds and premium/payout formulation are grounded in 
 | **Rain** | IMD: heavy = 64.5 mm/24h, very heavy = 115.6 mm/24h | 48 mm watch, 64.5 mm claim, 115.6 mm escalation | 48 mm is a pre-claim watch level introduced for elevated monitoring. 64.5 mm and 115.6 mm map directly to IMD heavy-rain bands. | ✅ Public-source anchored |
 | **AQI** | CPCB: Poor = 201–300, Very Poor = 301–400, Severe = 401+ | 201+ caution, 301+ severe, 401+ extreme | Maps directly to CPCB category boundaries. 201+ impairs outdoor delivery; 301+ causes significant work disruption. | ✅ Public-source anchored |
 | **Heat** | IMD/NDMA: heat-wave ≥ 45°C for plains, or departure ≥ 4.5°C | 45°C claim trigger, 47°C severe escalation | 45°C uses IMD/NDMA criteria directly. 47°C adds a severe band for escalated payouts. | ✅ Public-source anchored |
-| **Traffic** | No public standard for delivery-impairment delay | ≥ 40% travel-time delay | Operational estimate: 40%+ delay significantly reduces deliverable orders per shift. | ⚙️ Internal operational |
+| **Traffic** | [TomTom Traffic Flow API](https://developer.tomtom.com/traffic-api/documentation/traffic-flow/flow-segment-data) | ≥ 40% travel-time delay | Operational estimate: 40%+ delay significantly reduces deliverable orders. TomTom provides live proxy. *(Planned: Google Maps API)* | ⚙️ TomTom / Operational |
 | **Platform outage** | Platform data not publicly available | ≥ 30 min outage | Operational estimate: 30+ minutes causes material earning loss during an active shift. | ⚙️ Internal operational |
 | **Demand collapse** | Order volume not publicly available | ≥ 35% order drop vs baseline | Operational estimate: 35%+ drop pushes earning opportunity below viable thresholds. | ⚙️ Internal operational |
 

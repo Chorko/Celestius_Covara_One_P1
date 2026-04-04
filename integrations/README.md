@@ -26,8 +26,8 @@
 |---|------------|----------|--------|-------------|-------|
 | 1 | **OpenWeather API** | Weather + Temp | OpenWeather | **Live** | Primary weather feed; T1–T3 rain + T7–T8 temp triggers |
 | 2 | **CPCB AQI API** | Air Quality | data.gov.in (OGD) | **Live** | 511 stations; T5–T6 AQI triggers |
-| 3 | **TomTom Traffic Flow** | Traffic | TomTom | **Live** | Real-time speed + delay; T12 traffic trigger |
-| 4 | **TomTom Routing API** | Anti-Spoofing | TomTom | **Live** | Route plausibility check in Layer 2 of fraud engine |
+| 3 | **TomTom Traffic Flow** | Traffic | TomTom | **Live** | Real-time speed + delay; T12 traffic trigger *(Planned: Google Maps Distance Matrix API)* |
+| 4 | **TomTom Routing API** | Anti-Spoofing | TomTom | **Live** | Route plausibility check in Layer 2 of fraud engine *(Planned: Google Maps Roads API)* |
 | 5 | **Sandbox.co.in KYC** | Identity | Sandbox.co.in | **Implemented** | Aadhaar OTP, PAN verification, bank account verification |
 | 6 | **Twilio Verify** | OTP | Twilio | **Implemented** | Phone number OTP for auth + KYC confirmation |
 | 7 | **Twilio WhatsApp** | Notifications | Twilio | **Implemented** | 7 templates: trigger alerts, claim updates, payout confirmation |
@@ -129,7 +129,7 @@ Platform-specific APIs (delivery order volume, outage heartbeats, GPS traces) ar
 - **Simulated data:** Travel delay percentage (0–100%)
 - **Threshold used:** ≥ 40% delay
 - **Triggers fed:** T12
-- **Production API:** TomTom Traffic Flow API (paid per 1000 requests)
+- **Production API:** TomTom Traffic Flow API (paid per 1000 requests) · *(Planned: Google Maps Distance Matrix API for enhanced multi-route corridor analysis)*
 
 ### Platform Outage / Demand (Mock)
 - **Simulated data:** Outage duration (minutes), order volume drop (%)
