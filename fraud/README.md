@@ -4,6 +4,14 @@
 
 ---
 
+## Engineering Snapshot (2026-04-05)
+
+- Mobile device-context signatures are now verified server-side before fraud evaluation when telemetry headers are provided.
+- Anti-spoofing layer consumes normalized device-context aliases and replay-protected metadata for stronger spoof resistance.
+- Auto-claim path now emits durable events and shifts non-critical side effects to async consumers, while fraud outcomes remain part of the claim decision trace.
+
+---
+
 ## Implementation Status
 
 | Component | Status |

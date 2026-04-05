@@ -84,7 +84,7 @@ temp/
 !data/samples/*.csv
 
 # ==========================
-# Temporary Folders
+# Temporary Folders / Tests
 # ==========================
 TEMP_WILL_BE_DELETED/
 test_venv/

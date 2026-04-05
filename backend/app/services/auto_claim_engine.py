@@ -14,7 +14,7 @@ Flow:
      c. Run the full claim pipeline (fraud check, payout calc)
      d. Insert claim into manual_claims with claim_mode='trigger_auto'
      e. Insert payout_recommendation
-     f. Send WhatsApp notification to worker
+      f. Emit claim.auto_processed event for async consumers
   4. Return processing summary
 
 This is the feature that separates parametric insurance from
@@ -25,6 +25,8 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone, timedelta
 from uuid import uuid4
+
+from backend.app.services.event_bus.outbox import enqueue_domain_event, persist_claim_with_outbox
 
 logger = logging.getLogger("covara.auto_claim_engine")
 
@@ -53,6 +55,7 @@ async def run_auto_claim_engine(sb, lookback_hours: int = TRIGGER_LOOKBACK_HOURS
         "claims_needs_review": 0,
         "claims_held": 0,
         "claims_rejected": 0,
+        "duplicates_skipped": 0,
         "errors": [],
         "results": [],
     }
@@ -97,6 +100,24 @@ async def run_auto_claim_engine(sb, lookback_hours: int = TRIGGER_LOOKBACK_HOURS
 
         logger.info(f"Processing trigger {trigger_code} in zone {zone_id} ({city})")
 
+        try:
+            await enqueue_domain_event(
+                sb=sb,
+                event_type="trigger.processing_started",
+                key=str(zone_id),
+                source="auto_claim_engine.run_auto_claim_engine",
+                payload={
+                    "trigger_id": trigger_id,
+                    "zone_id": zone_id,
+                    "trigger_code": trigger_code,
+                    "trigger_family": trigger_family,
+                    "severity_band": severity_band,
+                    "city": city,
+                },
+            )
+        except Exception as e:
+            logger.warning("Event publish failed for trigger.processing_started: %s", e)
+
         # ── Step 3: Find eligible workers ────────────────────────────
         eligible_workers = await _find_eligible_workers(
             sb, zone_id=zone_id, trigger_started_at=started_at
@@ -128,6 +149,8 @@ async def run_auto_claim_engine(sb, lookback_hours: int = TRIGGER_LOOKBACK_HOURS
                 summary["claims_held"] += 1
             elif decision == "reject_spoof_risk":
                 summary["claims_rejected"] += 1
+            elif decision == "skipped_duplicate":
+                summary["duplicates_skipped"] += 1
 
             if result.get("error"):
                 summary["errors"].append(result["error"])
@@ -139,8 +162,21 @@ async def run_auto_claim_engine(sb, lookback_hours: int = TRIGGER_LOOKBACK_HOURS
         f"{summary['claims_auto_approved']} approved, "
         f"{summary['claims_needs_review']} review, "
         f"{summary['claims_held']} held, "
-        f"{summary['claims_rejected']} rejected"
+        f"{summary['claims_rejected']} rejected, "
+        f"{summary['duplicates_skipped']} duplicates skipped"
     )
+
+    try:
+        await enqueue_domain_event(
+            sb=sb,
+            event_type="claims.auto_process.summary",
+            key="auto_claim_engine",
+            source="auto_claim_engine.run_auto_claim_engine",
+            payload=summary,
+        )
+    except Exception as e:
+        logger.warning("Event publish failed for claims.auto_process.summary: %s", e)
+
     return summary
 
 
@@ -281,6 +317,10 @@ async def _process_worker_claim(
 
     try:
         # ── Build context objects for claim pipeline ──────────────────
+        plan = policy.get("plan_type", "essential")
+        if plan not in ("essential", "plus"):
+            plan = "essential"
+
         worker_context = {
             "worker_id": worker_id,
             "active_days": 6,
@@ -296,99 +336,130 @@ async def _process_worker_claim(
             "trigger_id": trigger_id,
             "trigger_family": trigger_family,
             "trigger_code": trigger_code,
+            "raw_value": observed_value,
             "observed_value": observed_value,
+            "band": severity_band,
             "severity_band": severity_band,
             "source_reliability": 0.90,  # Live API data = high reliability
+            "source_type": "public_source",
+            "started_at": trigger.get("started_at"),
         }
+
+        # ── Query recent claims for DBSCAN clustering (Layer 4) ─────────
+        recent_claims_batch = []
+        zone_claims_count = 0
+        try:
+            one_hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+            recent_resp = (
+                sb.table("manual_claims")
+                .select("id, worker_profile_id, claimed_at")
+                .eq("trigger_event_id", trigger_id)
+                .gte("claimed_at", one_hour_ago)
+                .execute()
+            )
+            recent_claims_batch = recent_resp.data or []
+            zone_claims_count = len(recent_claims_batch)
+        except Exception as e:
+            logger.warning(f"Could not fetch recent claims for DBSCAN: {e}")
 
         # ── Run the claim pipeline ────────────────────────────────────
         from backend.app.services.claim_pipeline import run_claim_pipeline
 
         pipeline_result = run_claim_pipeline(
+            claim_id=str(uuid4()),
             worker_context=worker_context,
             trigger_context=trigger_context,
-            manual_claim=False,  # This is a ZERO-TOUCH auto-claim
+            claim_mode="trigger_auto",  # This is a ZERO-TOUCH auto-claim
             evidence_records=[],
-            claim_data={
+            claim_record={
                 "zone_id": trigger.get("zone_id"),
                 "city": city,
                 "claim_mode": "trigger_auto",
             },
+            zone_claims_last_hour=zone_claims_count,
+            plan=plan,
         )
 
-        decision = pipeline_result.get("recommended_action", "needs_review")
-        payout_amount = pipeline_result.get("payout_amount", 0)
-        fraud_score = pipeline_result.get("fraud_score", 0)
+        review = pipeline_result.get("review", {})
+        decision = review.get("decision_action", "needs_review")
+        claim_status = review.get("decision", "soft_hold_verification")
+        payout_amount = (
+            pipeline_result.get("parametric_payout", {}).get("parametric_payout", 0)
+        )
+        fraud_score = pipeline_result.get("fraud_analysis", {}).get("fraud_score", 0)
+        cal = pipeline_result.get("internal_calibration", {})
 
-        # ── Map pipeline decision to claim status ─────────────────────
-        status_map = {
-            "auto_approve": "auto_approved",
-            "needs_review": "pending_review",
-            "hold_for_fraud": "held",
-            "batch_hold": "held",
-            "reject_spoof_risk": "rejected",
-        }
-        claim_status = status_map.get(decision, "pending_review")
-
-        # ── Persist claim to manual_claims table ─────────────────────
+        # ── Persist claim + payout + outbox event transactionally ─────
         now_iso = datetime.now(timezone.utc).isoformat()
         claim_row = {
             "worker_profile_id": worker_id,
             "trigger_event_id": trigger_id,
             "claim_mode": "trigger_auto",
-            "status": claim_status,
-            "description": (
+            "claim_reason": (
                 f"Auto-initiated: {trigger_code} — {threshold_label}. "
                 f"Observed: {observed_value}. Severity: {severity_band}."
             ),
-            "fraud_score": fraud_score,
-            "recommended_payout": payout_amount,
-            "submitted_at": now_iso,
+            "claim_status": claim_status,
+            "claimed_at": now_iso,
         }
 
-        try:
-            claim_resp = sb.table("manual_claims").insert(claim_row).execute()
-            claim_id = (claim_resp.data or [{}])[0].get("id", str(uuid4()))
-        except Exception as e:
-            logger.error(f"Failed to insert claim for worker {worker_id}: {e}")
-            claim_id = f"FAILED-{uuid4()}"
+        payout_row = {
+            "covered_weekly_income_b": cal.get("covered_weekly_income_b", 0),
+            "claim_probability_p": 0.15,
+            "severity_score_s": cal.get("severity_score_s", 0),
+            "exposure_score_e": cal.get("exposure_score_e", 0),
+            "confidence_score_c": cal.get("confidence_score_c", 0),
+            "fraud_holdback_fh": cal.get("fraud_holdback_fh", 0),
+            "outlier_uplift_u": cal.get("outlier_uplift_u", 1.0),
+            "payout_cap": cal.get("payout_cap", payout_amount),
+            "expected_payout": cal.get("expected_payout", payout_amount),
+            "gross_premium": cal.get("gross_premium", 0),
+            "recommended_payout": cal.get(
+                "recommended_payout_internal", payout_amount
+            ),
+            "explanation_json": pipeline_result,
+            "created_at": now_iso,
+        }
 
-        # ── Persist payout recommendation ─────────────────────────────
-        if payout_amount > 0 and claim_status == "auto_approved":
-            try:
-                payout_row = {
-                    "claim_id": claim_id,
-                    "worker_profile_id": worker_id,
-                    "recommended_amount": payout_amount,
-                    "status": "pending_disbursement",
-                    "created_at": now_iso,
-                }
-                sb.table("payout_recommendations").insert(payout_row).execute()
-            except Exception as e:
-                logger.warning(f"Payout recommendation insert failed: {e}")
+        auto_processed_event_payload = {
+            "trigger_id": trigger_id,
+            "trigger_code": trigger_code,
+            "worker_id": worker_id,
+            "decision": decision,
+            "claim_status": claim_status,
+            "payout_amount": payout_amount,
+            "fraud_score": fraud_score,
+        }
 
-        # ── Send WhatsApp notification ────────────────────────────────
-        try:
-            phone = await _get_worker_phone(sb, worker_id)
-            if phone:
-                from backend.app.services.twilio_service import send_whatsapp_template
-                template_key = {
-                    "auto_approved": "claim_auto_approved",
-                    "pending_review": "claim_needs_review",
-                    "held": "claim_needs_review",
-                    "rejected": "claim_rejected",
-                }.get(claim_status, "claim_needs_review")
+        persist_result = await persist_claim_with_outbox(
+            sb=sb,
+            claim_row=claim_row,
+            payout_row=payout_row,
+            event_type="claim.auto_processed",
+            event_key=str(worker_id),
+            event_source="auto_claim_engine._process_worker_claim",
+            event_payload=auto_processed_event_payload,
+            publish_immediately=False,
+        )
 
-                send_whatsapp_template(
-                    phone,
-                    template_key,
-                    trigger_type=trigger_code.replace("_", " ").title(),
-                    amount=str(int(payout_amount)),
-                    claim_id=str(claim_id)[:8].upper(),
-                    reason="Fraud risk detected" if claim_status == "rejected" else "",
-                )
-        except Exception as e:
-            logger.warning(f"WhatsApp notification failed for {worker_id}: {e}")
+        if persist_result.get("duplicate_skipped"):
+            logger.info(
+                "Skipping duplicate approved worker-event claim for worker %s and trigger %s",
+                worker_id,
+                trigger_id,
+            )
+            return {
+                "worker_id": worker_id,
+                "trigger_id": trigger_id,
+                "decision": "skipped_duplicate",
+                "claim_status": claim_status,
+            }
+
+        claim_id = persist_result.get("claim_id")
+        if not claim_id:
+            raise RuntimeError(
+                f"Failed to persist claim transaction for worker {worker_id}"
+            )
 
         logger.info(
             f"Claim processed for worker {worker_id}: "

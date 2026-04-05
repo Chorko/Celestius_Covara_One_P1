@@ -8,13 +8,17 @@ Handles:
 - POST /claims/{id}/review (Admin review action)
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
+from backend.app.config import settings
 from backend.app.dependencies import get_current_user, require_insurer_admin
 from backend.app.supabase_client import get_supabase_admin
 from backend.app.services.claim_pipeline import run_claim_pipeline
+from backend.app.services.device_context_security import verify_signed_device_context
+from backend.app.services.event_bus.outbox import enqueue_domain_event, persist_claim_with_outbox
 from backend.app.services.evidence import extract_exif_metadata
 from backend.app.services.gemini_analysis import generate_claim_narrative
+from backend.app.rate_limit import limiter
 import httpx
 
 router = APIRouter(prefix="/claims", tags=["Claims"])
@@ -36,11 +40,41 @@ class AdminReviewRequest(BaseModel):
 
 
 @router.post("/")
+@limiter.limit("5/minute")
 async def submit_claim(
-    body: ManualClaimRequest, user: dict = Depends(get_current_user)
+    request: Request, body: ManualClaimRequest, user: dict = Depends(get_current_user)
 ):
     """Submit a manual claim."""
     sb = get_supabase_admin()
+
+    # Optional mobile device context payload (cryptographically signed).
+    raw_device_context = request.headers.get("X-Device-Context")
+    device_context_signature = request.headers.get("X-Device-Context-Signature")
+    device_context_timestamp = request.headers.get("X-Device-Context-Timestamp")
+    device_context_key_id = request.headers.get("X-Device-Context-Key-Id")
+
+    context_verification = verify_signed_device_context(
+        raw_context=raw_device_context,
+        signature=device_context_signature,
+        timestamp=device_context_timestamp,
+        secret=settings.device_context_hmac_secret,
+        key_id=device_context_key_id,
+    )
+
+    # Backward compatible: web clients without context continue to work.
+    # But if a context blob is sent, it must be validly signed.
+    if raw_device_context and not context_verification.verified:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid signed device context: {context_verification.reason}",
+        )
+
+    device_context = dict(context_verification.context)
+    if device_context:
+        device_context["signature_verified"] = context_verification.verified
+        device_context["signature_reason"] = context_verification.reason
+        if context_verification.key_id:
+            device_context["key_id"] = context_verification.key_id
 
     # Validate plan
     if body.plan not in ("essential", "plus"):
@@ -108,15 +142,28 @@ async def submit_claim(
         trigger_context=trigger_context,  # type: ignore
         claim_mode="manual",
         evidence_records=evidence_records,
+        device_context=device_context,
         claim_record={
             "stated_lat": body.stated_lat,
             "stated_lng": body.stated_lng,
             "claim_reason": body.claim_reason,
+            "device_id": device_context.get("hardware_id"),
+            "client_ip": request.client.host if request.client else None,
         },
         plan=body.plan,
     )
 
-    # Store claim in DB
+    pipeline_result["device_context_security"] = {
+        "context_present": bool(raw_device_context),
+        "signature_verified": context_verification.verified,
+        "verification_reason": context_verification.reason,
+        "timestamp": context_verification.timestamp,
+        "key_id": context_verification.key_id,
+        "schema_version": context_verification.schema_version,
+        "nonce": context_verification.nonce,
+    }
+
+    # Build persistence rows
     initial_status = "submitted"
 
     claim_insert = {
@@ -130,15 +177,6 @@ async def submit_claim(
         "claim_status": initial_status,
     }
 
-    ins_resp = sb.table("manual_claims").insert(claim_insert).execute()
-    new_claim = ins_resp.data[0]
-    claim_id = new_claim["id"]  # type: ignore
-
-    # Store claim evidence in DB
-    for ev in evidence_records:
-        ev["claim_id"] = claim_id
-        sb.table("claim_evidence").insert(ev).execute()
-
     # Generate Admin Assistive AI Summary
     ai_summary = await generate_claim_narrative(
         claim_record=claim_insert,
@@ -147,10 +185,9 @@ async def submit_claim(
     )
     pipeline_result["ai_summary"] = ai_summary
 
-    # Save the payout recommendation and initial scores
+    # Build payout recommendation row
     cal = pipeline_result["internal_calibration"]
     payout_ins = {
-        "claim_id": claim_id,
         "covered_weekly_income_b": cal["covered_weekly_income_b"],
         "claim_probability_p": 0.15,
         "severity_score_s": cal["severity_score_s"],
@@ -161,10 +198,56 @@ async def submit_claim(
         "payout_cap": cal["payout_cap"],
         "expected_payout": cal["expected_payout"],
         "gross_premium": cal["gross_premium"],
-        "recommended_payout": cal["recommended_payout"],
+        "recommended_payout": cal.get(
+            "recommended_payout_internal",
+            pipeline_result.get("parametric_payout", {}).get("parametric_payout", 0),
+        ),
         "explanation_json": pipeline_result,
     }
-    sb.table("payout_recommendations").insert(payout_ins).execute()
+
+    submitted_event_payload = {
+        "worker_profile_id": user["id"],
+        "claim_mode": "manual",
+        "trigger_event_id": body.trigger_event_id,
+        "claim_status": initial_status,
+        "plan": body.plan,
+        "device_context_present": bool(raw_device_context),
+        "signature_verified": context_verification.verified,
+    }
+
+    persist_result = await persist_claim_with_outbox(
+        sb=sb,
+        claim_row=claim_insert,
+        payout_row=payout_ins,
+        event_type="claim.submitted",
+        event_key=str(user["id"]),
+        event_source="claims.submit_claim",
+        event_payload=submitted_event_payload,
+    )
+
+    if persist_result.get("duplicate_skipped"):
+        raise HTTPException(
+            status_code=409,
+            detail="Duplicate worker-event claim detected.",
+        )
+
+    claim_id = persist_result.get("claim_id")
+    if not claim_id:
+        raise HTTPException(status_code=500, detail="Failed to persist claim transaction")
+
+    # Store claim evidence in DB (outside transaction; can be retried independently).
+    for ev in evidence_records:
+        ev["claim_id"] = claim_id
+        sb.table("claim_evidence").insert(ev).execute()
+
+    claim_resp = (
+        sb.table("manual_claims")
+        .select("*")
+        .eq("id", claim_id)
+        .maybe_single()
+        .execute()
+    )
+    new_claim = claim_resp.data or {**claim_insert, "id": claim_id}
 
     return {
         "status": "created",
@@ -289,6 +372,23 @@ async def admin_review_claim(
         }
     ).execute()
 
+    try:
+        await enqueue_domain_event(
+            sb=sb,
+            event_type="claim.reviewed",
+            key=claim_id,
+            source="claims.admin_review_claim",
+            payload={
+                "claim_id": claim_id,
+                "reviewer_profile_id": user["id"],
+                "decision": body.decision,
+                "decision_reason": body.decision_reason,
+                "resulting_status": new_status,
+            },
+        )
+    except Exception as e:
+        print(f"WARN: event publish failed for claim.reviewed: {e}")
+
     return {
         "status": "reviewed",
         "claim_id": claim_id,
@@ -411,7 +511,7 @@ async def flag_post_approval(
         "Admin only. Safe to run repeatedly — duplicate claims are prevented by DB constraints."
     ),
 )
-async def auto_process_claims(lookback_hours: int = 6):
+async def auto_process_claims(request: Request, lookback_hours: int = 6):
     """
     Run the zero-touch auto-claim engine.
 
@@ -422,6 +522,27 @@ async def auto_process_claims(lookback_hours: int = 6):
     from backend.app.services.auto_claim_engine import run_auto_claim_engine
     sb = get_supabase_admin()
     result = await run_auto_claim_engine(sb, lookback_hours=lookback_hours)
+
+    try:
+        await enqueue_domain_event(
+            sb=sb,
+            event_type="claims.auto_process.completed",
+            key="auto_process",
+            source="claims.auto_process_claims",
+            payload={
+                "lookback_hours": lookback_hours,
+                "triggers_scanned": result.get("triggers_scanned", 0),
+                "workers_eligible": result.get("workers_eligible", 0),
+                "claims_auto_approved": result.get("claims_auto_approved", 0),
+                "claims_needs_review": result.get("claims_needs_review", 0),
+                "claims_held": result.get("claims_held", 0),
+                "claims_rejected": result.get("claims_rejected", 0),
+                "duplicates_skipped": result.get("duplicates_skipped", 0),
+            },
+        )
+    except Exception as e:
+        print(f"WARN: event publish failed for claims.auto_process.completed: {e}")
+
     return {
         "status": "complete",
         "lookback_hours": lookback_hours,
@@ -454,8 +575,9 @@ class OfflineSyncRequest(BaseModel):
         "to verify if the zone actually experienced a network outage."
     ),
 )
+@limiter.limit("3/minute")
 async def sync_offline_claims(
-    body: OfflineSyncRequest, user: dict = Depends(get_current_user)
+    request: Request, body: OfflineSyncRequest, user: dict = Depends(get_current_user)
 ):
     """Sync batched offline claims."""
     sb = get_supabase_admin()
@@ -490,9 +612,26 @@ async def sync_offline_claims(
             "event_payload": payload.model_dump(),
         }).execute()
 
+    try:
+        await enqueue_domain_event(
+            sb=sb,
+            event_type="claim.offline_synced",
+            key=str(user["id"]),
+            source="claims.sync_offline_claims",
+            payload={
+                "worker_profile_id": user["id"],
+                "synced_count": len(synced_claim_ids),
+                "claim_ids": synced_claim_ids,
+            },
+        )
+    except Exception as e:
+        print(f"WARN: event publish failed for claim.offline_synced: {e}")
+
     return {
         "status": "synced",
         "synced_count": len(synced_claim_ids),
         "claim_ids": synced_claim_ids,
         "message": "Offline claims synced and held for regional anomaly correlation.",
     }
+
+

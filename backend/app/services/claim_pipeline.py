@@ -265,6 +265,7 @@ def run_claim_pipeline(
         device_context=device_context or {},
         zone_claims_last_hour=zone_claims_last_hour,
         zone_avg_hourly=zone_avg_hourly,
+        claim_mode=claim_mode,
     )
 
     fraud_score = fraud_res['fraud_score']

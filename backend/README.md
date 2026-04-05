@@ -4,6 +4,17 @@
 
 ---
 
+## Engineering Snapshot (2026-04-05)
+
+- Added reliability schema path with migrations `10` to `13` (rewards ledger, durable outbox, transactional claim+outbox persistence RPC, and consumer dead-letter status support).
+- Introduced broker-agnostic event bus package (`backend/app/services/event_bus/`) with in-memory + Kafka adapters, outbox relay service, and consumer idempotency helpers.
+- Added admin operations router `backend/app/routers/events.py` with outbox and consumer status/dead-letter/requeue endpoints.
+- Enabled background outbox relay loop and optional Kafka consumer loop in app lifespan, configured through `EVENT_*` environment flags.
+- Hardened request layer with signed mobile device-context verification, rate limits (`slowapi`), and explicit OWASP security headers.
+- Added focused reliability tests for consumers, outbox ops, Kafka consumer runner, and events-router consumer endpoints.
+
+---
+
 ## Implementation Status
 
 | Component | Status |
@@ -43,13 +54,14 @@
 | ApiProviderPool (round-robin + LRU cache) | ✅ Implemented |
 | Docker multi-stage build | ✅ Implemented |
 | GitHub Actions CI/CD (3-job pipeline) | ✅ Implemented |
-| Automated pytest suite (61 tests, 100% pass) | ✅ Implemented |
+| Automated test suite (65 smoke validations, 100% pass) | ✅ Implemented |
 | Redis caching layer (`fastapi-cache2`) | ✅ Implemented (TTL decorators on `/triggers/live`, `/analytics/summary`, `/zones/`, `/policies/quote`) |
 | ML live inference | ✅ Implemented (`get_claim_probability()` — lazy-loads `severity_rf.joblib`, falls back to p=0.15 if model missing) |
 | DBSCAN cluster intelligence (Layer 4) | ✅ Implemented (`sklearn.cluster.DBSCAN` on lat/lng/timestamp batch) |
 | Simulation & mock-data endpoints | ✅ Implemented (`/simulate/claim-scenario`, `/simulate/mock-data/generate`) |
 | Payment gateway service | ✅ Implemented (mock `payment_mock.py` — RazorpayX-format async UPI payout simulation) |
-
+| Gamification & Rewards engine | ✅ Implemented (`coins_ledger` + 5 endpoints + auto-claim integration) |
+| Rate Limiting & OWASP Headers | ✅ Implemented (`slowapi` + explicit CORS + 6 security headers) |
 ---
 
 ## Tech Stack
@@ -168,6 +180,16 @@ flowchart TD
 | `POST` | `/claims/{id}/review` | Admin review action on claim | ✅ Implemented |
 | `POST` | `/claims/{id}/flag` | Post-approval fraud flag + trust downgrade | ✅ Implemented |
 
+### Rewards & Gamification Endpoints
+
+| Method | Endpoint | Purpose | Status |
+|--------|----------|---------|--------|
+| `GET` | `/rewards/balance` | Get worker coin balance & options | ✅ Implemented |
+| `GET` | `/rewards/history` | List recent coin transactions | ✅ Implemented |
+| `POST` | `/rewards/check-in` | Weekly 10-coin login bonus | ✅ Implemented |
+| `POST` | `/rewards/redeem/discount` | Redeem 100 coins for ₹5 off | ✅ Implemented |
+| `POST` | `/rewards/redeem/free-week`| Redeem 500 coins for free week | ✅ Implemented |
+
 ### Zone & Analytics Endpoints
 
 | Method | Endpoint | Purpose | Status |
@@ -223,7 +245,8 @@ flowchart TD
 | **Twilio Service** | `twilio_service.py` | WhatsApp + OTP. 7 notification templates. Mock fallback. |
 | **Trigger Evaluator** | `trigger_evaluator.py` | Threshold evaluation bridge for all 15+ trigger families. |
 | **Zone Coordinates** | `zone_coordinates.py` | Zone-to-coordinate mapping for batch scanning. |
-| **Auto Claim Engine** | `auto_claim_engine.py` | Zero-touch claim initiation from verified trigger events. |
+| **Auto Claim Engine** | `auto_claim_engine.py` | Zero-touch claim initiation from verified trigger events. Includes valid DBSCAN queries. |
+| **Rewards Engine** | `rewards_engine.py` | Gamification layer: award coins, fetch balance, handle redemptions, log to `coins_ledger`. |
 | **Payment Mock** | `payment_mock.py` | Async UPI payout simulation (RazorpayX-format). Returns transaction ID + status. Used by claim pipeline post-approval flow. |
 | **ML Training** | `ml_training.py` | RandomForestClassifier training script. Reads `joined_training_data_seed.csv`, exports `ml/model_artifacts/severity_rf.joblib`. |
 
