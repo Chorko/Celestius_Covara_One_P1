@@ -1,4 +1,4 @@
-﻿"""
+"""
 Covara One - Application Configuration
 Loads environment variables for Supabase, Gemini, and app settings.
 """
