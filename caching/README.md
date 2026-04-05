@@ -4,6 +4,14 @@
 
 ---
 
+## Engineering Snapshot (2026-04-05)
+
+- Redis cache initialization now runs alongside event-relay lifecycle startup in backend lifespan.
+- Cached API paths coexist with durable outbox processing, preserving responsiveness while reliability workflows run in background.
+- Operational dead-letter triage is now available through events admin endpoints; cache remains independent and non-blocking.
+
+---
+
 ## Implementation Status
 
 | Component | Status |

@@ -12,7 +12,7 @@
 [![Guidewire DEVTrails](https://img.shields.io/badge/🏆_Guidewire-DEVTrails_2026-6D28D9?style=for-the-badge)](https://devtrails.guidewire.com)
 [![Team](https://img.shields.io/badge/Team-Celestius-7C3AED?style=for-the-badge&logo=rocket&logoColor=white)](#-team-celestius)
 [![Phase](https://img.shields.io/badge/Phase_2-Production_Hardened-4F46E5?style=for-the-badge&logo=shield&logoColor=white)](#)
-[![Tests](https://img.shields.io/badge/Tests-61_Passing-16A34A?style=for-the-badge&logo=pytest&logoColor=white)](#)
+[![Tests](https://img.shields.io/badge/Smoke_Tests-65_Passing-16A34A?style=for-the-badge&logo=python&logoColor=white)](#)
 
 <br>
 
@@ -27,9 +27,20 @@
 
 *When the city drowns or the air turns toxic — your income doesn't stop. No forms. No calls. Zero waiting.*
 
-📹 **[Watch the Demo](https://www.youtube.com/watch?v=TB0tV3Kcn80)** · 🌐 **[Live Platform](#-quick-start)**
+📹 **[Watch the Demo](https://www.youtube.com/watch?v=6_IH64QjZbE)** · 🌐 **[Live Platform](#-quick-start)**
 
 </div>
+
+---
+
+## Engineering Snapshot (2026-04-05)
+
+- Database reliability migrations added and applied in sequence: `backend/sql/10_rewards_schema.sql`, `backend/sql/11_event_outbox.sql`, `backend/sql/12_event_reliability.sql`, `backend/sql/13_consumer_dead_letter.sql`.
+- Event reliability is now production-hardened with transactional outbox writes, relay retry/backoff, dead-letter handling, and consumer idempotency with max-attempt dead-letter escalation.
+- Async consumer flow is active for `claim.auto_processed` side effects (notification + rewards), with Kafka consumer runner parity for broker mode.
+- Operational admin endpoints are available under `/events/outbox/*` and `/events/consumers/*` for relay, status, dead-letter triage, and requeue.
+- Security hardening includes signed mobile device-context verification, explicit CORS/header allowlist, `slowapi` rate limits, and OWASP response headers.
+- Post-migration reliability validation is green, including focused consumer/outbox/Kafka tests and API-level tests for the new events consumer endpoints.
 
 ---
 
@@ -45,19 +56,23 @@
 | 🎬 | [Live Scenarios](#-live-scenarios) |
 | ⚡ | [How It Works](#-how-it-works) |
 | 💰 | [Coverage Plans & IRDAI Compliance](#-coverage-plans--irdai-compliance) |
-| 🛡️ | [The Fraud Fortress](#️-the-fraud-fortress) |
+| 💡 | [Premium Economics](#-premium-economics--why-28week-works) |
+| 🏦 | [Financial Viability](#-financial-viability--unit-economics) |
+| 🏗️ | [Architecture](#️-architecture) |
+| 🚀 | [Scalability](#-scalability--growth-architecture) |
 | ⚡ | [15-Trigger Library](#-the-15-trigger-library) |
-| 🔐 | [Adversarial Defense](#-adversarial-defense--anti-spoofing-strategy) |
+| 📊 | [Threshold References & Data Sources](#-threshold-references-and-why-they-were-chosen) |
+| 📐 | [Parametric Product & Calibration](#-parametric-product-weekly-benefit-plans) |
+| 💼 | [Business Framing](#-business-framing) |
+| 🛡️ | [The Fraud Fortress](#️-the-fraud-fortress) |
+| 🔐 | [Adversarial Defense & SynthID](#-adversarial-defense--anti-spoofing-strategy) |
 | 🔒 | [Payout Safety](#-payout-safety--duplicate-prevention) |
 | 📋 | [Claim State Machine](#-claim-state-machine) |
 | 🚦 | [Region Fast-Lane](#-region-validation-cache--fast-lane-approvals) |
 | 🚨 | [Post-Approval Controls](#-post-approval-fraud-controls) |
 | 🪪 | [Progressive KYC](#-progressive-kyc--trust-ladder) |
 | 🧠 | [ML Role](#-what-ml-does-vs-what-ml-does-not-do) |
-| 📊 | [Threshold References](#-threshold-references-and-why-they-were-chosen) |
-| 📐 | [Parametric Product & Calibration](#-parametric-product-weekly-benefit-plans) |
-| 💼 | [Business Framing](#-business-framing) |
-| 🏗️ | [Architecture](#️-architecture) |
+| 📈 | [Data Analytics & Pricing Validation](#-data-analytics--pricing-validation) |
 | 🏆 | [Why Covara One Wins](#-why-covara-one-wins) |
 | 🚀 | [Quick Start](#-quick-start) |
 | 📚 | [Deep Dive Docs](#-deep-dive-docs) |
@@ -293,6 +308,105 @@ Let **W** = selected weekly benefit cap. Payout = Band multiplier × W.
 ---
 
 
+## 💡 Premium Economics — Why ₹28/week Works
+
+> **The core question:** How can meaningful income protection cost less than a single delivery order?
+
+### How We Calculated the Premium
+
+The premium is derived from an **expected-loss loading** approach — a standard actuarial method ([Loss Data Analytics, Ch. 7](https://openacttexts.github.io/Loss-Data-Analytics/ChapPremiumFoundations.html)) where the premium covers the expected payout plus operational expenses and a risk margin:
+
+```
+Premium = [P(trigger) × Expected_Payout] / (1 − expense_load − risk_margin)
+```
+
+| Component | Value | Basis |
+|---|---|---|
+| **P(trigger)** | ~3.5–4% per week | Historical weather/AQI event frequency across Indian metros (IMD, CPCB data) |
+| **Expected Payout** | ₹750–₹1,500 (Band 1–2 weighted avg) | Most claims are Band 1–2; Band 3 (severe) events are statistically rare |
+| **Expense Load (α)** | 12% | Platform operations, API costs, support |
+| **Risk Margin (β)** | 10% | Actuarial buffer for adverse deviation ([Mikosch, 2004](https://unina2.on-line.it/sebina/repository/catalogazione/documenti/Mikosch%20-%20Non-life%20insurance%20mathematics.pdf)) |
+| **Resulting Premium** | **₹28/week** (Essential) | `[0.04 × ₹950] / (1 − 0.12 − 0.10) ≈ ₹49` → compressed to ₹28 for mass adoption |
+
+The ₹28 price point is deliberately positioned **below** the pure actuarial break-even to prioritize **volume acquisition** — the economics work because of the factors below.
+
+### Why The Price Is So Low
+
+| Factor | How It Keeps Premiums Down |
+|---|---|
+| **High-volume micro-insurance** | 12.7M potential users × ₹28/week = massive premium pool even at low individual cost |
+| **Low per-claim payout** | Band 1 (₹750) and Band 2 (₹1,500) are the dominant claim types — Band 3 severe events are statistically rare |
+| **Geographic diversification** | Mumbai monsoon ≠ Delhi AQI winter ≠ Chennai cyclone season — risk pools don't all trigger simultaneously |
+| **Weekly billing cycle** | No annual lock-in; workers churn naturally during low-risk months → premium collected only when risk exists |
+| **Zero Loss Adjustment Expense** | Parametric triggers eliminate adjuster visits, claim investigations, and manual processing — the biggest cost driver for traditional insurers |
+| **Automated pipeline** | 8-stage claim pipeline + 5-layer fraud engine runs at near-zero marginal cost per claim |
+| **Seasonal balancing** | High-risk months (Jun–Sep monsoon) offset by low-risk months (Jan–Mar) across the portfolio |
+
+### Who Buys This — Target User Economics
+
+| Profile | Arjun (Essential) | Priya (Plus) |
+|---|---|---|
+| **Monthly income** | ₹19,000 | ₹28,000 |
+| **Weekly premium** | ₹28 (0.37% of income) | ₹42 (0.39% of income) |
+| **Premium as % of one day's earning** | ~4.4% | ~3.9% |
+| **Cost equivalent** | Less than 1 delivery order | Less than 1 delivery order |
+| **Key motivation** | *"I can't afford to lose ₹1,900 in a monsoon week"* | *"I want higher protection for my family's EMI payments"* |
+| **Risk profile** | Paycheck-to-paycheck, zero savings buffer | Slightly more stability but high fixed costs (rent, EMI) |
+| **Savings buffer** | ₹0 — 90% of gig workers (NITI Aayog) | < ₹5,000 — one disruption away from EMI default |
+
+> **Behavioral insight:** ₹28/week sits at the **"one chai" threshold** — low enough that loss aversion (*"What if I lose ₹1,900 without cover?"*) overwhelmingly dominates the cost consideration. At < 0.4% of monthly income, the purchase decision is nearly frictionless.
+
+### Market Opportunity
+
+| Metric | Value | Source |
+|---|---|---|
+| Total gig workers in India | **12.7 million** | NITI Aayog |
+| Gig workers with zero formal insurance | **80%** | NITI Aayog |
+| Food-delivery workers (addressable) | **~3.5 million** | Industry estimates (Zomato, Swiggy, Blinkit, Zepto) |
+| Covara One SAM (Year 1 target) | **50,000 weekly subscribers** | Conservative 1.4% penetration |
+| Annual premium revenue at SAM | **₹8.3 crore** | 50K × ₹32 avg × 52 weeks |
+| Total addressable market | **₹580+ crore/year** | 3.5M × ₹32 × 52 × 10% adoption |
+
+---
+
+
+## 🏦 Financial Viability & Unit Economics
+
+### Revenue Model at Scale
+
+| Metric | Year 1 (Conservative) | Year 2 (Growth) | Year 3 (Scale) |
+|---|---|---|---|
+| Active weekly subscribers | 50,000 | 200,000 | 500,000 |
+| Avg weekly premium (Essential/Plus mix) | ₹32 | ₹34 | ₹35 |
+| **Weekly premium revenue** | **₹16 lakh** | **₹68 lakh** | **₹1.75 crore** |
+| **Annual premium revenue** | **₹8.3 crore** | **₹35.4 crore** | **₹91 crore** |
+
+### Claim Rate Scenarios (at 50,000 subscribers)
+
+| Scenario | % Workers Claiming | Weekly Payouts | Weekly Revenue | Result |
+|---|---|---|---|---|
+| **Normal week** | 3–5% | ₹2.5–4 lakh | ₹16 lakh | ✅ Profitable |
+| **Moderate disruption** (1 city monsoon) | 8–10% | ₹8–12 lakh | ₹16 lakh | ✅ Covered by reserves |
+| **Severe disruption** (multi-city) | 15% | ₹22 lakh | ₹16 lakh | ⚠️ Draw from catastrophic reserve |
+| **Extreme event** (< 1% probability) | 20%+ | ₹35+ lakh | ₹16 lakh | ❌ Reinsurance trigger |
+
+### Why The Pool Stays Solvent
+
+| Control | Mechanism |
+|---|---|
+| **Geographic diversification** | Mumbai monsoon, Delhi AQI, Chennai cyclone — risk pools don't overlap temporally |
+| **Seasonal balancing** | High-risk months (Jun–Sep) offset by low-risk months (Jan–Mar) across the full portfolio |
+| **Weekly payout caps** | One payout per event per worker — no unlimited drain |
+| **Daily single-claim rule** | Max one claim/day, even during multi-trigger events |
+| **Fraud prevention** | 5-layer Ghost Shift Detector prevents fraudulent pool drain |
+| **Circuit-breakers** | Automatic throttling during mass-claim spikes protects liquidity |
+| **Reinsurance trigger** | Extreme scenarios (20%+ claim rate) are passed to a reinsurance partner |
+
+> **Target combined ratio:** < 70% in steady state. Parametric automation (zero LAE) and the fraud engine (< 2% leakage target) keep operating expenses minimal compared to traditional general insurance.
+
+---
+
+
 ## 🏗️ Architecture
 
 ```mermaid
@@ -366,6 +480,52 @@ flowchart TD
 ---
 
 
+## 🚀 Scalability & Growth Architecture
+
+Covara One is built for **horizontal scale from day one** — the same codebase serves 100 workers in one city or 1,000,000 workers across 50 cities.
+
+### Infrastructure Scaling
+
+| Layer | Scaling Strategy | Status |
+|---|---|---|
+| **Backend (FastAPI)** | Stateless microservices behind load balancer; Docker containers scale horizontally via K8s `HorizontalPodAutoscaler` | ✅ Docker + K8s ready |
+| **Database (Supabase Postgres)** | Connection pooling (PgBouncer), read replicas for dashboard queries, partitioned tables by city/zone | ✅ 14-table schema + RLS |
+| **Cache (Redis)** | TTL-based caching for trigger feeds, dashboard KPIs, and zone risk scores; `fastapi-cache2` decorator integration | ✅ Redis in docker-compose |
+| **Trigger Ingestion** | Parallel async polling of external APIs (OpenWeather, CPCB, TomTom); Redis-backed deduplication prevents duplicate trigger fires | ✅ Async connectors live |
+| **ML Inference** | Lazy-loaded `.joblib` model per request; horizontally scalable across backend replicas with no shared state | ✅ Live inference wired |
+| **Frontend (Next.js)** | Static generation for public pages, server-side rendering for dashboards, CDN-cacheable assets via standalone output | ✅ Standalone mode |
+
+### Multi-City Expansion Model
+
+Adding a new city requires **zero code changes** — only configuration:
+
+1. **Define zones** — Add `zone_id` entries for the new city's delivery areas
+2. **Map triggers** — Environmental triggers (rain, AQI, heat) auto-activate from zone coordinates via existing API connectors
+3. **Set thresholds** — City-specific threshold overrides (e.g., Chennai cyclone wind speed vs. Delhi AQI GRAP-IV)
+4. **Seed workers** — Workers self-register to zones during onboarding; no manual provisioning
+
+```
+Current:  6 cities × ~20 zones = 120 zone configurations
+Target:   50 cities × ~30 zones = 1,500 zone configurations
+No architectural change needed — zone/trigger/claim model is inherently multi-tenant.
+```
+
+### Throughput Benchmarks (Stress Test)
+
+The [Mumbai Monsoon Simulator](ml/stress_test_simulator.py) validates system behavior under extreme load:
+
+| Metric | Value |
+|---|---|
+| Simulated workers | 10,000 |
+| Simulated event duration | 3-day monsoon |
+| Concurrent trigger evaluations | 10,000+ per trigger window |
+| Fraud engine throughput | 5-layer check in < 2 seconds per claim |
+| Circuit-breaker activation | Tested with 500-claim coordinated batch attack |
+| DBSCAN cluster detection | Identifies syndicate patterns within batch window |
+
+---
+
+
 ## ⚡ The 15-Trigger Library
 
 The platform uses a **3-tier trigger architecture**: early warning → claim trigger → severe escalation.
@@ -419,6 +579,34 @@ Environmental thresholds are anchored to official Indian government sources. Ope
 - **Threshold basis per trigger family** with source links → [data/README.md](data/README.md#trigger-threshold-reference-table)
 - **ML baseline and feature normalization provenance** → [ml/README.md](ml/README.md#pricing-baseline-and-reference-notes)
 - **Insurance-side trend sources** (IRDAI, IIB) → [docs/README.md](docs/README.md#insurance-side-trend-sources)
+
+### 🌐 External Data Source Reference Table
+
+All external data sources used by the platform, consolidated with URLs and integration status:
+
+| # | Source | URL | Data Provided | Used For | Status |
+|---|---|---|---|---|---|
+| 1 | **IMD** (India Meteorological Dept) | [mausam.imd.gov.in](https://mausam.imd.gov.in/) | Rainfall categories, heat-wave definitions, cyclone warnings | T1–T3 rain thresholds, T7–T9 heat thresholds | ✅ Threshold source |
+| 2 | **IMD Rainfall FAQ** | [rsmcnewdelhi.imd.gov.in/images/pdf/faq.pdf](https://rsmcnewdelhi.imd.gov.in/images/pdf/faq.pdf) | Heavy/very heavy rain definitions (64.5 / 115.6 mm) | Claim trigger anchoring | ✅ Public reference |
+| 3 | **IMD Heat Wave Services** | [IMD Brochure PDF](https://mausam.imd.gov.in/imd_latest/contents/pdf/pubbrochures/Heat%20Wave%20Warning%20Services.pdf) | Heat-wave criteria (≥ 45°C plains) | T7–T8 heat triggers | ✅ Public reference |
+| 4 | **CPCB** (Central Pollution Control Board) | [cpcb.nic.in/national-air-quality-index](https://www.cpcb.nic.in/national-air-quality-index/) | AQI category definitions (Poor/Very Poor/Severe) | T5–T6 AQI thresholds | ✅ Threshold source |
+| 5 | **OGD Real-Time AQI** (data.gov.in) | [data.gov.in AQI resource](https://www.data.gov.in/resource/real-time-air-quality-index-various-locations) | Live AQI readings from 511 CPCB stations | Real-time AQI ingestion | ✅ Live API |
+| 6 | **NDMA** (National Disaster Mgmt Authority) | [ndma.gov.in/Natural-Hazards/Heat-Wave](https://ndma.gov.in/Natural-Hazards/Heat-Wave) | Heat-wave classification guidance | Heat trigger calibration | ✅ Public reference |
+| 7 | **OpenWeather API** | [openweathermap.org/api](https://openweathermap.org/api) | Current weather, temperature, rainfall, forecasts | Live weather trigger ingestion | ✅ Live API |
+| 8 | **TomTom Traffic Flow API** | [developer.tomtom.com/traffic-api](https://developer.tomtom.com/traffic-api/documentation/traffic-flow/flow-segment-data) | Real-time traffic flow, travel-time delays | T12 traffic trigger + route plausibility (fraud) | ✅ Live API |
+| 9 | **TomTom Snap-to-Roads** | [developer.tomtom.com/snap-to-roads](https://developer.tomtom.com/snap-to-roads-api/documentation/product-information/introduction) | GPS coordinate road-matching | Fraud detection — validates GPS is on real road | ✅ Live API |
+| 10 | **NewsAPI** | [newsapi.org](https://newsapi.org/) | Civic news, closures, strikes, curfews | T10–T11 civic closure triggers | ✅ Live API |
+| 11 | **Gemini API** (Google) | [ai.google.dev](https://ai.google.dev/) | AI narrative generation, SynthID watermark detection | Claim explanation + AI-image fraud detection | ✅ Live API |
+| 12 | **Sandbox.co.in** | [sandbox.co.in](https://sandbox.co.in/) | Aadhaar OTP, PAN, bank verification | Progressive KYC (Levels 2–4) | ✅ Integrated |
+| 13 | **Twilio** | [twilio.com](https://www.twilio.com/) | WhatsApp templates, OTP verification | Claim notifications, worker alerts | ✅ Sandboxed |
+| 14 | **IRDAI Annual Reports** | [irdai.gov.in/annual-reports](https://www.irdai.gov.in/annual-reports) | Claim trends, market structure, micro-insurance caps | Pricing validation, regulatory compliance | 📚 Reference |
+| 15 | **IIB** (Insurance Information Bureau) | [iib.gov.in](https://iib.gov.in/) | Insurance analytics, fraud benchmarks | Risk analytics orientation | 📚 Reference |
+| 16 | **Swiss Re** | [swissre.com](https://www.swissre.com/) | Parametric insurance product frameworks | Product architecture framing | 📚 Reference |
+| 17 | **Google Maps Distance Matrix** *(Planned)* | [developers.google.com/maps](https://developers.google.com/maps/documentation/distance-matrix) | Multi-route corridor travel times | Enhanced T12 traffic analysis | 📋 Planned |
+| 18 | **IMD Direct API** *(Planned)* | [imd.gov.in](https://mausam.imd.gov.in/) | Official rainfall/heat data (IP-whitelisted) | Replace OpenWeather for official sourcing | 📋 Planned |
+| 19 | **DigiLocker** (MeitY) *(Planned)* | [digilocker.gov.in](https://www.digilocker.gov.in/) | Aadhaar, PAN, DL document verification | KYC Level 4+ upgrade | 📋 Planned |
+
+> **Legend:** ✅ Live/Integrated — 📚 Reference source — 📋 Planned integration
 
 ### Data Split
 
@@ -1052,6 +1240,81 @@ Full identity verification upfront kills conversion. Covara One uses a **progres
 ---
 
 
+## 📈 Data Analytics & Pricing Validation
+
+> The pricing model isn't a guess. Here’s the data science pipeline that validates our formulas and pricing decisions.
+
+### Feature Importance — What Drives Claims
+
+The Random Forest baseline model trained on the synthetic scenario set reveals which disruption signals matter most for predicting income loss:
+
+![Feature Importance — Random Forest Baseline](docs/assets/insurance/feature_importance.png)
+
+| Rank | Feature | Importance | Interpretation |
+|---|---|---|---|
+| 1 | `traffic_delay_pct` | 0.109 | Route blockage is the strongest predictor — no deliveries if roads are impassable |
+| 2 | `accessibility_score` | 0.106 | Zone-level accessibility directly determines earning potential |
+| 3 | `rain_mm` | 0.092 | Rainfall confirms — the IMD 64.5mm threshold accurately separates disrupted vs. normal |
+| 4 | `temp_c` | 0.086 | Heat disruption is real — heatwave days measurably reduce platform activity |
+| 5 | `gps_consistency` | 0.086 | GPS quality is a proxy for both network conditions and fraud signals |
+| 6 | `aqi` | 0.083 | AQI tracks with delivery platform slowdowns during Delhi winter |
+| 7 | `trust_score` | 0.082 | Behavioral trust is a meaningful risk differentiator |
+| 8 | `demand_drop_pct` | 0.075 | Demand collapse captures platform-side disruption |
+
+> **Key insight:** The top 3 features are all **environmental/operational** — confirming that parametric triggers based on weather, traffic, and accessibility are the correct anchors for this product. The model validates our trigger design.
+
+### Bootstrap Pricing Distribution
+
+The bootstrap pipeline (synthetic expansion from 8-row seed) produced these calibration benchmarks:
+
+![Bootstrap Pricing Distribution](docs/assets/insurance/premium_payout_boxplot.png)
+
+| Metric | Value | What It Validates |
+|---|---|---|
+| Median weekly premium (uncapped) | ₹218.7 | Raw formula output before IRDAI compression |
+| Median payout (if triggered) | ₹442.6 | Average payout sits within Band 1–2 range |
+| Model AUC (holdout) | 0.647 | Moderate discriminative power — appropriate for 8-row seed baseline |
+| Outlier share (Tukey IQR) | 5.5% | Only 5.5% of scenarios produce extreme premiums → outlier uplift handles these |
+| High-risk cutoff | ≈ ₹1,012.8 | Workers above this threshold flagged for premium review |
+| **Premium-payout correlation** | **0.93** | Premium tracks payout almost perfectly — the formula is internally consistent |
+
+### Why ₹28 Not ₹218 — The Compression Logic
+
+The bootstrap median (₹218.7) reflects the **internal actuarial calculation** for high-income synthetic worker profiles. The final ₹28/₹42 rates are set by:
+
+1. **Target demographic compression** — Arjun earns ₹19K/month, not the ₹95/hr seed assumption
+2. **Volume economics** — At 50K+ subscribers, the pool absorbs per-event payouts
+3. **IRDAI micro-insurance cap** — Annual premium must stay under ₹10,000
+4. **Acquisition pricing** — Deliberately below break-even to drive mass adoption in Year 1
+5. **Parametric efficiency** — Zero LAE (Loss Adjustment Expense) eliminates traditional insurer's biggest cost line
+
+### Loss Ratio Sanity Check
+
+| Scenario | Monthly Claim Rate | Monthly Payout | Monthly Premium Revenue (50K users) | Loss Ratio |
+|---|---|---|---|---|
+| Low-risk month | 3% | ₹5.6 lakh | ₹69 lakh | **8.1%** — very healthy |
+| Average month | 6% | ₹13.5 lakh | ₹69 lakh | **19.6%** — healthy |
+| High-risk month (monsoon) | 12% | ₹31 lakh | ₹69 lakh | **44.9%** — sustainable |
+| Extreme month (< 1% prob) | 20% | ₹56 lakh | ₹69 lakh | **81.2%** — reinsurance covers residual |
+
+> **Target combined ratio:** < 70% in steady state. Parametric automation (zero LAE) and the fraud engine (< 2% leakage target) keep the combined ratio well below traditional general insurance benchmarks (typically 95–110%).
+
+### XGBoost Benchmark Comparison
+
+The Random Forest baseline was benchmarked against XGBoost ([Chen & Guestrin, 2016](https://doi.org/10.1145/2939672.2939785)) to validate model choice:
+
+| Metric | Random Forest | XGBoost | Decision |
+|---|---|---|---|
+| AUC (holdout) | 0.647 | ~0.66 | Marginal improvement — not worth complexity trade-off |
+| Feature importance interpretability | ✅ Direct `.feature_importances_` | Requires SHAP for interpretability | RF is more transparent |
+| Overfitting risk on small data | Low (bagging + random subspace) | Higher (sequential boosting) | RF safer for 8-row seed |
+| **Selected for production** | **✅ Yes** | 📋 Future benchmark | RF wins on interpretability + safety |
+
+> **Full ML pipeline details:** [ml/README.md](ml/README.md) · **XGBoost benchmark script:** [ml/xgboost_benchmark.py](ml/xgboost_benchmark.py)
+
+---
+
+
 ## 🏆 Why Covara One Wins
 
 <div align="center">
@@ -1062,8 +1325,8 @@ Full identity verification upfront kills conversion. Covara One uses a **progres
 | **ML** | Hardcoded probability | Live Random Forest `predict_proba()` + DBSCAN clustering |
 | **Auth** | Client-side guard | Next.js Edge SSR Middleware — flash-free, server-enforced |
 | **Caching** | None | Redis + `fastapi-cache2` TTL decorators on live feeds |
-| **Infrastructure** | ZIP file | Docker multi-stage + GitHub Actions CI/CD + K8s manifests |
-| **Testing** | None | 61 pytest tests — 100% pass rate |
+| **Infrastructure & Security** | ZIP file | Docker multi-stage + GitHub Actions CI/CD + K8s manifests, OWASP Headers, and Rate Limiting (`slowapi`) |
+| **Testing** | None | 65 comprehensive smoke test validations — 100% pass rate |
 | **Stress tested** | Not mentioned | Mumbai monsoon simulator: 10,000 workers, 3-day event |
 
 </div>
@@ -1076,7 +1339,7 @@ Full identity verification upfront kills conversion. Covara One uses a **progres
 
 **🔍**<br>**Ghost Shift Detector**
 
-<sub>5-layer pipeline. DBSCAN cluster detection. Gemini SynthID for AI photos. The only defense that works against Telegram syndicates.</sub>
+<sub>5-layer pipeline. DBSCAN cluster detection. <b>Google SynthID</b> watermark scanning for AI-generated photo evidence. Gemini Vision AI-generation probability scoring. The only defense that works against Telegram syndicates and AI-faked evidence.</sub>
 
 </td>
 <td align="center" width="20%">
@@ -1106,6 +1369,16 @@ Full identity verification upfront kills conversion. Covara One uses a **progres
 
 <sub>Admin Dashboard shows live Burning Cost Rate and Loss Ratio against the ₹28 premium pool — we understand insurance unit economics.</sub>
 
+</td>
+</tr>
+<tr>
+<td colspan="5" style="border: none; padding: 20px;">
+<div align="center">
+
+**🪙 Gamified Retention**  
+Instead of static screens, Covara One leverages a **Rewards & Coins System** tied to the worker's bottom line. Submit clean claims, check in weekly, or verify KYC to earn coins that dynamically convert to **premium discounts or Free Coverage Weeks** via our idempotent `coins_ledger` backend.
+
+</div>
 </td>
 </tr>
 </table>
@@ -1207,8 +1480,8 @@ gantt
 ```bash
 git clone https://github.com/Chorko/Celestius_DEVTrails_P1.git
 cd Celestius_DEVTrails_P1
-cp backend/.env.example backend/.env   # Add SUPABASE_URL, SUPABASE_SERVICE_KEY
-cp frontend/.env.example frontend/.env.local  # Add NEXT_PUBLIC_SUPABASE_URL, ANON_KEY
+cp .env.example .env
+# Fill required keys in .env (Supabase, service role, external APIs)
 ```
 
 **2. Seed the database:**
@@ -1236,6 +1509,23 @@ cd frontend && npm install && npm run dev
 | 🏢 **Admin** | `admin@demo.com` | `demo1234` | KPI cards, BCR/Loss Ratio, review queue, trigger engine |
 
 > **Or use Docker:** `docker compose up` — brings up FastAPI + Next.js + Redis in one command
+
+### 🐳 Docker Preflight
+
+Before running with Docker in any environment:
+
+1. Start Docker Desktop (or Docker Engine + Compose) and ensure the Linux engine is running.
+2. Create `.env` from `.env.example` at the repo root.
+3. Validate compose file syntax:
+    ```bash
+    docker compose config --quiet
+    ```
+4. Start the stack:
+    ```bash
+    docker compose up --build
+    ```
+
+If `docker compose build` fails with a pipe or engine ping error on Windows, Docker Desktop is installed but not running.
 
 ### 🗂️ Project Structure
 
@@ -1265,7 +1555,7 @@ Celestius_DEVTrails_P1/
 ├── fraud/                           ← Ghost Shift Detector architecture docs
 ├── data/                            ← Seed CSVs, schemas, threshold references
 ├── integrations/                    ← Live API connectors + payment mock
-├── tests/                           ← 61 pytest tests (100% pass rate)
+├── tests/                           ← 65 smoke test validations (100% pass rate)
 └── .github/workflows/               ← CI/CD: lint→test→docker→security audit
 ```
 

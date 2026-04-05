@@ -4,6 +4,14 @@
 
 ---
 
+## Engineering Snapshot (2026-04-05)
+
+- Added broker-agnostic event bus runtime with optional Kafka backend (`EVENT_BUS_BACKEND=kafka`) and durable outbox relay.
+- Introduced async consumer pipeline for claim-side effects, with consumer-ledger idempotency and dead-letter recovery operations.
+- Added admin ops endpoints for event outbox and consumer dead-letter triage/requeue to improve operational visibility.
+
+---
+
 ## Implementation Status
 
 | Component | Status |

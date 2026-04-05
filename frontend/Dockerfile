@@ -11,7 +11,11 @@ FROM base AS deps
 RUN apk add --no-cache libc6-compat
 
 COPY frontend/package.json frontend/package-lock.json* ./
-RUN npm install --frozen-lockfile --ignore-scripts
+RUN if [ -f package-lock.json ]; then \
+            npm ci --ignore-scripts; \
+        else \
+            npm install --ignore-scripts; \
+        fi
 
 # ── Stage 2: Build the Next.js app ───────────────────────────────────
 FROM base AS builder
