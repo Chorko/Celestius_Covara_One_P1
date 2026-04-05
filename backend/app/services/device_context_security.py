@@ -1,4 +1,4 @@
-﻿"""
+"""
 Covara One - Device Context Signature Verification
 
 Validates cryptographically signed mobile device-context payloads.
