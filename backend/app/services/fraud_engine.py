@@ -53,6 +53,7 @@ def evaluate_fraud_risk(
     zone_claims_last_hour: int = 0,
     zone_avg_hourly: float = 5.0,
     recent_claims_batch: list = None,
+    claim_mode: str = "manual",
 ) -> dict:
     """
     Evaluates fraud across 5 layers using the signal confidence hierarchy.
@@ -405,6 +406,28 @@ def evaluate_fraud_risk(
     else:
         band = "low"
         decision = "auto_approve"
+
+    # ── Claim-mode-aware override for zero-touch auto-claims ──────────
+    # Auto-triggered parametric claims have NO evidence photos and NO
+    # device context by design — the anti-spoof layer will always return
+    # "review" because it scores missing data as "uncertain" (0.5).
+    # For API-verified trigger events with clean fraud signals, we allow
+    # auto-approval since there is nothing to spoof (no human filed claim).
+    if (
+        claim_mode == "trigger_auto"
+        and has_trigger
+        and reliability >= 0.80
+        and fraud_score < 0.25
+        and flag_count == 0
+        and decision == "needs_review"
+        and anti_spoof_result["anti_spoof_verdict"] != "fail"
+    ):
+        band = "low"
+        decision = "auto_approve"
+        logger.info(
+            "Auto-claim override: trigger_auto + verified event + "
+            f"clean fraud ({fraud_score}) → auto_approve"
+        )
 
     # ── Fraud penalty for payout calculation ──
     penalty_map = {

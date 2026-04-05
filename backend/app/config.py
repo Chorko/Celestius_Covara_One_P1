@@ -1,5 +1,5 @@
-"""
-Covara One — Application Configuration
+﻿"""
+Covara One - Application Configuration
 Loads environment variables for Supabase, Gemini, and app settings.
 """
 
@@ -26,12 +26,12 @@ class Settings:
     # Gemini (backend-only)
     gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
 
-    # External APIs (legacy single-key names — still supported)
+    # External APIs (legacy single-key names - still supported)
     openweather_api_key: str = os.getenv("OPENWEATHER_API_KEY", "")
     tomtom_api_key: str = os.getenv("TOMTOM_API_KEY", "")
     news_api_key: str = os.getenv("NEWS_API_KEY", "")
 
-    # KYC — Sandbox.co.in
+    # KYC - Sandbox.co.in
     sandbox_kyc_api_key: str = os.getenv("SANDBOX_KYC_API_KEY", "")
 
     # Twilio
@@ -40,7 +40,54 @@ class Settings:
     twilio_verify_service_sid: str = os.getenv("TWILIO_VERIFY_SERVICE_SID", "")
     twilio_whatsapp_from: str = os.getenv("TWILIO_WHATSAPP_FROM", "")
 
-    # ── Dynamic API Key Discovery ──
+    # Mobile device-context signing
+    device_context_hmac_secret: str = os.getenv("DEVICE_CONTEXT_HMAC_SECRET", "")
+
+    # Event bus abstraction and Kafka adapter settings
+    event_bus_backend: str = os.getenv("EVENT_BUS_BACKEND", "inmemory")
+    event_bus_topic_prefix: str = os.getenv("EVENT_BUS_TOPIC_PREFIX", "covara")
+    kafka_bootstrap_servers: str = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "")
+    kafka_client_id: str = os.getenv("KAFKA_CLIENT_ID", "covara-backend")
+    kafka_security_protocol: str = os.getenv("KAFKA_SECURITY_PROTOCOL", "PLAINTEXT")
+    event_bus_publish_on_write: bool = (
+        os.getenv("EVENT_BUS_PUBLISH_ON_WRITE", "true").strip().lower() == "true"
+    )
+    event_bus_inline_consumer_enabled: bool = (
+        os.getenv("EVENT_BUS_INLINE_CONSUMER_ENABLED", "true").strip().lower()
+        == "true"
+    )
+    event_outbox_relay_batch_size: int = int(
+        os.getenv("EVENT_OUTBOX_RELAY_BATCH_SIZE", "100")
+    )
+    event_outbox_relay_enabled: bool = (
+        os.getenv("EVENT_OUTBOX_RELAY_ENABLED", "true").strip().lower() == "true"
+    )
+    event_outbox_relay_interval_seconds: int = int(
+        os.getenv("EVENT_OUTBOX_RELAY_INTERVAL_SECONDS", "15")
+    )
+    event_outbox_max_retries: int = int(
+        os.getenv("EVENT_OUTBOX_MAX_RETRIES", "10")
+    )
+    event_consumer_enabled: bool = (
+        os.getenv("EVENT_CONSUMER_ENABLED", "true").strip().lower() == "true"
+    )
+    event_consumer_group_id: str = os.getenv(
+        "EVENT_CONSUMER_GROUP_ID", "covara-event-consumers"
+    )
+    event_consumer_auto_offset_reset: str = os.getenv(
+        "EVENT_CONSUMER_AUTO_OFFSET_RESET", "latest"
+    )
+    event_consumer_poll_timeout_ms: int = int(
+        os.getenv("EVENT_CONSUMER_POLL_TIMEOUT_MS", "1000")
+    )
+    event_consumer_max_records: int = int(
+        os.getenv("EVENT_CONSUMER_MAX_RECORDS", "100")
+    )
+    event_consumer_max_attempts: int = int(
+        os.getenv("EVENT_CONSUMER_MAX_ATTEMPTS", "5")
+    )
+
+    # -- Dynamic API Key Discovery --
     # Instead of hardcoding N key fields, we scan env vars at runtime.
     # Just add WEATHER_API_KEY_1, WEATHER_API_KEY_2, ... to .env
     # and the system auto-discovers them. Works for any N.
@@ -51,7 +98,7 @@ class Settings:
         Auto-discover all API keys matching {PREFIX}_API_KEY_* from env vars.
 
         Example:
-            get_api_keys("WEATHER") → {"1": "abc123", "2": "def456"}
+            get_api_keys("WEATHER") -> {"1": "abc123", "2": "def456"}
 
         This means you never need to touch config.py to add a new provider.
         Just add WEATHER_API_KEY_4=xxx to .env and it's discovered.
@@ -93,3 +140,4 @@ class Settings:
 
 
 settings = Settings()
+

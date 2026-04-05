@@ -6,6 +6,14 @@
 
 ---
 
+## Engineering Snapshot (2026-04-05)
+
+- ML-assisted claim outputs now flow through a durability-hardened claim pipeline with transactional outbox persistence.
+- Non-critical post-claim actions (notifications/rewards) have moved to async consumers, keeping model inference and claim decision paths cleaner.
+- Reliability validation is green after migration and consumer dead-letter hardening, preserving current ML-calibration behavior.
+
+---
+
 ## Implementation Status
 
 | Component | Status |

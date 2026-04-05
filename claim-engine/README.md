@@ -4,6 +4,15 @@
 
 ---
 
+## Engineering Snapshot (2026-04-05)
+
+- Claim persistence is now transaction-coupled with outbox write semantics via `persist_claim_with_outbox`.
+- `claim.auto_processed` is now consumed asynchronously for side effects (notifications and rewards), reducing synchronous request-path coupling.
+- Duplicate worker-event auto-claims are safely skipped and tracked in summary output.
+- Claim-flow events (`claim.submitted`, `claim.reviewed`, `claim.offline_synced`, `claims.auto_process.*`) are emitted through the durable event path.
+
+---
+
 ## Implementation Status
 
 | Component | Status |

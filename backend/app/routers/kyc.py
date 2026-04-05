@@ -10,11 +10,10 @@ Endpoints:
   GET  /kyc/status            Get current KYC tier for authenticated worker
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import Optional
 
-from ..dependencies import require_authenticated_user, require_insurer_admin
 from ..supabase_client import get_supabase_admin
 from ..services.twilio_service import send_otp, verify_otp
 from ..services.kyc_service import (
