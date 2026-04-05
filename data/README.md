@@ -4,6 +4,14 @@
 
 ---
 
+## Engineering Snapshot (2026-04-05)
+
+- Data and claim records now participate in transactional outbox persistence for durable event delivery.
+- New schema migrations (`backend/sql/10` to `13`) add rewards ledger support plus event outbox and consumer dead-letter reliability structures.
+- Seed/sample datasets remain the same reference source for ML and pricing experiments; reliability additions are backward-compatible with existing sample flows.
+
+---
+
 ## Implementation Status
 
 | Component | Status |

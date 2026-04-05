@@ -49,6 +49,19 @@ def _evaluate_temperature(temp_c: float) -> tuple[str, str, str] | None:
     return None
 
 
+def _evaluate_wind(wind_speed: float) -> tuple[str, str, str] | None:
+    """Evaluate wind speed against T15/T16 thresholds.
+    We assume API returns wind speed in m/s (metric).
+    62 km/h ≈ 17.2 m/s (Gale/Storm)
+    89 km/h ≈ 24.7 m/s (Severe Cyclone)
+    """
+    if wind_speed >= 24.7:
+        return ("WIND_SEVERE", "escalation", f"Cyclone/Severe Wind: {wind_speed:.1f} m/s ≥ 24.7 m/s")
+    elif wind_speed >= 17.2:
+        return ("WIND_HIGH", "claim", f"Storm/High Wind: {wind_speed:.1f} m/s ≥ 17.2 m/s")
+    return None
+
+
 def _evaluate_aqi(aqi_value: float, sb=None, zone_id: str = "", city: str = "", zone_name: str = "") -> tuple[str, str, str] | None:
     """Evaluate AQI using dynamic/zone-calibrated thresholds when context is known,
     falling back to flat national CPCB thresholds."""
@@ -83,6 +96,8 @@ TRIGGER_SOURCES = {
     "AQI_SEVERE": "R1",
     "AQI_EXTREME": "R1",
     "TRAFFIC_SEVERE": "internal",
+    "WIND_HIGH": "R2",
+    "WIND_SEVERE": "R2",
 }
 
 TRIGGER_FAMILIES = {
@@ -95,6 +110,8 @@ TRIGGER_FAMILIES = {
     "AQI_SEVERE": "aqi",
     "AQI_EXTREME": "aqi",
     "TRAFFIC_SEVERE": "traffic",
+    "WIND_HIGH": "wind",
+    "WIND_SEVERE": "wind",
 }
 
 TRIGGER_THRESHOLDS = {
@@ -107,6 +124,8 @@ TRIGGER_THRESHOLDS = {
     "AQI_SEVERE": "301+",
     "AQI_EXTREME": "401+",
     "TRAFFIC_SEVERE": "≥ 40% delay",
+    "WIND_HIGH": "≥ 62 km/h (17.2 m/s)",
+    "WIND_SEVERE": "≥ 89 km/h (24.7 m/s)",
 }
 
 
@@ -231,6 +250,18 @@ def evaluate_weather_data(
             code, band, desc = temp_result
             event = _create_trigger_event(
                 sb, code, zone_id, city, float(temp_c), band, desc, provider
+            )
+            if event:
+                created.append(event)
+                
+    # ── Wind / Cyclone evaluation (T15/T16) ──
+    wind_speed = weather_data.get("wind_speed")
+    if wind_speed is not None:
+        wind_result = _evaluate_wind(float(wind_speed))
+        if wind_result:
+            code, band, desc = wind_result
+            event = _create_trigger_event(
+                sb, code, zone_id, city, float(wind_speed), band, desc, provider
             )
             if event:
                 created.append(event)
@@ -408,6 +439,7 @@ async def scan_all_zones_async(sb) -> dict:
                     "provider": weather.get("provider"),
                     "temp_c": payload.get("temp_c"),
                     "rain_mm": payload.get("rain_1h_mm") or payload.get("rain_3h_mm"),
+                    "wind_speed": payload.get("wind_speed"),
                 }
         except Exception as e:
             summary["errors"].append(f"Weather/{city}: {e}")

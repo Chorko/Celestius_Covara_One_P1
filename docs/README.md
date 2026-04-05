@@ -4,6 +4,19 @@
 
 ---
 
+## Engineering Snapshot (2026-04-05)
+
+- Added event reliability runbook docs at `docs/EVENT_BUS_KAFKA_ROADMAP.md`.
+- Added signed mobile telemetry contract at `docs/MOBILE_DEVICE_CONTEXT_CONTRACT.md`.
+- Reliability hardening now includes outbox dead-letter + consumer dead-letter operational workflows with admin endpoints.
+
+### New Docs Added
+
+- `docs/EVENT_BUS_KAFKA_ROADMAP.md` - event bus evolution, Kafka rollout stages, operational defaults, and safety notes.
+- `docs/MOBILE_DEVICE_CONTEXT_CONTRACT.md` - signed header contract, replay controls, key rotation, and compatibility requirements.
+
+---
+
 ## Implementation Status
 
 | Asset | Status | Notes |

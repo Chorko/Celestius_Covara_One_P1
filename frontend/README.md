@@ -4,6 +4,15 @@
 
 ---
 
+## Engineering Snapshot (2026-04-05)
+
+- Admin dashboard now includes a live `ZoneRiskMap` (`Leaflet`) with active-trigger overlays and DBSCAN suspicious-claim cluster visualization.
+- Frontend API integration remains role-token based, now paired with stronger backend protections (rate limits, security headers, signed mobile context verification).
+- Event operations endpoints (`/events/outbox/*`, `/events/consumers/*`) are available for insurer/admin observability and dead-letter requeue workflows.
+- Dependency updates include `leaflet` and `@types/leaflet` for map rendering support.
+
+---
+
 ## Implementation Status
 
 | Component | Status |

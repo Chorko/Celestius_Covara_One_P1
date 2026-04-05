@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useUserStore } from '@/store'
 import { createClient } from '@/lib/supabase'
+import dynamic from 'next/dynamic'
+import 'leaflet/dist/leaflet.css'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import AnimatedCounter from '@/components/AnimatedCounter'
 import Skeleton from '@/components/Skeleton'
@@ -11,6 +13,16 @@ import {
   Shield, Users, AlertTriangle, CheckCircle, IndianRupee,
   Clock, ArrowRight, Activity, FileSearch,
 } from 'lucide-react'
+const ZoneRiskMap = dynamic(() => import('@/components/admin/ZoneRiskMap'), {
+  ssr: false,
+  loading: () => (
+    <div className="card p-6">
+      <Skeleton width="180px" height="1.25rem" className="mb-4" />
+      <Skeleton width="100%" height="120px" className="mb-3" />
+      <Skeleton width="100%" height="420px" />
+    </div>
+  ),
+})
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 interface ClaimItem { id: string; claim_status: string; claim_reason: string; claimed_at: string; worker_profiles?: { platform_name?: string; city?: string }; [key: string]: any }
@@ -225,6 +237,9 @@ export default function AdminDashboard() {
           </div>
         </section>
 
+        {/* Zone Risk Map */}
+        <ZoneRiskMap />
+
         {/* Charts + Recent Claims */}
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Pie Chart */}
@@ -296,3 +311,5 @@ export default function AdminDashboard() {
     </div>
   )
 }
+
+
