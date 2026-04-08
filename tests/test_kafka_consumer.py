@@ -47,6 +47,16 @@ class TestKafkaConsumer:
 
         assert event is None
 
+    def test_message_to_domain_event_invalid_without_event_id(self):
+        message = {
+            "event_type": "claim.auto_processed",
+            "payload": {"claim_id": "claim-2"},
+        }
+
+        event = message_to_domain_event(message)
+
+        assert event is None
+
     @patch("backend.app.services.event_bus.kafka_consumer.dispatch_event_to_consumers", new_callable=AsyncMock)
     def test_process_kafka_message_dispatches(self, mock_dispatch):
         mock_dispatch.return_value = {

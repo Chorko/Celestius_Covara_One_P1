@@ -1,0 +1,17 @@
+{
+  "expo": {
+    "name": "Covara Worker Mobile",
+    "slug": "covara-worker-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "covara",
+    "userInterfaceStyle": "automatic",
+    "platforms": ["ios", "android"],
+    "android": {
+      "package": "com.covara.worker"
+    },
+    "ios": {
+      "bundleIdentifier": "com.covara.worker"
+    }
+  }
+}

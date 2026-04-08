@@ -39,6 +39,7 @@ class AdminReviewRequest(BaseModel):
     decision_reason: str | None = None
 
 
+@router.post("")
 @router.post("/")
 @limiter.limit("5/minute")
 async def submit_claim(
@@ -256,6 +257,7 @@ async def submit_claim(
     }
 
 
+@router.get("")
 @router.get("/")
 async def list_claims(user: dict = Depends(get_current_user)):
     """List claims. Workers see their own; Admins see all."""

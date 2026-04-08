@@ -1,8 +1,8 @@
 "use client"
 
 import { useEffect, useState, useCallback } from 'react'
-import { useUserStore } from '@/store'
 import { createClient } from '@/lib/supabase'
+import { backendGet, backendPost, BackendApiError } from '@/lib/backendApi'
 import {
   FileSearch, CheckCircle, XCircle, Shield,
   ChevronDown, ChevronUp, Eye, Image, Bot, Scale,
@@ -13,8 +13,6 @@ interface ClaimRecord {
   id: string; claim_status: string; claim_reason: string; claim_mode?: string; claimed_at: string
   worker_profiles?: { platform_name?: string; city?: string; trust_score?: number; profiles?: { full_name?: string; email?: string } }
   trigger_events?: { trigger_family?: string; trigger_code?: string; zone_id?: string }
-  payout_recommendations?: PayoutRecommendation[]
-  claim_evidence?: EvidenceItem[]
 }
 interface PayoutRecommendation {
   recommended_payout?: number; expected_payout?: number; payout_cap?: number; fraud_holdback_fh?: number
@@ -25,8 +23,31 @@ interface PayoutRecommendation {
 interface EvidenceItem { storage_path?: string; evidence_type?: string; exif_lat?: number; exif_lng?: number; exif_timestamp?: string }
 interface DetailData { claim: ClaimRecord; payout_recommendation: PayoutRecommendation | null; evidence: EvidenceItem[] }
 
+interface ClaimsListResponse {
+  claims: ClaimRecord[]
+}
+
+interface ClaimDetailResponse {
+  claim: ClaimRecord
+  payout_recommendation: PayoutRecommendation | null
+  evidence: EvidenceItem[]
+}
+
+function formatApiError(error: unknown): string {
+  if (error instanceof BackendApiError) {
+    if (error.status === 401) {
+      return 'Session expired. Please sign in again.'
+    }
+    if (error.status === 403) {
+      return 'Admin role required for this action.'
+    }
+    return error.detail
+  }
+
+  return error instanceof Error ? error.message : 'Request failed'
+}
+
 export default function AdminReviews() {
-  const { user, profile } = useUserStore()
   const supabase = createClient()
   const [claims, setClaims] = useState<ClaimRecord[]>([])
   const [selectedClaim, setSelectedClaim] = useState<string | null>(null)
@@ -39,33 +60,63 @@ export default function AdminReviews() {
 
   const loadClaims = useCallback(async () => {
     try {
-      const { data } = await supabase.from('manual_claims').select(`*, worker_profiles(profile_id, platform_name, city, trust_score, profiles(full_name, email)), trigger_events(trigger_family, trigger_code, zone_id), payout_recommendations(*), claim_evidence(*)`).order('claimed_at', { ascending: false })
-      setClaims(data || [])
+      const response = await backendGet<ClaimsListResponse>(supabase, '/claims/')
+      setClaims(response.claims || [])
     } catch (e) { console.error('Could not load claims', e) }
   }, [supabase])
 
   useEffect(() => { loadClaims() }, [loadClaims])
 
   const loadDetail = async (claimId: string) => {
-    setSelectedClaim(claimId); setLoading(true); setActionError(null)
-    const found = claims.find(c => c.id === claimId)
-    if (found) setDetailData({ claim: found, payout_recommendation: found.payout_recommendations?.[0] || null, evidence: found.claim_evidence || [] })
-    setLoading(false)
+    setSelectedClaim(claimId)
+    setLoading(true)
+    setActionError(null)
+    setPipelineExpanded(false)
+
+    try {
+      const detail = await backendGet<ClaimDetailResponse>(supabase, `/claims/${claimId}`)
+      setDetailData({
+        claim: detail.claim,
+        payout_recommendation: detail.payout_recommendation,
+        evidence: detail.evidence || [],
+      })
+    } catch (e: unknown) {
+      setActionError(formatApiError(e))
+      setDetailData(null)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleReviewAction = async (decision: string) => {
     if (!detailData) return
-    const claimId = detailData.claim.id; setActionLoading(decision); setActionError(null)
+    const claimId = detailData.claim.id
+    setActionLoading(decision)
+    setActionError(null)
+
     try {
-      const newStatus = decision === 'approve' ? 'approved' : decision === 'reject' ? 'rejected' : decision === 'flag_post_approval' ? 'post_approval_flagged' : decision === 'escalate' ? 'fraud_escalated_review' : 'soft_hold_verification'
-      const reviewerId = profile?.id ?? user?.id
-      if (!reviewerId) { setActionError('Could not identify reviewer — please refresh and try again.'); setActionLoading(null); return }
-      const { error: revErr } = await supabase.from('claim_reviews').insert({ claim_id: claimId, reviewer_profile_id: reviewerId, decision, decision_reason: decisionReason || `Admin review — ${decision}`, reviewed_at: new Date().toISOString() })
-      if (revErr) { setActionError(revErr.message); setActionLoading(null); return }
-      const { error: updErr } = await supabase.from('manual_claims').update({ claim_status: newStatus }).eq('id', claimId)
-      if (updErr) { setActionError(updErr.message); setActionLoading(null); return }
-    } catch (e: unknown) { setActionError(e instanceof Error ? e.message : 'Review action failed'); setActionLoading(null); return }
-    setActionLoading(null); setSelectedClaim(null); setDetailData(null); setDecisionReason(''); await loadClaims()
+      if (decision === 'flag_post_approval') {
+        await backendPost(supabase, `/claims/${claimId}/flag`, {
+          fraud_severity: 'moderate',
+          reason: decisionReason || undefined,
+        })
+      } else {
+        await backendPost(supabase, `/claims/${claimId}/review`, {
+          decision,
+          decision_reason: decisionReason || undefined,
+        })
+      }
+    } catch (e: unknown) {
+      setActionError(formatApiError(e))
+      setActionLoading(null)
+      return
+    }
+
+    setActionLoading(null)
+    setSelectedClaim(null)
+    setDetailData(null)
+    setDecisionReason('')
+    await loadClaims()
   }
 
   const statusBadge = (s: string) => {
@@ -85,6 +136,8 @@ export default function AdminReviews() {
   const evidence = detailData?.evidence || []
   const explJson = pr?.explanation_json
   const isFraud = (pr?.fraud_holdback_fh ?? 0) > 0.30
+  const canReview = ['submitted', 'soft_hold_verification', 'fraud_escalated_review', 'held'].includes(claim?.claim_status || '')
+  const canPostApprovalFlag = ['approved', 'auto_approved', 'paid'].includes(claim?.claim_status || '')
 
   return (
     <div className="p-4 md:p-6 pb-28 h-full flex flex-col md:flex-row gap-6 min-h-screen page-mesh animate-fade-in-up">
@@ -107,9 +160,6 @@ export default function AdminReviews() {
               <div className="flex justify-between items-start mb-2">
                 <span className="text-sm font-medium truncate pr-2" style={{ color: 'var(--text-primary)' }}>{c.worker_profiles?.platform_name || 'Worker'} - {c.worker_profiles?.city || 'Unknown'}</span>
                 <div className="flex items-center gap-1.5 shrink-0">
-                  {(c.payout_recommendations as PayoutRecommendation[])?.[0]?.fraud_holdback_fh && ((c.payout_recommendations as PayoutRecommendation[])?.[0]?.fraud_holdback_fh ?? 0) > 0.30 && (
-                    <span className="badge-danger text-[10px] flex items-center gap-1"><AlertTriangle size={10} /> Fraud</span>
-                  )}
                   <span className={`badge ${statusBadge(c.claim_status)} shrink-0`}>{statusLabel(c.claim_status)}</span>
                 </div>
               </div>
@@ -152,8 +202,8 @@ export default function AdminReviews() {
               </div>
               <div className="flex items-center gap-2">
                 {isFraud && <span className="badge-danger flex items-center gap-1"><AlertTriangle size={12} /> Fraud Detected</span>}
-                <span className={claim?.claim_mode === 'auto' ? 'badge-success' : 'badge-info'}>
-                  {claim?.claim_mode === 'auto' ? 'Auto-Triggered' : 'Manual Claim'}
+                <span className={claim?.claim_mode === 'trigger_auto' ? 'badge-success' : 'badge-info'}>
+                  {claim?.claim_mode === 'trigger_auto' ? 'Auto-Triggered' : 'Manual Claim'}
                 </span>
               </div>
             </div>
@@ -250,7 +300,7 @@ export default function AdminReviews() {
             )}
 
             {/* Actions */}
-            {(['submitted', 'soft_hold_verification', 'fraud_escalated_review', 'held'].includes(claim?.claim_status || '')) ? (
+            {canReview ? (
               <div className="pt-6 space-y-4" style={{ borderTop: '1px solid var(--border-primary)' }}>
                 {actionError && <div className="p-3 rounded-lg text-sm" style={{ background: 'var(--danger-muted)', border: '1px solid var(--danger)', color: 'var(--danger)' }}>{actionError}</div>}
                 <div>
@@ -272,6 +322,23 @@ export default function AdminReviews() {
                     </button>
                   ))}
                 </div>
+              </div>
+            ) : canPostApprovalFlag ? (
+              <div className="pt-6 space-y-4" style={{ borderTop: '1px solid var(--border-primary)' }}>
+                {actionError && <div className="p-3 rounded-lg text-sm" style={{ background: 'var(--danger-muted)', border: '1px solid var(--danger)', color: 'var(--danger)' }}>{actionError}</div>}
+                <div>
+                  <label className="text-xs font-semibold uppercase tracking-wider block mb-2" style={{ color: 'var(--text-tertiary)' }}>Fraud Flag Reason (Optional)</label>
+                  <textarea value={decisionReason} onChange={e => setDecisionReason(e.target.value)} placeholder="Explain why this approved claim should be post-flagged..." className="input-field min-h-[80px] resize-none" />
+                </div>
+                <button
+                  onClick={() => handleReviewAction('flag_post_approval')}
+                  disabled={actionLoading !== null}
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-lg font-medium text-sm transition-all disabled:opacity-50"
+                  style={{ background: 'var(--danger-muted)', color: 'var(--danger)', border: '1px solid var(--danger)' }}
+                >
+                  {actionLoading === 'flag_post_approval' ? <div className="w-4 h-4 border-2 rounded-full animate-spin" style={{ borderColor: 'transparent', borderTopColor: 'var(--danger)' }} /> : <AlertTriangle size={16} />}
+                  Flag Post-Approval Fraud
+                </button>
               </div>
             ) : (
               <div className="pt-6 text-center" style={{ borderTop: '1px solid var(--border-primary)' }}>

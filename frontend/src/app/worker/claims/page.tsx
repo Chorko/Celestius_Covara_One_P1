@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useUserStore } from '@/store'
 import { createClient } from '@/lib/supabase'
+import { backendGet, backendPost, BackendApiError } from '@/lib/backendApi'
 import {
   FileText, MapPin, Send, AlertCircle, Clock, CheckCircle, XCircle,
   Upload, LocateFixed, Zap, ImageIcon, FileWarning,
@@ -13,10 +14,33 @@ interface ClaimItem {
   id: string; claim_status: string; claim_reason: string; claim_mode?: string; claimed_at: string
   stated_lat?: number; stated_lng?: number
   trigger_events?: { trigger_code?: string; trigger_family?: string; severity_band?: string }
-  claim_evidence?: { storage_path?: string; evidence_type?: string }[]
   [key: string]: any
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
+
+interface ClaimsListResponse {
+  claims: ClaimItem[]
+}
+
+function formatSubmitError(error: unknown): string {
+  if (error instanceof BackendApiError) {
+    if (error.status === 401) {
+      return 'Session expired. Please sign in again.'
+    }
+
+    if (error.status === 409) {
+      return 'A similar claim already exists for this trigger event.'
+    }
+
+    if (error.status === 429) {
+      return 'You are submitting too frequently. Please wait and retry.'
+    }
+
+    return error.detail
+  }
+
+  return error instanceof Error ? error.message : 'Failed to submit claim'
+}
 
 export default function WorkerClaims() {
   const { user, profile } = useUserStore()
@@ -35,13 +59,13 @@ export default function WorkerClaims() {
   const [isDragging, setIsDragging] = useState(false)
 
   const loadClaims = useCallback(async () => {
+    if (!profile) {
+      return
+    }
+
     try {
-      const { data } = await supabase
-        .from('manual_claims')
-        .select('*, trigger_events(trigger_code, trigger_family, severity_band), claim_evidence(*)')
-        .eq('worker_profile_id', profile!.id)
-        .order('claimed_at', { ascending: false })
-      setClaims(data || [])
+      const response = await backendGet<ClaimsListResponse>(supabase, '/claims/')
+      setClaims(response.claims || [])
     } catch (e) { console.error("Could not load claims", e) }
   }, [supabase, profile])
 
@@ -60,26 +84,42 @@ export default function WorkerClaims() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); setIsSubmitting(true); setSubmitError(null)
     try {
-      let storagePath: string | null = null
-      if (file && user) {
+      let evidenceUrl: string | null = null
+
+      if (file) {
         setUploadingFile(true)
-        const fileExt = file.name.split('.').pop()
-        const fileName = `${user.id}-${Date.now()}.${fileExt}`
-        const { error: uploadError, data: uploadData } = await supabase.storage.from('claim-evidence').upload(fileName, file)
-        if (uploadError) throw new Error(`Evidence upload failed: ${uploadError.message}`)
-        storagePath = uploadData?.path || fileName
-        setUploadingFile(false)
+        try {
+          const fileExt = file.name.split('.').pop() || 'jpg'
+          const uploaderId = user?.id || profile?.id || 'worker'
+          const fileName = `${uploaderId}-${Date.now()}.${fileExt}`
+          const { error: uploadError, data: uploadData } = await supabase.storage
+            .from('claim-evidence')
+            .upload(fileName, file)
+
+          if (uploadError) {
+            throw new Error(`Evidence upload failed: ${uploadError.message}`)
+          }
+
+          const storedPath = uploadData?.path || fileName
+          const { data: publicUrlData } = supabase.storage
+            .from('claim-evidence')
+            .getPublicUrl(storedPath)
+          evidenceUrl = publicUrlData?.publicUrl || storedPath
+        } finally {
+          setUploadingFile(false)
+        }
       }
-      const { data: newClaim, error: insertError } = await supabase.from('manual_claims').insert({
-        worker_profile_id: profile!.id, claim_mode: 'manual', claim_reason: reason,
-        stated_lat: lat || null, stated_lng: lng || null, claim_status: 'submitted', claimed_at: new Date().toISOString(),
-      }).select().single()
-      if (insertError) throw new Error(insertError.message || 'Failed to submit claim')
-      if (newClaim && storagePath) {
-        await supabase.from('claim_evidence').insert({ claim_id: newClaim.id, evidence_type: 'photo', storage_path: storagePath })
-      }
+
+      await backendPost<{ status: string; claim: ClaimItem }>(supabase, '/claims/', {
+        claim_reason: reason,
+        stated_lat: lat || undefined,
+        stated_lng: lng || undefined,
+        evidence_url: evidenceUrl || undefined,
+        plan: 'essential',
+      })
+
       setReason(''); setLat(null); setLng(null); setFile(null); await loadClaims()
-    } catch (e: unknown) { setSubmitError(e instanceof Error ? e.message : 'Failed to submit claim') }
+    } catch (e: unknown) { setSubmitError(formatSubmitError(e)) }
     finally { setIsSubmitting(false) }
   }
 

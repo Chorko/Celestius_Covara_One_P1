@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useUserStore } from '@/store'
 import { createClient } from '@/lib/supabase'
+import { backendGet } from '@/lib/backendApi'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import {
   ShieldCheck,
@@ -19,6 +20,14 @@ import {
 } from 'lucide-react'
 import AnimatedCounter from '@/components/AnimatedCounter'
 import Skeleton from '@/components/Skeleton'
+
+interface ClaimStatusRow {
+  claim_status: string
+}
+
+interface ClaimsSummaryResponse {
+  claims: ClaimStatusRow[]
+}
 
 export default function WorkerDashboard() {
   const { profile } = useUserStore()
@@ -113,10 +122,9 @@ export default function WorkerDashboard() {
       // Claims summary — per-section loading
       (async () => {
         try {
-          const { data: claimData } = await supabase
-            .from('manual_claims')
-            .select('claim_status')
-            .eq('worker_profile_id', wData.profile_id)
+          const response = await backendGet<ClaimsSummaryResponse>(supabase, '/claims/')
+          const claimData = response.claims || []
+
           if (claimData) {
             const pending = claimData.filter(c => ['submitted', 'soft_hold_verification', 'fraud_escalated_review'].includes(c.claim_status)).length
             const approved = claimData.filter(c => ['approved', 'auto_approved', 'paid'].includes(c.claim_status)).length

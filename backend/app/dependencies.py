@@ -11,7 +11,7 @@ The backend verifies it against Supabase Auth and loads the user's profile/role.
 
 from fastapi import Depends, HTTPException, Request, status
 from supabase import Client
-from backend.app.supabase_client import get_supabase_anon
+from backend.app.supabase_client import get_supabase_admin, get_supabase_anon
 
 
 async def get_current_user(request: Request) -> dict:
@@ -39,11 +39,11 @@ async def get_current_user(request: Request) -> dict:
             detail="Empty access token.",
         )
 
-    sb: Client = get_supabase_anon()
+    sb_anon: Client = get_supabase_anon()
 
     # Verify the JWT with Supabase Auth
     try:
-        user_response = sb.auth.get_user(token)
+        user_response = sb_anon.auth.get_user(token)
         if not user_response or not user_response.user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -57,8 +57,11 @@ async def get_current_user(request: Request) -> dict:
         )
 
     # Load the user's profile (role + metadata) from the profiles table
+    # Profile lookup must use service-role client. The anon client is not bound
+    # to the bearer token session in this backend context, so RLS can hide rows.
+    sb_admin: Client = get_supabase_admin()
     profile_resp = (
-        sb.table("profiles")
+        sb_admin.table("profiles")
         .select("*")
         .eq("id", str(auth_user.id))
         .maybe_single()

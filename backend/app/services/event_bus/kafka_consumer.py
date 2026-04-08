@@ -24,21 +24,28 @@ logger = logging.getLogger("covara.kafka_consumer")
 def message_to_domain_event(message: dict[str, Any]) -> DomainEvent | None:
     """Map a Kafka payload into a DomainEvent instance."""
     event_type = message.get("event_type")
-    if not event_type:
+    event_id = message.get("event_id")
+
+    if not event_type or not event_id:
         return None
 
     payload = message.get("payload")
     if not isinstance(payload, dict):
         payload = {}
 
-    return DomainEvent(
-        event_id=str(message.get("event_id") or ""),
-        event_type=str(event_type),
-        occurred_at=str(message.get("occurred_at") or ""),
-        source=str(message.get("source") or "backend"),
-        key=(str(message.get("key")) if message.get("key") is not None else None),
-        payload=payload,
-    )
+    event_kwargs: dict[str, Any] = {
+        "event_id": str(event_id),
+        "event_type": str(event_type),
+        "source": str(message.get("source") or "backend"),
+        "key": (str(message.get("key")) if message.get("key") is not None else None),
+        "payload": payload,
+    }
+
+    occurred_at = message.get("occurred_at")
+    if occurred_at:
+        event_kwargs["occurred_at"] = str(occurred_at)
+
+    return DomainEvent(**event_kwargs)
 
 
 async def process_kafka_message(sb, message: dict[str, Any]) -> dict[str, Any]:
@@ -79,6 +86,7 @@ class KafkaEventConsumerRunner:
         self.poll_timeout_ms = poll_timeout_ms
         self.max_records = max_records
         self._consumer: Any = None
+        self._offset_and_metadata_cls: Any = None
 
     async def _ensure_consumer(self) -> None:
         if self._consumer is not None:
@@ -86,8 +94,11 @@ class KafkaEventConsumerRunner:
 
         try:
             from aiokafka import AIOKafkaConsumer
+            from aiokafka.structs import OffsetAndMetadata
         except Exception as exc:
             raise RuntimeError("aiokafka is required for Kafka event consumer") from exc
+
+        self._offset_and_metadata_cls = OffsetAndMetadata
 
         self._consumer = AIOKafkaConsumer(
             bootstrap_servers=self.bootstrap_servers,
@@ -95,7 +106,8 @@ class KafkaEventConsumerRunner:
             client_id=self.client_id,
             security_protocol=self.security_protocol,
             auto_offset_reset=self.auto_offset_reset,
-            enable_auto_commit=True,
+            # Manual commits are required so failed records are retried.
+            enable_auto_commit=False,
             value_deserializer=lambda value: json.loads(value.decode("utf-8")),
         )
 
@@ -117,6 +129,22 @@ class KafkaEventConsumerRunner:
 
         await self._consumer.stop()
         self._consumer = None
+        self._offset_and_metadata_cls = None
+
+    async def _commit_record_offset(self, topic_partition: Any, offset: int) -> None:
+        """Commit one successfully handled record offset for its partition."""
+        if self._consumer is None:
+            return
+
+        next_offset = int(offset) + 1
+        if self._offset_and_metadata_cls is not None:
+            commit_payload = {
+                topic_partition: self._offset_and_metadata_cls(next_offset, ""),
+            }
+        else:
+            commit_payload = {topic_partition: next_offset}
+
+        await self._consumer.commit(offsets=commit_payload)
 
     async def run_forever(self) -> None:
         try:
@@ -135,7 +163,7 @@ class KafkaEventConsumerRunner:
                     continue
 
                 sb = get_supabase_admin()
-                for records in batches.values():
+                for topic_partition, records in batches.items():
                     for record in records:
                         raw_message = record.value
                         if not isinstance(raw_message, dict):
@@ -144,10 +172,19 @@ class KafkaEventConsumerRunner:
                                 getattr(record, "topic", "unknown"),
                                 getattr(record, "offset", "unknown"),
                             )
+                            # Bad payloads are not recoverable; commit and move on.
+                            await self._commit_record_offset(
+                                topic_partition=topic_partition,
+                                offset=getattr(record, "offset", -1),
+                            )
                             continue
 
                         try:
                             await process_kafka_message(sb=sb, message=raw_message)
+                            await self._commit_record_offset(
+                                topic_partition=topic_partition,
+                                offset=getattr(record, "offset", -1),
+                            )
                         except Exception as exc:
                             logger.warning(
                                 "Kafka message processing failed topic=%s offset=%s error=%s",
@@ -155,6 +192,7 @@ class KafkaEventConsumerRunner:
                                 getattr(record, "offset", "unknown"),
                                 exc,
                             )
+                            # Do not commit on failure so Kafka can redeliver.
         except asyncio.CancelledError:
             raise
         finally:
