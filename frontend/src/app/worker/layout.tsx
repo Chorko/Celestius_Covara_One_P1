@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   FileText,
   CreditCard,
+  Coins,
   Shield,
   LogOut,
   Menu,
@@ -19,6 +20,7 @@ import {
 const NAV_ITEMS = [
   { href: '/worker/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/worker/claims', label: 'My Claims', icon: FileText },
+  { href: '/worker/rewards', label: 'Rewards', icon: Coins },
   { href: '/worker/pricing', label: 'Coverage', icon: CreditCard },
 ]
 

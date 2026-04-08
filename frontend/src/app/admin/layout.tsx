@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   FileSearch,
   Activity,
+  Database,
   Users,
   Shield,
   LogOut,
@@ -20,6 +21,7 @@ import {
 const NAV_ITEMS = [
   { href: '/admin/dashboard', label: 'Overview', icon: LayoutDashboard },
   { href: '/admin/reviews', label: 'Reviews', icon: FileSearch },
+  { href: '/admin/events', label: 'Event Ops', icon: Database },
   { href: '/admin/triggers', label: 'Triggers', icon: Activity },
   { href: '/admin/users', label: 'Users', icon: Users },
 ]

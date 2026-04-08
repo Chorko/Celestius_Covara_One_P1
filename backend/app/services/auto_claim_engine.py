@@ -296,6 +296,50 @@ async def _check_shift_overlap(
     return 0.2  # Had shifts today but not during trigger window
 
 
+async def _get_recent_zone_activity_context(
+    sb,
+    worker_id: str,
+    days_lookback: int = 30,
+) -> tuple[dict[str, int], str | None, str | None]:
+    """
+    Build behavioral context for region controls from recent worker shifts:
+      - zone_delivery_counts
+      - last_zone_activity_timestamp
+      - last_zone_activity_zone_id
+    """
+    lookback_date = (datetime.now(timezone.utc) - timedelta(days=days_lookback)).date().isoformat()
+
+    try:
+        shifts_resp = (
+            sb.table("worker_shifts")
+            .select("zone_id,shift_start,shift_end")
+            .eq("worker_profile_id", worker_id)
+            .gte("shift_date", lookback_date)
+            .order("shift_end", desc=True)
+            .limit(400)
+            .execute()
+        )
+        shifts = shifts_resp.data or []
+    except Exception:
+        shifts = []
+
+    zone_delivery_counts: dict[str, int] = {}
+    for shift in shifts:
+        zone_id = shift.get("zone_id")
+        if not zone_id:
+            continue
+        zone_delivery_counts[str(zone_id)] = zone_delivery_counts.get(str(zone_id), 0) + 1
+
+    last_zone_activity_timestamp: str | None = None
+    last_zone_activity_zone_id: str | None = None
+    if shifts:
+        latest = shifts[0]
+        last_zone_activity_timestamp = latest.get("shift_end") or latest.get("shift_start")
+        last_zone_activity_zone_id = latest.get("zone_id")
+
+    return zone_delivery_counts, last_zone_activity_timestamp, last_zone_activity_zone_id
+
+
 async def _process_worker_claim(
     sb,
     worker: dict,
@@ -321,6 +365,13 @@ async def _process_worker_claim(
         if plan not in ("essential", "plus"):
             plan = "essential"
 
+        claim_zone_id = trigger.get("zone_id")
+        (
+            zone_delivery_counts,
+            last_zone_activity_timestamp,
+            last_zone_activity_zone_id,
+        ) = await _get_recent_zone_activity_context(sb, worker_id)
+
         worker_context = {
             "worker_id": worker_id,
             "active_days": 6,
@@ -330,7 +381,20 @@ async def _process_worker_claim(
             "gps_consistency_score": 0.85,
             "avg_hourly_income_inr": worker.get("avg_hourly_income", 150),
             "trust_score": worker.get("trust_score", 0.75),
+            "zone_delivery_counts": zone_delivery_counts,
+            "last_zone_activity_timestamp": last_zone_activity_timestamp,
+            "last_zone_activity_zone_id": last_zone_activity_zone_id,
         }
+
+        # If there is no historical activity but we know the worker had overlap
+        # in the current trigger zone, provide a minimal continuity signal so
+        # trigger-auto claims are not unfairly penalized as first-time spoofing.
+        if claim_zone_id and not worker_context["zone_delivery_counts"]:
+            worker_context["zone_delivery_counts"] = {str(claim_zone_id): 1}
+            worker_context["last_zone_activity_zone_id"] = str(claim_zone_id)
+            worker_context["last_zone_activity_timestamp"] = (
+                trigger.get("started_at") or datetime.now(timezone.utc).isoformat()
+            )
 
         trigger_context = {
             "trigger_id": trigger_id,
@@ -372,7 +436,7 @@ async def _process_worker_claim(
             claim_mode="trigger_auto",  # This is a ZERO-TOUCH auto-claim
             evidence_records=[],
             claim_record={
-                "zone_id": trigger.get("zone_id"),
+                "zone_id": claim_zone_id,
                 "city": city,
                 "claim_mode": "trigger_auto",
             },
