@@ -1,19 +1,71 @@
+﻿# Docs - Documentation Index
+
+> This folder is the non-code explanation layer of the project. It contains architecture diagrams, formula references, pitch assets, and supporting documentation that allow judges and reviewers to understand the platform without inspecting source code.
+
+---
+
+This folder is the repository documentation index.
+
+## Core Documents
+
+- `IMPLEMENTATION_STATUS.md` - technical status and reference map
+- `DEPLOYMENT_RELEASE_RUNBOOK.md` - release/deploy/smoke/rollback process
+- `EVENT_BUS_KAFKA_ROADMAP.md` - event bus evolution and Kafka path
+- `MOBILE_DEVICE_CONTEXT_CONTRACT.md` - signed mobile telemetry contract
+
+## Diagrams
+
+Mermaid source files in `diagrams/`:
+
+- `overall-system-architecture.mmd`
+- `worker-journey.mmd`
+- `insurer-operations.mmd`
+- `trigger-to-claim-flow.mmd`
+- `fraud-detection-pipeline.mmd`
+
+## Static Assets
+
+Current chart/image assets in `assets/insurance/`:
+
+- `feature_importance.png`
+- `premium_payout_boxplot.png`
+
+## Suggested Reading Order
+
+1. [../README.md](../README.md)
+2. [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md)
+3. [../backend/README.md](../backend/README.md)
+4. [../frontend/README.md](../frontend/README.md)
+5. [../claim-engine/README.md](../claim-engine/README.md)
+6. [../fraud/README.md](../fraud/README.md)
+7. [../data/README.md](../data/README.md)
+8. [../ml/README.md](../ml/README.md)
+9. [../integrations/README.md](../integrations/README.md)
+10. [../caching/README.md](../caching/README.md)
+
+## Notes
+
+- Keep docs aligned with code paths and migration reality.
+- Avoid hardcoded test pass counts in docs unless generated in the same commit.
+- Prefer linking to source files over duplicating implementation details.
 # Docs — Documentation Index
 
 > This folder is the **non-code explanation layer** of the project. It contains architecture diagrams, formula references, pitch assets, and supporting documentation that allow judges and reviewers to understand the platform without inspecting source code.
 
 ---
 
-## Engineering Snapshot (2026-04-05)
+## Engineering Snapshot (2026-04-09)
 
 - Added event reliability runbook docs at `docs/EVENT_BUS_KAFKA_ROADMAP.md`.
 - Added signed mobile telemetry contract at `docs/MOBILE_DEVICE_CONTEXT_CONTRACT.md`.
 - Reliability hardening now includes outbox dead-letter + consumer dead-letter operational workflows with admin endpoints.
+- Added release/deployment hardening runbook at `docs/DEPLOYMENT_RELEASE_RUNBOOK.md`.
 
 ### New Docs Added
 
 - `docs/EVENT_BUS_KAFKA_ROADMAP.md` - event bus evolution, Kafka rollout stages, operational defaults, and safety notes.
 - `docs/MOBILE_DEVICE_CONTEXT_CONTRACT.md` - signed header contract, replay controls, key rotation, and compatibility requirements.
+- `docs/DEPLOYMENT_RELEASE_RUNBOOK.md` - CI release gates, strict env validation, compose/k8s apply order, smoke checks, and rollback steps.
 
 ---
 
@@ -234,3 +286,23 @@ A strong docs folder means judges do not need to guess what the product does, ho
 - Public threshold citations
 - Sample scenarios with numbers that make immediate sense
 - README system that explains itself without code inspection
+
+
+## April 2026 Repo Update Addendum
+
+### Newly implemented in current repo
+
+- Deployment release runbook now defines pre-release gates,
+  environment validation, smoke checks, and rollback guidance.
+- Event bus roadmap documents phased migration across in-memory,
+  durable outbox, and Kafka-backed operation.
+- Mobile device-context contract reflects v2 signing and replay protections.
+- Implementation status now tracks staging validation and planned migrations.
+
+### Planned and next tranche
+
+- Keep all module README updates synchronized with implementation milestones.
+- Add more operations evidence snapshots as reliability tests expand.
+- Extend diagram updates when event and payout workflows evolve.
+- Continue tightening release governance across environments.
+

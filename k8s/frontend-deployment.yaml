@@ -6,6 +6,13 @@ metadata:
     app: covara-frontend
 spec:
   replicas: 2
+  revisionHistoryLimit: 5
+  minReadySeconds: 10
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   selector:
     matchLabels:
       app: covara-frontend
@@ -14,13 +21,21 @@ spec:
       labels:
         app: covara-frontend
     spec:
+      terminationGracePeriodSeconds: 30
       containers:
       - name: covara-frontend
         image: covara-frontend:latest
         imagePullPolicy: IfNotPresent
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1001
+          runAsGroup: 1001
+          allowPrivilegeEscalation: false
         ports:
         - containerPort: 3000
         envFrom:
+        - configMapRef:
+            name: covara-config
         - secretRef:
             name: covara-secrets
         resources:
@@ -30,12 +45,28 @@ spec:
           limits:
             memory: "512Mi"
             cpu: "1000m"
+        startupProbe:
+          httpGet:
+            path: /
+            port: 3000
+          failureThreshold: 30
+          periodSeconds: 5
         livenessProbe:
           httpGet:
-            path: /api/live
+            path: /
             port: 3000
-          initialDelaySeconds: 15
+          initialDelaySeconds: 20
           periodSeconds: 20
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 5
 ---
 apiVersion: v1
 kind: Service

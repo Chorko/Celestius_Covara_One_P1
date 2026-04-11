@@ -14,6 +14,7 @@ from typing import Any
 from backend.app.config import settings
 from backend.app.services.event_bus.contracts import DomainEvent
 from backend.app.services.event_bus.factory import publish_domain_event
+from backend.app.services.observability import increment_counter, set_gauge, structured_log
 
 logger = logging.getLogger("covara.event_outbox")
 
@@ -83,10 +84,15 @@ def _mark_outbox_failure(
     if retry_count >= max_retries:
         update_payload["status"] = "dead_letter"
         update_payload["dead_lettered_at"] = _utc_now_iso()
+        increment_counter("event_outbox_dead_letter_total")
     else:
         update_payload["status"] = "failed"
 
     sb.table("event_outbox").update(update_payload).eq("event_id", event_id).execute()
+    increment_counter(
+        "event_outbox_publish_total",
+        labels={"status": str(update_payload["status"])},
+    )
     return str(update_payload["status"]), retry_count
 
 
@@ -113,6 +119,7 @@ async def _publish_and_mark_outbox_event(
                 "dead_lettered_at": None,
             }
         ).eq("event_id", event.event_id).execute()
+        increment_counter("event_outbox_publish_total", labels={"status": "processed"})
         return {
             "event_id": event.event_id,
             "status": "processed",
@@ -168,6 +175,7 @@ async def enqueue_domain_event(
     }
 
     sb.table("event_outbox").insert(row).execute()
+    increment_counter("event_outbox_enqueued_total", labels={"event_type": event_type})
 
     should_publish_now = (
         settings.event_bus_publish_on_write
@@ -188,7 +196,14 @@ async def enqueue_domain_event(
         previous_retry_count=0,
     )
     if result.get("status") != "processed":
-        logger.warning("Immediate outbox publish failed for event_id=%s", event.event_id)
+        structured_log(
+            logger,
+            logging.WARNING,
+            "event_outbox.publish_immediate_failed",
+            event_id=event.event_id,
+            status=result.get("status"),
+            retry_count=result.get("retry_count"),
+        )
     return result
 
 
@@ -283,7 +298,12 @@ async def persist_claim_with_outbox(
             )
             return publish_result
         except Exception as exc:
-            logger.warning("Transactional RPC persist failed, using fallback path: %s", exc)
+            structured_log(
+                logger,
+                logging.WARNING,
+                "event_outbox.persist_rpc_failed",
+                error=str(exc),
+            )
 
     try:
         claim_response = sb.table("manual_claims").insert(claim_row).execute()
@@ -346,6 +366,7 @@ async def relay_pending_outbox_events(sb, batch_size: int = 100) -> dict[str, in
 
     rows = response.data or []
     if not rows:
+        set_gauge("event_outbox_pending", 0)
         return {
             "fetched": 0,
             "processed": 0,
@@ -380,6 +401,14 @@ async def relay_pending_outbox_events(sb, batch_size: int = 100) -> dict[str, in
         else:
             failed += 1
 
+    increment_counter("event_outbox_relay_batches_total")
+    increment_counter("event_outbox_relay_processed_total", amount=processed)
+    increment_counter("event_outbox_relay_failed_total", amount=failed)
+    increment_counter("event_outbox_relay_dead_lettered_total", amount=dead_lettered)
+    set_gauge("event_outbox_pending", len(rows))
+    set_gauge("event_outbox_relay_failed_last_batch", failed)
+    set_gauge("event_outbox_relay_dead_lettered_last_batch", dead_lettered)
+
     return {
         "fetched": len(rows),
         "processed": processed,
@@ -409,6 +438,9 @@ async def get_outbox_status_counts(sb) -> dict[str, int]:
             counts[status] += 1
 
     counts["total"] = len(rows)
+    set_gauge("event_outbox_count_pending", counts["pending"])
+    set_gauge("event_outbox_count_failed", counts["failed"])
+    set_gauge("event_outbox_count_dead_letter", counts["dead_letter"])
     return counts
 
 
@@ -473,6 +505,8 @@ async def requeue_dead_letter_outbox_events(
             .execute()
         )
         requeued += 1
+
+    increment_counter("event_outbox_requeue_total", amount=requeued)
 
     return {
         "selected": len(rows),

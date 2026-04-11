@@ -29,6 +29,15 @@ from ..services.kyc_service import (
 router = APIRouter(prefix="/kyc", tags=["KYC & Verification"])
 
 
+def _kyc_error_detail(result: dict, fallback: str) -> dict:
+    detail = {
+        "error": result.get("error", fallback),
+    }
+    if "provider_status_code" in result:
+        detail["provider_status_code"] = result.get("provider_status_code")
+    return detail
+
+
 # ── Request Models ───────────────────────────────────────────────────
 
 class SendOTPRequest(BaseModel):
@@ -119,7 +128,7 @@ async def initiate_aadhaar_kyc(body: AadhaarInitiateRequest):
 
     result = await aadhaar_generate_otp(body.aadhaar_number)
     if not result.get("success"):
-        raise HTTPException(status_code=400, detail=result.get("error", "Aadhaar OTP failed"))
+        raise HTTPException(status_code=400, detail=_kyc_error_detail(result, "Aadhaar OTP failed"))
 
     return {
         "reference_id": result.get("reference_id"),
@@ -136,7 +145,7 @@ async def verify_aadhaar_kyc(body: AadhaarVerifyRequest):
     """
     result = await aadhaar_verify_otp(body.reference_id, body.otp)
     if not result.get("success"):
-        raise HTTPException(status_code=400, detail=result.get("error", "Aadhaar verify failed"))
+        raise HTTPException(status_code=400, detail=_kyc_error_detail(result, "Aadhaar verify failed"))
     if not result.get("verified"):
         raise HTTPException(status_code=422, detail="OTP incorrect or Aadhaar not verified")
 
@@ -167,7 +176,7 @@ async def verify_bank(body: BankVerifyRequest):
     """
     result = await verify_bank_account(body.account_number, body.ifsc)
     if not result.get("success"):
-        raise HTTPException(status_code=400, detail=result.get("error", "Bank verify failed"))
+        raise HTTPException(status_code=400, detail=_kyc_error_detail(result, "Bank verify failed"))
     if not result.get("verified"):
         raise HTTPException(status_code=422, detail="Bank account could not be verified")
 
@@ -191,7 +200,7 @@ async def verify_pan_card(body: PANVerifyRequest):
     """
     result = await verify_pan(body.pan_number.upper())
     if not result.get("success"):
-        raise HTTPException(status_code=400, detail=result.get("error", "PAN verify failed"))
+        raise HTTPException(status_code=400, detail=_kyc_error_detail(result, "PAN verify failed"))
 
     return {
         "verified": result.get("verified", False),

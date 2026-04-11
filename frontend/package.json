@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "validate:env": "node ./scripts/validate-env.mjs",
+    "build": "npm run validate:env && next build",
     "start": "next start",
     "lint": "eslint"
   },

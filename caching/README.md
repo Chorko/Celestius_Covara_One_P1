@@ -1,4 +1,4 @@
-# Caching — Cache Strategy & TTL Policies
+﻿# Caching — Cache Strategy & TTL Policies
 
 > External signal fetching, repeated dashboard loading, and repeated claim simulations can create unnecessary load. The cache avoids repeated recomputation and makes the demo feel fast.
 
@@ -114,3 +114,20 @@ This folder exists so we do not repeatedly fetch or recompute the same environme
 **Implementation detail:** `fastapi-cache2[redis]` is initialized in `backend/app/main.py` lifespan. If Redis is unavailable (e.g. localhost without Docker), the app logs a warning and continues serving live traffic — all cached endpoints degrade gracefully to direct DB queries. This ensures zero downtime on cache failures.
 
 The caching layer makes the demo flow faster and more realistic during hackathon evaluation, and provides a production-hardened TTL pattern ready for scale.
+
+
+## April 2026 Repo Update Addendum
+
+### Newly implemented in current repo
+
+- Redis-backed fastapi-cache2 integration is active with graceful fallback.
+- High-traffic read endpoints use TTL-based caching for dashboard responsiveness.
+- Startup path tolerates cache unavailability without request-path downtime.
+
+### Planned and next tranche
+
+- Add selective cache invalidation patterns for event-driven updates.
+- Improve cache observability to expose hit-rate and stale-read trends.
+- Evaluate stampede prevention for bursty trigger workloads.
+- Extend TTL governance guidance per endpoint criticality.
+

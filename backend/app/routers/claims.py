@@ -8,20 +8,37 @@ Handles:
 - POST /claims/{id}/review (Admin review action)
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+import logging
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from backend.app.config import settings
 from backend.app.dependencies import get_current_user, require_insurer_admin
 from backend.app.supabase_client import get_supabase_admin
 from backend.app.services.claim_pipeline import run_claim_pipeline
-from backend.app.services.device_context_security import verify_signed_device_context
+from backend.app.services.device_context_security import (
+    summarize_device_context_trust,
+    verify_signed_device_context,
+)
 from backend.app.services.event_bus.outbox import enqueue_domain_event, persist_claim_with_outbox
 from backend.app.services.evidence import extract_exif_metadata
 from backend.app.services.gemini_analysis import generate_claim_narrative
+from backend.app.services.observability import increment_counter, structured_log
+from backend.app.services.payout_workflow import (
+    get_payout_trace_for_claim,
+    initiate_payout_for_claim,
+)
+from backend.app.services.review_workflow import (
+    TERMINAL_CLAIM_STATUSES,
+    build_review_meta,
+    compute_review_due_at,
+)
 from backend.app.rate_limit import limiter
 import httpx
 
 router = APIRouter(prefix="/claims", tags=["Claims"])
+logger = logging.getLogger("covara.claims")
 
 
 class ManualClaimRequest(BaseModel):
@@ -39,6 +56,95 @@ class AdminReviewRequest(BaseModel):
     decision_reason: str | None = None
 
 
+class AssignClaimRequest(BaseModel):
+    reviewer_profile_id: str | None = None
+    due_in_hours: int | None = None
+    assignment_note: str | None = None
+
+
+def _now_iso() -> str:
+    return (
+        datetime.now(timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
+
+
+def _request_id(request: Request | None) -> str | None:
+    if request is None:
+        return None
+
+    state_id = getattr(getattr(request, "state", None), "request_id", None)
+    if state_id:
+        return str(state_id)
+
+    header_id = request.headers.get("X-Request-ID") or request.headers.get("X-Correlation-ID")
+    if header_id:
+        return header_id
+
+    return None
+
+
+def _load_reviewer_name_map(sb, reviewer_ids: list[str]) -> dict[str, str]:
+    if not reviewer_ids:
+        return {}
+
+    rows = (
+        sb.table("profiles")
+        .select("id, full_name")
+        .in_("id", reviewer_ids)
+        .execute()
+        .data
+        or []
+    )
+    return {
+        row["id"]: row.get("full_name") or row["id"]
+        for row in rows
+        if row.get("id")
+    }
+
+
+def _prepare_review_meta(claim: dict, reviewer_name_map: dict[str, str], user: dict) -> dict:
+    reviewer_user_id = user.get("id") if user.get("role") == "insurer_admin" else None
+    return build_review_meta(
+        claim=claim,
+        reviewer_names_by_id=reviewer_name_map,
+        current_user_id=reviewer_user_id,
+        due_soon_hours=settings.review_sla_due_soon_hours,
+    )
+
+
+def _extract_device_trust_from_payout_row(payout_row: dict | None) -> dict | None:
+    if not isinstance(payout_row, dict):
+        return None
+
+    explanation = payout_row.get("explanation_json")
+    if not isinstance(explanation, dict):
+        return None
+
+    direct_summary = explanation.get("device_trust")
+    if isinstance(direct_summary, dict):
+        return direct_summary
+
+    fraud_layers = (
+        explanation.get("fraud_analysis", {})
+        .get("layers", {})
+        .get("anti_spoofing", {})
+    )
+    if not isinstance(fraud_layers, dict):
+        return None
+
+    device_flags = fraud_layers.get("flags_fired")
+    return {
+        "device_trust_tier": fraud_layers.get("device_trust_tier"),
+        "device_trust_score": fraud_layers.get("device_trust_score"),
+        "signal_confidence": fraud_layers.get("signal_confidence"),
+        "attestation_verdict": fraud_layers.get("attestation_verdict"),
+        "risk_signals": device_flags if isinstance(device_flags, list) else [],
+    }
+
+
 @router.post("")
 @router.post("/")
 @limiter.limit("5/minute")
@@ -47,6 +153,16 @@ async def submit_claim(
 ):
     """Submit a manual claim."""
     sb = get_supabase_admin()
+    request_id = _request_id(request)
+
+    structured_log(
+        logger,
+        logging.INFO,
+        "claim.submit.started",
+        request_id=request_id,
+        worker_profile_id=user.get("id"),
+        trigger_event_id=body.trigger_event_id,
+    )
 
     # Optional mobile device context payload (cryptographically signed).
     raw_device_context = request.headers.get("X-Device-Context")
@@ -65,17 +181,51 @@ async def submit_claim(
     # Backward compatible: web clients without context continue to work.
     # But if a context blob is sent, it must be validly signed.
     if raw_device_context and not context_verification.verified:
+        increment_counter(
+            "claim_submission_total",
+            labels={"outcome": "invalid_device_context"},
+        )
+        structured_log(
+            logger,
+            logging.WARNING,
+            "claim.submit.rejected.invalid_device_context",
+            request_id=request_id,
+            worker_profile_id=user.get("id"),
+            verification_reason=context_verification.reason,
+        )
         raise HTTPException(
             status_code=400,
             detail=f"Invalid signed device context: {context_verification.reason}",
         )
 
+    context_present = bool(raw_device_context)
+    signature_verified = bool(context_present and context_verification.verified)
+
     device_context = dict(context_verification.context)
-    if device_context:
-        device_context["signature_verified"] = context_verification.verified
-        device_context["signature_reason"] = context_verification.reason
-        if context_verification.key_id:
-            device_context["key_id"] = context_verification.key_id
+    trust_summary = summarize_device_context_trust(
+        context=device_context,
+        context_present=context_present,
+        signature_verified=signature_verified,
+    )
+    device_context["context_present"] = context_present
+    device_context["signature_verified"] = signature_verified
+    device_context["signature_reason"] = context_verification.reason
+    device_context["schema_version"] = context_verification.schema_version
+    device_context["nonce"] = context_verification.nonce
+    device_context["device_trust_score"] = trust_summary["device_trust_score"]
+    device_context["device_trust_tier"] = trust_summary["device_trust_tier"]
+    device_context["device_risk_signals"] = trust_summary["risk_signals"]
+    if context_verification.key_id:
+        device_context["key_id"] = context_verification.key_id
+
+    if trust_summary.get("device_trust_tier") in {"low", "high_risk"}:
+        increment_counter(
+            "claim_device_trust_degraded_total",
+            labels={
+                "tier": str(trust_summary.get("device_trust_tier") or "unknown"),
+                "signature_verified": str(signature_verified).lower(),
+            },
+        )
 
     # Validate plan
     if body.plan not in ("essential", "plus"):
@@ -130,7 +280,14 @@ async def submit_claim(
                 }
             )
         except Exception as e:
-            print(f"Failed to fetch or parse evidence image: {e}")
+            structured_log(
+                logger,
+                logging.WARNING,
+                "claim.submit.evidence_parse_failed",
+                request_id=request_id,
+                worker_profile_id=user.get("id"),
+                error=str(e),
+            )
             # Still append record but without EXIF if fetching failed
             evidence_records.append(
                 {"evidence_type": "photo", "storage_path": body.evidence_url}
@@ -155,14 +312,16 @@ async def submit_claim(
     )
 
     pipeline_result["device_context_security"] = {
-        "context_present": bool(raw_device_context),
-        "signature_verified": context_verification.verified,
+        "context_present": context_present,
+        "signature_verified": signature_verified,
         "verification_reason": context_verification.reason,
         "timestamp": context_verification.timestamp,
         "key_id": context_verification.key_id,
         "schema_version": context_verification.schema_version,
         "nonce": context_verification.nonce,
+        "trust_summary": trust_summary,
     }
+    pipeline_result["device_trust"] = trust_summary
 
     # Build persistence rows
     initial_status = "submitted"
@@ -176,6 +335,8 @@ async def submit_claim(
         "stated_lng": body.stated_lng,
         "shift_id": body.shift_id,
         "claim_status": initial_status,
+        "assignment_state": "unassigned",
+        "review_due_at": compute_review_due_at(None, settings.review_sla_hours),
     }
 
     # Generate Admin Assistive AI Summary
@@ -214,6 +375,7 @@ async def submit_claim(
         "plan": body.plan,
         "device_context_present": bool(raw_device_context),
         "signature_verified": context_verification.verified,
+        "request_id": request_id,
     }
 
     persist_result = await persist_claim_with_outbox(
@@ -227,6 +389,18 @@ async def submit_claim(
     )
 
     if persist_result.get("duplicate_skipped"):
+        increment_counter(
+            "claim_submission_total",
+            labels={"outcome": "duplicate_skipped"},
+        )
+        structured_log(
+            logger,
+            logging.WARNING,
+            "claim.submit.duplicate_skipped",
+            request_id=request_id,
+            worker_profile_id=user.get("id"),
+            trigger_event_id=body.trigger_event_id,
+        )
         raise HTTPException(
             status_code=409,
             detail="Duplicate worker-event claim detected.",
@@ -250,6 +424,20 @@ async def submit_claim(
     )
     new_claim = claim_resp.data or {**claim_insert, "id": claim_id}
 
+    increment_counter(
+        "claim_submission_total",
+        labels={"outcome": "created"},
+    )
+    structured_log(
+        logger,
+        logging.INFO,
+        "claim.submit.completed",
+        request_id=request_id,
+        worker_profile_id=user.get("id"),
+        claim_id=claim_id,
+        trust_tier=trust_summary.get("device_trust_tier"),
+    )
+
     return {
         "status": "created",
         "claim": new_claim,
@@ -259,9 +447,13 @@ async def submit_claim(
 
 @router.get("")
 @router.get("/")
-async def list_claims(user: dict = Depends(get_current_user)):
+async def list_claims(
+    queue: str = Query("all", description="all | mine | unassigned | overdue"),
+    user: dict = Depends(get_current_user),
+):
     """List claims. Workers see their own; Admins see all."""
     sb = get_supabase_admin()
+    queue_key = (queue or "all").strip().lower()
 
     query = sb.table("manual_claims").select(
         "*, worker_profiles(city, platform_name), trigger_events(trigger_family)"
@@ -270,8 +462,67 @@ async def list_claims(user: dict = Depends(get_current_user)):
     if user["role"] == "worker":
         query = query.eq("worker_profile_id", user["id"])
 
-    resp = query.order("claimed_at", desc=True).limit(50).execute()
-    return {"claims": resp.data}
+    resp = query.order("claimed_at", desc=True).limit(100).execute()
+    claims = resp.data or []
+
+    if user["role"] == "worker":
+        return {"claims": claims}
+
+    reviewer_ids = sorted(
+        {
+            c.get("assigned_reviewer_profile_id")
+            for c in claims
+            if c.get("assigned_reviewer_profile_id")
+        }
+    )
+    reviewer_name_map = _load_reviewer_name_map(sb, reviewer_ids)
+
+    for claim in claims:
+        meta = _prepare_review_meta(claim, reviewer_name_map, user)
+        claim["review_meta"] = meta
+        if meta.get("assigned_reviewer_profile_id"):
+            claim["assigned_reviewer"] = {
+                "id": meta.get("assigned_reviewer_profile_id"),
+                "full_name": meta.get("assigned_reviewer_name"),
+            }
+
+    if queue_key == "mine":
+        claims = [
+            c
+            for c in claims
+            if c.get("review_meta", {}).get("assigned_reviewer_profile_id")
+            == user["id"]
+        ]
+    elif queue_key == "unassigned":
+        claims = [
+            c
+            for c in claims
+            if c.get("review_meta", {}).get("assignment_state") == "unassigned"
+        ]
+    elif queue_key == "overdue":
+        claims = [
+            c
+            for c in claims
+            if c.get("review_meta", {}).get("sla_status") == "overdue"
+        ]
+
+    def _sort_claim(item: dict):
+        meta = item.get("review_meta", {})
+        status_rank = {
+            "overdue": 0,
+            "due_soon": 1,
+            "on_track": 2,
+            "not_set": 3,
+            "escalated": 4,
+            "resolved": 5,
+        }
+        sla_rank = status_rank.get(meta.get("sla_status"), 9)
+        hours_to_due = meta.get("hours_to_due")
+        due_rank = hours_to_due if isinstance(hours_to_due, (float, int)) else 10_000
+        return (sla_rank, due_rank)
+
+    claims.sort(key=_sort_claim)
+    return {"claims": claims, "queue": queue_key}
 
 
 @router.get("/{claim_id}")
@@ -320,12 +571,163 @@ async def get_claim_detail(
         .eq("claim_id", claim_id)
         .execute()
     )
+    payout_trace = get_payout_trace_for_claim(sb, claim_id)
+    device_trust = _extract_device_trust_from_payout_row(payout_resp.data)  # type: ignore[arg-type]
+
+    reviewer_name_map: dict[str, str] = {}
+    assigned_reviewer_id = claim_data.get("assigned_reviewer_profile_id")
+    if assigned_reviewer_id:
+        reviewer_name_map = _load_reviewer_name_map(sb, [assigned_reviewer_id])
+
+    claim_data["review_meta"] = _prepare_review_meta(
+        claim_data,
+        reviewer_name_map,
+        user,
+    )
+    if assigned_reviewer_id:
+        claim_data["assigned_reviewer"] = {
+            "id": assigned_reviewer_id,
+            "full_name": reviewer_name_map.get(assigned_reviewer_id),
+        }
 
     return {
         "claim": claim_data,
         "evidence": evidence_resp.data,
         "payout_recommendation": payout_resp.data,  # type: ignore
+        "payout_trace": payout_trace,
+        "device_trust": device_trust,
         "reviews": review_resp.data,
+    }
+
+
+@router.post(
+    "/{claim_id}/assign", dependencies=[Depends(require_insurer_admin)]
+)
+async def assign_claim(
+    claim_id: str,
+    body: AssignClaimRequest,
+    request: Request,
+    user: dict = Depends(get_current_user),
+):
+    """Assign claim ownership and SLA due timestamp for review operations."""
+    sb = get_supabase_admin()
+    request_id = _request_id(request)
+    claim_resp = (
+        sb.table("manual_claims")
+        .select(
+            "id, claimed_at, claim_status, assigned_reviewer_profile_id, assignment_state, review_due_at"
+        )
+        .eq("id", claim_id)
+        .maybe_single()
+        .execute()
+    )
+    claim_row = claim_resp.data
+    if not claim_row:
+        raise HTTPException(status_code=404, detail="Claim not found")
+
+    if claim_row.get("claim_status") in TERMINAL_CLAIM_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot reassign a claim in terminal status.",
+        )
+
+    reviewer_id = body.reviewer_profile_id or user["id"]
+    reviewer_exists = (
+        sb.table("insurer_profiles")
+        .select("profile_id")
+        .eq("profile_id", reviewer_id)
+        .maybe_single()
+        .execute()
+        .data
+    )
+    if not reviewer_exists:
+        raise HTTPException(
+            status_code=400,
+            detail="Assigned reviewer must be a valid insurer admin profile.",
+        )
+
+    due_hours = body.due_in_hours or settings.review_sla_hours
+    if due_hours < 1 or due_hours > 240:
+        raise HTTPException(
+            status_code=400,
+            detail="due_in_hours must be between 1 and 240.",
+        )
+
+    now_iso = _now_iso()
+    update_payload = {
+        "assigned_reviewer_profile_id": reviewer_id,
+        "assignment_state": "assigned",
+        "assigned_at": now_iso,
+        "review_due_at": compute_review_due_at(claim_row.get("claimed_at"), due_hours),
+    }
+
+    sb.table("manual_claims").update(update_payload).eq("id", claim_id).execute()
+
+    sb.table("audit_events").insert(
+        {
+            "entity_type": "claim",
+            "entity_id": claim_id,
+            "action_type": "claim_assigned",
+            "actor_profile_id": user["id"],
+            "event_payload": {
+                "reviewer_profile_id": reviewer_id,
+                "due_in_hours": due_hours,
+                "assignment_note": body.assignment_note,
+                "request_id": request_id,
+            },
+        }
+    ).execute()
+
+    try:
+        await enqueue_domain_event(
+            sb=sb,
+            event_type="claim.assigned",
+            key=claim_id,
+            source="claims.assign_claim",
+            payload={
+                "claim_id": claim_id,
+                "assigned_reviewer_profile_id": reviewer_id,
+                "assigned_by": user["id"],
+                "review_due_at": update_payload["review_due_at"],
+                "request_id": request_id,
+            },
+        )
+    except Exception as e:
+        structured_log(
+            logger,
+            logging.WARNING,
+            "claim.assign.event_publish_failed",
+            request_id=request_id,
+            claim_id=claim_id,
+            error=str(e),
+        )
+
+    updated_claim = {
+        **claim_row,
+        **update_payload,
+    }
+    reviewer_name_map = _load_reviewer_name_map(sb, [reviewer_id])
+    meta = _prepare_review_meta(updated_claim, reviewer_name_map, user)
+
+    increment_counter(
+        "claim_assignment_total",
+        labels={"outcome": "assigned"},
+    )
+    structured_log(
+        logger,
+        logging.INFO,
+        "claim.assign.completed",
+        request_id=request_id,
+        claim_id=claim_id,
+        assigned_reviewer_profile_id=reviewer_id,
+        due_in_hours=due_hours,
+    )
+
+    return {
+        "status": "assigned",
+        "claim_id": claim_id,
+        "assigned_reviewer_profile_id": reviewer_id,
+        "review_meta": meta,
     }
 
 
@@ -335,10 +737,32 @@ async def get_claim_detail(
 async def admin_review_claim(
     claim_id: str,
     body: AdminReviewRequest,
+    request: Request,
     user: dict = Depends(get_current_user),
 ):
     """Submit a manual decision/review for a claim."""
     sb = get_supabase_admin()
+    request_id = _request_id(request)
+
+    claim_resp = (
+        sb.table("manual_claims")
+        .select(
+            "id, claimed_at, claim_status, assigned_reviewer_profile_id, assignment_state, assigned_at, first_reviewed_at, review_due_at"
+        )
+        .eq("id", claim_id)
+        .maybe_single()
+        .execute()
+    )
+    claim_row = claim_resp.data
+    if not claim_row:
+        raise HTTPException(status_code=404, detail="Claim not found")
+
+    owner_id = claim_row.get("assigned_reviewer_profile_id")
+    if owner_id and owner_id != user["id"]:
+        raise HTTPException(
+            status_code=409,
+            detail="Claim is assigned to another reviewer.",
+        )
 
     sb.table("claim_reviews").insert(
         {
@@ -359,9 +783,29 @@ async def admin_review_claim(
     }
 
     new_status = status_mapping.get(body.decision, "soft_hold_verification")
-    sb.table("manual_claims").update({"claim_status": new_status}).eq(
-        "id", claim_id
-    ).execute()
+    now_iso = _now_iso()
+    claim_update = {
+        "claim_status": new_status,
+        "last_reviewed_at": now_iso,
+        "assigned_reviewer_profile_id": owner_id or user["id"],
+        "assigned_at": claim_row.get("assigned_at") or now_iso,
+        "review_due_at": claim_row.get("review_due_at")
+        or compute_review_due_at(claim_row.get("claimed_at"), settings.review_sla_hours),
+    }
+
+    if not claim_row.get("first_reviewed_at"):
+        claim_update["first_reviewed_at"] = now_iso
+
+    if body.decision == "escalate":
+        claim_update["assignment_state"] = "escalated"
+        claim_update["escalated_at"] = now_iso
+        claim_update["escalation_reason"] = body.decision_reason
+    elif body.decision in {"approve", "reject", "flag_post_approval"}:
+        claim_update["assignment_state"] = "resolved"
+    else:
+        claim_update["assignment_state"] = "in_review"
+
+    sb.table("manual_claims").update(claim_update).eq("id", claim_id).execute()
 
     # Audit log (using new audit_events table)
     sb.table("audit_events").insert(
@@ -370,7 +814,12 @@ async def admin_review_claim(
             "entity_id": claim_id,
             "action_type": f"claim_reviewed_{body.decision}",
             "actor_profile_id": user["id"],
-            "event_payload": body.model_dump(),
+            "event_payload": {
+                **body.model_dump(),
+                "assignment_state": claim_update.get("assignment_state"),
+                "review_due_at": claim_update.get("review_due_at"),
+                "request_id": request_id,
+            },
         }
     ).execute()
 
@@ -386,15 +835,68 @@ async def admin_review_claim(
                 "decision": body.decision,
                 "decision_reason": body.decision_reason,
                 "resulting_status": new_status,
+                "assignment_state": claim_update.get("assignment_state"),
+                "request_id": request_id,
             },
         )
     except Exception as e:
-        print(f"WARN: event publish failed for claim.reviewed: {e}")
+        structured_log(
+            logger,
+            logging.WARNING,
+            "claim.review.event_publish_failed",
+            request_id=request_id,
+            claim_id=claim_id,
+            decision=body.decision,
+            error=str(e),
+        )
+
+    payout_result = None
+    if body.decision == "approve":
+        try:
+            payout_result = await initiate_payout_for_claim(
+                sb,
+                claim_id=claim_id,
+                initiated_by_profile_id=user["id"],
+                trigger_source="claims.admin_review_claim",
+                request_id=request_id,
+                force_retry=False,
+                initiation_note="auto_initiated_from_review_approval",
+            )
+        except ValueError as e:
+            payout_result = {
+                "status": "not_initiated",
+                "reason": str(e),
+            }
+        except Exception as e:
+            payout_result = {
+                "status": "initiation_error",
+                "reason": str(e),
+            }
+
+    increment_counter(
+        "claim_review_actions_total",
+        labels={
+            "decision": body.decision,
+            "resulting_status": new_status,
+        },
+    )
+    structured_log(
+        logger,
+        logging.INFO,
+        "claim.review.completed",
+        request_id=request_id,
+        claim_id=claim_id,
+        reviewer_profile_id=user.get("id"),
+        decision=body.decision,
+        resulting_status=new_status,
+    )
 
     return {
         "status": "reviewed",
         "claim_id": claim_id,
         "decision": body.decision,
+        "assignment_state": claim_update.get("assignment_state"),
+        "payout": payout_result,
     }
 
 
@@ -412,6 +914,7 @@ class PostApprovalFlagRequest(BaseModel):
 async def flag_post_approval(
     claim_id: str,
     body: PostApprovalFlagRequest,
+    request: Request,
     user: dict = Depends(get_current_user),
 ):
     """
@@ -423,6 +926,7 @@ async def flag_post_approval(
     )
 
     sb = get_supabase_admin()
+    request_id = _request_id(request)
 
     # Validate the claim exists and is in an approved/paid state
     claim_resp = (
@@ -443,6 +947,13 @@ async def flag_post_approval(
             detail=f"Claim must be approved/paid to flag. Current: {claim_data['claim_status']}",
         )
 
+    owner_id = claim_data.get("assigned_reviewer_profile_id")
+    if owner_id and owner_id != user["id"]:
+        raise HTTPException(
+            status_code=409,
+            detail="Claim is assigned to another reviewer.",
+        )
+
     # Apply trust score penalty
     worker_profile = claim_data.get("worker_profiles", {})
     current_trust = float(worker_profile.get("trust_score", 0.8) or 0.8)
@@ -451,9 +962,17 @@ async def flag_post_approval(
         fraud_severity=body.fraud_severity,
     )
 
-    # Update claim status to post_approval_flagged
+    now_iso = _now_iso()
+    # Update claim status to post_approval_flagged and close assignment loop.
     sb.table("manual_claims").update(
-        {"claim_status": "post_approval_flagged"}
+        {
+            "claim_status": "post_approval_flagged",
+            "assignment_state": "resolved",
+            "assigned_reviewer_profile_id": owner_id or user["id"],
+            "assigned_at": claim_data.get("assigned_at") or now_iso,
+            "first_reviewed_at": claim_data.get("first_reviewed_at") or now_iso,
+            "last_reviewed_at": now_iso,
+        }
     ).eq("id", claim_id).execute()
 
     # Downgrade worker trust score
@@ -487,9 +1006,24 @@ async def flag_post_approval(
                 "fraud_severity": body.fraud_severity,
                 "reason": body.reason,
                 "penalty_result": penalty_result,
+                "request_id": request_id,
             },
         }
     ).execute()
+
+    increment_counter(
+        "claim_post_approval_flags_total",
+        labels={"severity": body.fraud_severity},
+    )
+    structured_log(
+        logger,
+        logging.WARNING,
+        "claim.flagged_post_approval",
+        request_id=request_id,
+        claim_id=claim_id,
+        reviewer_profile_id=user.get("id"),
+        severity=body.fraud_severity,
+    )
 
     return {
         "status": "flagged",
@@ -523,6 +1057,16 @@ async def auto_process_claims(request: Request, lookback_hours: int = 6):
     """
     from backend.app.services.auto_claim_engine import run_auto_claim_engine
     sb = get_supabase_admin()
+    request_id = _request_id(request)
+
+    structured_log(
+        logger,
+        logging.INFO,
+        "claims.auto_process.started",
+        request_id=request_id,
+        lookback_hours=lookback_hours,
+    )
+
     result = await run_auto_claim_engine(sb, lookback_hours=lookback_hours)
 
     try:
@@ -540,10 +1084,54 @@ async def auto_process_claims(request: Request, lookback_hours: int = 6):
                 "claims_held": result.get("claims_held", 0),
                 "claims_rejected": result.get("claims_rejected", 0),
                 "duplicates_skipped": result.get("duplicates_skipped", 0),
+                "request_id": request_id,
             },
         )
     except Exception as e:
-        print(f"WARN: event publish failed for claims.auto_process.completed: {e}")
+        structured_log(
+            logger,
+            logging.WARNING,
+            "claims.auto_process.event_publish_failed",
+            request_id=request_id,
+            error=str(e),
+        )
+
+    increment_counter(
+        "claims_auto_process_runs_total",
+        labels={"outcome": "completed"},
+    )
+    increment_counter(
+        "claims_auto_process_claims_total",
+        amount=int(result.get("claims_auto_approved", 0)),
+        labels={"outcome": "auto_approved"},
+    )
+    increment_counter(
+        "claims_auto_process_claims_total",
+        amount=int(result.get("claims_needs_review", 0)),
+        labels={"outcome": "needs_review"},
+    )
+    increment_counter(
+        "claims_auto_process_claims_total",
+        amount=int(result.get("claims_held", 0)),
+        labels={"outcome": "held"},
+    )
+    increment_counter(
+        "claims_auto_process_claims_total",
+        amount=int(result.get("claims_rejected", 0)),
+        labels={"outcome": "rejected"},
+    )
+    structured_log(
+        logger,
+        logging.INFO,
+        "claims.auto_process.completed",
+        request_id=request_id,
+        triggers_scanned=result.get("triggers_scanned", 0),
+        workers_eligible=result.get("workers_eligible", 0),
+        claims_auto_approved=result.get("claims_auto_approved", 0),
+        claims_needs_review=result.get("claims_needs_review", 0),
+        claims_held=result.get("claims_held", 0),
+        claims_rejected=result.get("claims_rejected", 0),
+    )
 
     return {
         "status": "complete",
@@ -583,6 +1171,7 @@ async def sync_offline_claims(
 ):
     """Sync batched offline claims."""
     sb = get_supabase_admin()
+    request_id = _request_id(request)
 
     # Validate worker
     worker_resp = (
@@ -601,6 +1190,8 @@ async def sync_offline_claims(
             "stated_lat": payload.stated_lat,
             "stated_lng": payload.stated_lng,
             "claim_status": "soft_hold_verification", # Force hold for regional anomaly check
+            "assignment_state": "unassigned",
+            "review_due_at": compute_review_due_at(None, settings.review_sla_hours),
         }
         ins_resp = sb.table("manual_claims").insert(claim_insert).execute()
         synced_claim_ids.append(ins_resp.data[0]["id"])
@@ -611,7 +1202,10 @@ async def sync_offline_claims(
             "entity_id": ins_resp.data[0]["id"],
             "action_type": "dark_zone_offline_sync",
             "actor_profile_id": user["id"],
-            "event_payload": payload.model_dump(),
+            "event_payload": {
+                **payload.model_dump(),
+                "request_id": request_id,
+            },
         }).execute()
 
     try:
@@ -624,10 +1218,32 @@ async def sync_offline_claims(
                 "worker_profile_id": user["id"],
                 "synced_count": len(synced_claim_ids),
                 "claim_ids": synced_claim_ids,
+                "request_id": request_id,
             },
         )
     except Exception as e:
-        print(f"WARN: event publish failed for claim.offline_synced: {e}")
+        structured_log(
+            logger,
+            logging.WARNING,
+            "claim.offline_sync.event_publish_failed",
+            request_id=request_id,
+            worker_profile_id=user.get("id"),
+            error=str(e),
+        )
+
+    increment_counter(
+        "claim_offline_sync_total",
+        amount=len(synced_claim_ids),
+        labels={"outcome": "synced"},
+    )
+    structured_log(
+        logger,
+        logging.INFO,
+        "claim.offline_sync.completed",
+        request_id=request_id,
+        worker_profile_id=user.get("id"),
+        synced_count=len(synced_claim_ids),
+    )
 
     return {
         "status": "synced",

@@ -52,14 +52,16 @@
 | KYC — Sandbox.co.in | ✅ Implemented | Aadhaar OTP + PAN + bank verification (3-tier progressive KYC) |
 | Twilio WhatsApp + OTP | ✅ Implemented | 7 notification templates + Verify OTP (sandboxed) |
 | Redis caching layer | ✅ Implemented | fastapi-cache2[redis] with TTL decorators on high-frequency endpoints |
+| Observability baseline | ✅ Implemented | Request/correlation IDs, structured logs, in-memory ops metrics, readiness + ops status endpoints |
 | ML live inference | ✅ Implemented | RF model trained + saved; live `predict_proba()` wired into claim pipeline |
 | DBSCAN fraud clustering | ✅ Implemented | Batch anomaly detection in `fraud_engine.py` |
 | Actuarial metrics (BCR / Loss Ratio) | ✅ Implemented | Admin dashboard + `/analytics/summary` endpoint |
 | Stress test simulator | ✅ Implemented | `ml/stress_test_simulator.py` — 10,000 workers, 3-day monsoon |
 | Offline claim sync (Dark Zone) | ✅ Implemented | `POST /claims/offline-sync` — regional correlation hold |
 | Docker (multi-stage builds) | ✅ Implemented | backend/Dockerfile + frontend/Dockerfile + docker-compose.yml |
-| Kubernetes orchestration | ✅ Ready | `k8s/` — Deployment, Service, Ingress manifests |
-| GitHub Actions CI/CD | ✅ Implemented | 3-job pipeline: lint+test → docker build → security audit |
+| Kubernetes orchestration | ✅ Hardened baseline | Rolling update strategy, startup/readiness probes, configmap+secret references, ingress TLS secret wiring |
+| GitHub Actions CI/CD | ✅ Hardened baseline | Blocking release gates: backend tests, frontend lint/type/build, mobile env/type checks, OpenAPI drift, SQL migration guardrail, deployment manifest checks, compose render check |
+| Release smoke and rollback runbook | ✅ Implemented | `docs/DEPLOYMENT_RELEASE_RUNBOOK.md` + `scripts/smoke_release_endpoints.py` |
 | Automated test suite | ✅ Implemented | 61 pytest tests, 100% pass — pricing, fraud, pipeline, KYC, Twilio |
 | Regional AQI Calibration | ✅ Implemented | City-specific baselines (Delhi 250+ vs Mumbai 150+) |
 | Dynamic Threshold Engine | ✅ Implemented | Monthly p50/p75/p90 distribution calculations (Python + DB) |
@@ -67,6 +69,38 @@
 | Payment gateway (UPI) | ✅ Mock | `payment_mock.py` — async, RazorpayX-format, failure simulation |
 
 **Legend:** ✅ Implemented & Live — ⚠️ Implemented with Known Limitation — 📋 Planned
+
+### Staging Validation State (2026-04-09)
+
+- Repo-side deployment readiness is hardened and locally validated (CI gates, manifest guardrails, release smoke script path, rollback runbook).
+- End-to-end staging deployment execution is currently blocked by external environment inputs not present in repo:
+   - kube staging context/API access
+   - target namespace
+   - ingress host/DNS + TLS secret provisioning
+   - concrete staging secrets (`covara-secrets` values)
+   - pullable staging image references/registry access
+
+### Operational Observability Baseline
+
+The backend now exposes practical observability signals for staging and ops confidence without external telemetry dependencies.
+
+- Request correlation:
+   - `X-Request-ID` / `X-Correlation-ID` are resolved on ingress and propagated in response headers.
+   - Critical claim and payout event/audit payloads include request correlation fields where available.
+- Structured operational logs:
+   - Claims submit/review/assignment/offline sync critical transitions emit structured JSON logs.
+   - Payout initiation + webhook verification/processing paths emit structured logs.
+   - Outbox relay publish failures and retry/dead-letter transitions emit structured logs.
+- Metrics baseline (in-memory):
+   - HTTP request totals/failures/latency timer buckets.
+   - Claim submission/review/assignment/post-approval/offline-sync counters.
+   - Payout initiation outcomes, webhook signature failures, settlement status counters.
+   - Outbox enqueue/publish/relay/dead-letter/requeue counters.
+   - Alert-ready gauges for overdue/unassigned reviews, dead-letter counts, and payout failure-like states.
+- Ops/readiness surfaces:
+   - `GET /ready`: readiness checks for config, redis cache, outbox worker, and Kafka consumer requirements.
+   - `GET /ops/metrics`: in-memory metrics snapshot.
+   - `GET /ops/status`: event bus status, review backlog/aging summary, payout status summary, runtime worker states, alert signals.
 
 ### Planned Migrations (Post-Approval)
 

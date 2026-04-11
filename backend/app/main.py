@@ -13,6 +13,8 @@ Docs:
 """
 
 import asyncio
+import logging
+import time
 from contextlib import asynccontextmanager
 from contextlib import suppress
 from fastapi import FastAPI, Depends, Request
@@ -25,23 +27,49 @@ from backend.app.config import settings
 from backend.app.dependencies import require_insurer_admin
 from backend.app.rate_limit import limiter
 from backend.app.routers import (
+    analytics,
     auth,
-    workers,
-    zones,
     claims,
     events,
-    triggers,
-    policies,
-    analytics,
     ingest,
     kyc,
     mock_data,
+    ops,
+    payouts,
+    policies,
     rewards,
+    triggers,
+    workers,
+    zones,
 )
 from backend.app.seed import seed_all
+from backend.app.services.observability import (
+    bind_request_id,
+    increment_counter,
+    observe_timing_ms,
+    resolve_request_id,
+    set_gauge,
+    structured_log,
+    unbind_request_id,
+)
 
 
-async def _outbox_relay_loop() -> None:
+def _configure_logging() -> None:
+    root_logger = logging.getLogger()
+    if root_logger.handlers:
+        return
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
+
+
+_configure_logging()
+logger = logging.getLogger("covara.app")
+
+
+async def _outbox_relay_loop(app: FastAPI) -> None:
     """Continuously relay pending outbox events in small batches."""
     from backend.app.services.event_bus.outbox import relay_pending_outbox_events
     from backend.app.supabase_client import get_supabase_admin
@@ -53,19 +81,33 @@ async def _outbox_relay_loop() -> None:
         try:
             sb = get_supabase_admin()
             result = await relay_pending_outbox_events(sb, batch_size=batch_size)
+            app.state.outbox_last_batch = result
+            app.state.outbox_last_batch_at = time.time()
+            set_gauge("event_outbox_pending", result.get("fetched", 0))
+            set_gauge("event_outbox_failed", result.get("failed", 0))
+            set_gauge("event_outbox_dead_letter_batch", result.get("dead_lettered", 0))
             if (
                 result.get("processed", 0)
                 or result.get("failed", 0)
                 or result.get("dead_lettered", 0)
             ):
-                print(
-                    "INFO: outbox relay batch"
-                    f" processed={result.get('processed', 0)}"
-                    f" failed={result.get('failed', 0)}"
-                    f" dead_lettered={result.get('dead_lettered', 0)}"
+                structured_log(
+                    logger,
+                    logging.INFO,
+                    "outbox.relay.batch",
+                    fetched=result.get("fetched", 0),
+                    processed=result.get("processed", 0),
+                    failed=result.get("failed", 0),
+                    dead_lettered=result.get("dead_lettered", 0),
                 )
         except Exception as e:
-            print(f"WARN: outbox relay loop error: {e}")
+            increment_counter("event_outbox_relay_errors_total")
+            structured_log(
+                logger,
+                logging.WARNING,
+                "outbox.relay.error",
+                error=str(e),
+            )
 
         await asyncio.sleep(interval_seconds)
 
@@ -75,14 +117,36 @@ async def _outbox_relay_loop() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Validate config on startup."""
+    app.state.redis_cache_ready = False
+    app.state.outbox_worker_running = False
+    app.state.kafka_consumer_running = False
+    app.state.outbox_last_batch = None
+    app.state.outbox_last_batch_at = None
+
     missing = settings.validate()
     if missing:
-        print(f"WARN:  Missing config: {', '.join(missing)}")
-        print("   The API will start but Supabase calls will fail.")
-        print("   Create a .env file — see .env.example")
+        strict_mode = settings.is_strict_env_validation_enabled()
+        level = logging.ERROR if strict_mode else logging.WARNING
+        structured_log(
+            logger,
+            level,
+            "startup.config.missing",
+            strict_env_validation=strict_mode,
+            missing_config=missing,
+        )
+        if strict_mode:
+            raise RuntimeError(
+                "Missing required configuration in strict env validation mode: "
+                + ", ".join(missing)
+            )
     else:
-        print(f"OK: Config loaded. Supabase: {settings.supabase_url}")
-        print(f"   Environment: {settings.app_env}")
+        structured_log(
+            logger,
+            logging.INFO,
+            "startup.config.loaded",
+            supabase_url=settings.supabase_url,
+            app_env=settings.app_env,
+        )
         
     try:
         from fastapi_cache import FastAPICache
@@ -92,24 +156,45 @@ async def lifespan(app: FastAPI):
         redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
         redis = aioredis.from_url(redis_url, encoding="utf8", decode_responses=False)
         FastAPICache.init(RedisBackend(redis), prefix="covara-cache")
-        print("OK: Redis cache initialized")
+        app.state.redis_cache_ready = True
+        structured_log(
+            logger,
+            logging.INFO,
+            "startup.redis.ready",
+            redis_url=redis_url,
+        )
     except Exception as e:
-        print(f"WARN: Redis cache initialization failed: {e}")
+        app.state.redis_cache_ready = False
+        increment_counter("startup_redis_init_failures_total")
+        structured_log(
+            logger,
+            logging.WARNING,
+            "startup.redis.failed",
+            error=str(e),
+        )
 
     relay_task = None
     kafka_consumer_task = None
     if settings.event_outbox_relay_enabled:
         relay_task = asyncio.create_task(
-            _outbox_relay_loop(),
+            _outbox_relay_loop(app),
             name="covara-outbox-relay",
         )
-        print(
-            "OK: Outbox relay worker started "
-            f"(interval={settings.event_outbox_relay_interval_seconds}s, "
-            f"batch={settings.event_outbox_relay_batch_size})"
+        app.state.outbox_worker_running = True
+        structured_log(
+            logger,
+            logging.INFO,
+            "startup.outbox_worker.started",
+            interval_seconds=settings.event_outbox_relay_interval_seconds,
+            batch_size=settings.event_outbox_relay_batch_size,
         )
     else:
-        print("INFO: Outbox relay worker disabled by config")
+        app.state.outbox_worker_running = False
+        structured_log(
+            logger,
+            logging.INFO,
+            "startup.outbox_worker.disabled",
+        )
 
     if (
         (settings.event_bus_backend or "").strip().lower() == "kafka"
@@ -123,13 +208,21 @@ async def lifespan(app: FastAPI):
             run_kafka_consumer_loop(),
             name="covara-kafka-consumer",
         )
-        print(
-            "OK: Kafka consumer worker started "
-            f"(group={settings.event_consumer_group_id}, "
-            f"max_records={settings.event_consumer_max_records})"
+        app.state.kafka_consumer_running = True
+        structured_log(
+            logger,
+            logging.INFO,
+            "startup.kafka_consumer.started",
+            group_id=settings.event_consumer_group_id,
+            max_records=settings.event_consumer_max_records,
         )
     elif (settings.event_bus_backend or "").strip().lower() == "kafka":
-        print("INFO: Kafka consumer worker disabled by config")
+        app.state.kafka_consumer_running = False
+        structured_log(
+            logger,
+            logging.INFO,
+            "startup.kafka_consumer.disabled",
+        )
 
     try:
         yield
@@ -138,11 +231,13 @@ async def lifespan(app: FastAPI):
             kafka_consumer_task.cancel()
             with suppress(asyncio.CancelledError):
                 await kafka_consumer_task
+            app.state.kafka_consumer_running = False
 
         if relay_task:
             relay_task.cancel()
             with suppress(asyncio.CancelledError):
                 await relay_task
+            app.state.outbox_worker_running = False
 
 
 # ── Rate Limiter ──────────────────────────────────────────────────
@@ -178,8 +273,81 @@ app.add_middleware(
         "X-Device-Context-Timestamp",
         "X-Device-Context-Key-Id",
         "X-Request-ID",
+        "X-Correlation-ID",
     ],
 )
+
+
+@app.middleware("http")
+async def add_request_id_and_metrics(request: Request, call_next):
+    request_id = resolve_request_id(
+        request.headers.get("X-Request-ID"),
+        request.headers.get("X-Correlation-ID"),
+    )
+
+    request.state.request_id = request_id
+    request.state.correlation_id = request_id
+    token = bind_request_id(request_id)
+
+    method = request.method
+    path = request.url.path
+    status_code = 500
+    started_at = time.perf_counter()
+
+    increment_counter(
+        "http_requests_total",
+        labels={"method": method, "path": path},
+    )
+
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        response.headers["X-Request-ID"] = request_id
+        response.headers["X-Correlation-ID"] = request_id
+
+        if status_code >= 500:
+            increment_counter(
+                "http_request_failures_total",
+                labels={
+                    "method": method,
+                    "path": path,
+                    "status_family": "5xx",
+                },
+            )
+
+        return response
+    except Exception as e:
+        increment_counter(
+            "http_request_failures_total",
+            labels={
+                "method": method,
+                "path": path,
+                "status_family": "5xx",
+            },
+        )
+        structured_log(
+            logger,
+            logging.ERROR,
+            "http.request.unhandled_exception",
+            request_id=request_id,
+            method=method,
+            path=path,
+            error_type=type(e).__name__,
+            error=str(e),
+        )
+        raise
+    finally:
+        duration_ms = (time.perf_counter() - started_at) * 1000
+        observe_timing_ms(
+            "http_request_latency_ms",
+            duration_ms,
+            labels={
+                "method": method,
+                "path": path,
+                "status_family": f"{max(1, status_code // 100)}xx",
+            },
+        )
+        unbind_request_id(token)
 
 
 # ── OWASP Security Headers Middleware ─────────────────────────────
@@ -212,6 +380,8 @@ app.include_router(analytics.router)
 app.include_router(ingest.router)
 app.include_router(kyc.router)
 app.include_router(mock_data.router)
+app.include_router(ops.router)
+app.include_router(payouts.router)
 app.include_router(rewards.router)
 
 
@@ -233,11 +403,46 @@ def root():
 def health_check():
     """Health check with config status."""
     missing = settings.validate()
+    strict_mode = settings.is_strict_env_validation_enabled()
     return {
         "status": "ok" if not missing else "degraded",
         "service": "covara-one-api",
         "version": "0.5.0",
+        "strict_env_validation": strict_mode,
         "config_ok": not missing,
+        "missing_config": missing if missing else None,
+    }
+
+
+@app.get("/ready", tags=["System"])
+def readiness_check(request: Request):
+    """Readiness signal with key runtime component states."""
+    missing = settings.validate()
+    strict_mode = settings.is_strict_env_validation_enabled()
+    kafka_required = (
+        (settings.event_bus_backend or "").strip().lower() == "kafka"
+        and settings.event_consumer_enabled
+    )
+
+    checks = {
+        "config_ok": not missing,
+        "redis_cache_ready": bool(getattr(request.app.state, "redis_cache_ready", False)),
+        "outbox_worker_running": bool(getattr(request.app.state, "outbox_worker_running", False))
+        if settings.event_outbox_relay_enabled
+        else True,
+        "kafka_consumer_running": bool(getattr(request.app.state, "kafka_consumer_running", False))
+        if kafka_required
+        else True,
+    }
+
+    ready = all(checks.values())
+    if not ready:
+        increment_counter("readiness_degraded_total")
+
+    return {
+        "status": "ready" if ready else "degraded",
+        "strict_env_validation": strict_mode,
+        "checks": checks,
         "missing_config": missing if missing else None,
     }
 

@@ -1,4 +1,4 @@
-# ML — Data Science & Severity Modeling
+﻿# ML — Data Science & Severity Modeling
 
 > This folder contains the data-science side of the project. The first job is not to chase fancy models. The first job is to **prove that the numbers make sense** — and then let the model improve them.
 >
@@ -311,3 +311,23 @@ These features are designed for a review-routing classifier with four output lab
 ## Rule
 
 > Keep everything explainable enough for judges to understand in one minute. If a model output cannot be traced back to input features and threshold logic, it fails the transparency test.
+
+
+## April 2026 Repo Update Addendum
+
+### Newly implemented in current repo
+
+- Random Forest artifact path is integrated with lazy-load fallback behavior
+  for resilient claim probability estimation.
+- Training utility and benchmark scripts are present for reproducible
+  internal calibration and stress testing.
+- ML role remains bounded: supports probability and review routing,
+  while payout remains parametric and rule-driven.
+
+### Planned and next tranche
+
+- Expand model benchmarking and calibration against larger datasets.
+- Add drift and data-quality monitoring for staging and production readiness.
+- Formalize retraining cadence with artifact version tracking.
+- Strengthen explainability outputs linked to operational dashboards.
+

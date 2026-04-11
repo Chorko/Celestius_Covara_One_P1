@@ -26,6 +26,7 @@ import logging
 from datetime import datetime, timezone, timedelta
 from uuid import uuid4
 
+from backend.app.config import settings
 from backend.app.services.event_bus.outbox import enqueue_domain_event, persist_claim_with_outbox
 
 logger = logging.getLogger("covara.auto_claim_engine")
@@ -213,7 +214,7 @@ async def _find_eligible_workers(
                 {
                     "worker_profile_id": w["profile_id"],
                     "plan_type": "essential",
-                    "coverage_amount": 2250,
+                    "coverage_amount": 3000,
                     "premium_amount": 28,
                 }
                 for w in (workers_resp.data or [])
@@ -455,6 +456,14 @@ async def _process_worker_claim(
 
         # ── Persist claim + payout + outbox event transactionally ─────
         now_iso = datetime.now(timezone.utc).isoformat()
+        needs_manual_review = claim_status in {
+            "submitted",
+            "soft_hold_verification",
+            "fraud_escalated_review",
+        }
+        review_due_at = (
+            datetime.now(timezone.utc) + timedelta(hours=max(1, settings.review_sla_hours))
+        ).isoformat()
         claim_row = {
             "worker_profile_id": worker_id,
             "trigger_event_id": trigger_id,
@@ -465,6 +474,8 @@ async def _process_worker_claim(
             ),
             "claim_status": claim_status,
             "claimed_at": now_iso,
+            "assignment_state": "unassigned" if needs_manual_review else "resolved",
+            "review_due_at": review_due_at if needs_manual_review else None,
         }
 
         payout_row = {

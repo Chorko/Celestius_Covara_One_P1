@@ -19,24 +19,26 @@ export function useTheme() {
   return useContext(ThemeContext)
 }
 
+function resolveInitialTheme(): Theme {
+  if (typeof window === 'undefined') {
+    return 'dark'
+  }
+
+  const saved = localStorage.getItem('covara-theme')
+  if (saved === 'dark' || saved === 'light') {
+    return saved
+  }
+
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+}
+
 export default function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>('dark')
-  const [mounted, setMounted] = useState(false)
+  const [theme, setThemeState] = useState<Theme>(resolveInitialTheme)
 
   useEffect(() => {
-    // Read saved preference or system preference
-    const saved = localStorage.getItem('covara-theme') as Theme | null
-    if (saved === 'dark' || saved === 'light') {
-      setThemeState(saved)
-      document.documentElement.setAttribute('data-theme', saved)
-    } else {
-      const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-      const initial = systemDark ? 'dark' : 'light'
-      setThemeState(initial)
-      document.documentElement.setAttribute('data-theme', initial)
-    }
-    setMounted(true)
-  }, [])
+    document.documentElement.setAttribute('data-theme', theme)
+    localStorage.setItem('covara-theme', theme)
+  }, [theme])
 
   const setTheme = useCallback((t: Theme) => {
     setThemeState(t)
@@ -48,23 +50,16 @@ export default function ThemeProvider({ children }: { children: React.ReactNode 
     setTheme(theme === 'dark' ? 'light' : 'dark')
   }, [theme, setTheme])
 
-  // Prevent flash: set data-theme before hydration
-  if (!mounted) {
-    return (
-      <>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('covara-theme');if(t==='light'||t==='dark'){document.documentElement.setAttribute('data-theme',t)}else{document.documentElement.setAttribute('data-theme',window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light')}}catch(e){document.documentElement.setAttribute('data-theme','dark')}})()`,
-          }}
-        />
-        {children}
-      </>
-    )
-  }
-
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>
-      {children}
-    </ThemeContext.Provider>
+    <>
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `(function(){try{var t=localStorage.getItem('covara-theme');if(t==='light'||t==='dark'){document.documentElement.setAttribute('data-theme',t)}else{document.documentElement.setAttribute('data-theme',window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light')}}catch(e){document.documentElement.setAttribute('data-theme','dark')}})()`,
+        }}
+      />
+      <ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>
+        {children}
+      </ThemeContext.Provider>
+    </>
   )
 }

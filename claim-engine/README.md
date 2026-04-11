@@ -1,4 +1,4 @@
-# Claim Engine
+﻿# Claim Engine
 
 > This module owns the **trigger-to-claim-to-approval decision flow** — the core business logic pipeline that turns a raw disruption event into an approved, reviewed, held, or rejected claim with a **pre-agreed parametric payout**.
 
@@ -208,3 +208,23 @@ flowchart LR
 
     style CE fill:#e74c3c,color:#fff
 ```
+
+
+## April 2026 Repo Update Addendum
+
+### Newly implemented in current repo
+
+- Auto-claim automation has contract-aligned persistence mapping and
+  duplicate worker-event handling safeguards.
+- Pipeline output mapping is aligned with downstream DB and event payload usage.
+- Claim automation side effects shifted to event-driven handlers to keep
+  hot request paths non-blocking.
+- Review and payout workflows are now connected to claim lifecycle transitions.
+
+### Planned and next tranche
+
+- Expand trigger-policy linking for richer auto-approval explainability.
+- Add deeper calibration feedback loops from review and payout outcomes.
+- Continue event schema hardening for cross-service portability.
+- Improve replay and simulation tooling for regression confidence.
+

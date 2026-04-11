@@ -1,4 +1,4 @@
-# Fraud — Ghost Shift Detector
+﻿# Fraud — Ghost Shift Detector
 
 > This module implements the **5-layer fraud detection pipeline** (Ghost Shift Detector) that validates every claim before payout. It is a rules-plus-score layer that directly changes the claim decision — not just a buzzword section. Following the adversarial defense update, the pipeline now includes dedicated anti-spoofing verification and coordinated-ring detection.
 
@@ -354,3 +354,22 @@ flowchart LR
 This is not just anomaly buzzwords. The fraud layer uses **five progressively deeper validation steps** — from event truth through anti-spoofing to coordinated-ring detection — produces a **quantitative fraud penalty** that directly affects claim routing, and creates **five explainable decision outcomes** that determine whether a claim is auto-approved, reviewed, held, batch-held, or rejected. Every decision can be traced back through the layers to specific evidence. The liquidity circuit-breaker controls protect the payout pool from mass-claim drain attacks without blocking legitimate claims.
 
 Fraud detection also extends **after payout** — post-approval flagging, graduated trust score penalties, and legal escalation ensure the system stays accountable even after money has moved.
+
+
+## April 2026 Repo Update Addendum
+
+### Newly implemented in current repo
+
+- Signed device-context verification is integrated into claim submission flow.
+- Anti-spoofing checks are now tied to decision outcomes and routing.
+- Post-approval fraud controls include explicit flagging paths
+  and trust score impact handling.
+- Event-driven side effects preserve fraud metadata for downstream actions.
+
+### Planned and next tranche
+
+- Expand coordinated-ring detection depth and explainability artifacts.
+- Add stronger cross-signal correlation with consumer-side enrichment.
+- Increase fraud telemetry coverage for dashboard and ops triage.
+- Iterate threshold tuning with larger synthetic and staged datasets.
+

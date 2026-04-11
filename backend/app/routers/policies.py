@@ -7,12 +7,12 @@ Supports exactly two plans: Essential and Plus.
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
+from datetime import datetime, timedelta, timezone
 from backend.app.dependencies import require_worker
 from backend.app.supabase_client import get_supabase_admin
 from backend.app.services.pricing import (
     calculate_policy_metrics,
     calculate_payout,
-    get_premium_quote as get_pricing_quote,
     PLAN_DEFINITIONS,
 )
 from backend.app.services.claim_pipeline import (
@@ -24,6 +24,15 @@ router = APIRouter(prefix="/policies", tags=["Policies"])
 
 # ── Two plans only ────────────────────────────────────────────────────
 VALID_PLANS = ("essential", "plus")
+
+
+def _plan_uplift_factor(plan: str) -> float:
+    """Return relative benefit uplift compared to Essential plan."""
+    base_cap = float(PLAN_DEFINITIONS["essential"]["weekly_benefit_cap_inr"])
+    selected_cap = float(PLAN_DEFINITIONS[plan]["weekly_benefit_cap_inr"])
+    if base_cap <= 0:
+        return 1.0
+    return round(selected_cap / base_cap, 2)
 
 
 class ActivatePolicyRequest(BaseModel):
@@ -108,7 +117,7 @@ async def get_premium_quote(
         "max_payout_cap_inr": quote["payout_cap"],
         "exposure_multiplier": base_metrics["exposure_e"],
         "confidence_multiplier": base_metrics["confidence_base"],
-        "plan_uplift_factor": plan_uplift,
+        "plan_uplift_factor": _plan_uplift_factor(plan),
     }
 
 
@@ -127,38 +136,57 @@ async def activate_policy(
             detail=f"Invalid plan '{body.plan}'. Must be 'essential' or 'plus'.",
         )
 
-    import datetime as _dt
-
     sb = get_supabase_admin()
-    now = _dt.datetime.utcnow()
-    valid_until = now + _dt.timedelta(days=7)
-    weekly_benefit = PLAN_WEEKLY_BENEFITS[body.plan]
-    policy_id = f"POL-{user['id'][:8]}-{now.strftime('%Y%m%d')}"
+    now = datetime.now(timezone.utc)
+    valid_until = now + timedelta(days=7)
+    plan_details = PLAN_DEFINITIONS[body.plan]
+    weekly_benefit = float(plan_details["weekly_benefit_cap_inr"])
+    weekly_premium = float(plan_details["weekly_premium_inr"])
+    policy_id = f"POL-{user['id'][:8]}-{now.strftime('%Y%m%d%H%M%S')}"
+
+    worker_resp = (
+        sb.table("worker_profiles")
+        .select("profile_id, preferred_zone_id")
+        .eq("profile_id", user["id"])
+        .maybe_single()
+        .execute()
+    )
+    worker_row = worker_resp.data or {}
+    zone_id = worker_row.get("preferred_zone_id")
 
     policy_row = {
         "policy_id": policy_id,
-        "worker_id": user["id"],
-        "plan": body.plan,
-        "weekly_benefit": weekly_benefit,
+        "worker_profile_id": user["id"],
+        "zone_id": zone_id,
+        "plan_type": body.plan,
+        "coverage_amount": weekly_benefit,
+        "premium_amount": weekly_premium,
         "status": "active",
-        "activated_at": now.isoformat() + "Z",
-        "valid_until": valid_until.isoformat() + "Z",
+        "activated_at": now.isoformat(),
+        "valid_until": valid_until.isoformat(),
+        "updated_at": now.isoformat(),
     }
 
     try:
         resp = sb.table("policies").upsert(
-            policy_row, on_conflict="worker_id"
+            policy_row, on_conflict="worker_profile_id"
         ).execute()
         persisted = resp.data[0] if resp.data else policy_row
-    except Exception:
-        # Table may not exist yet — fall back to mock response
-        persisted = policy_row
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Policy storage unavailable. Apply database migrations and retry."
+            ),
+        ) from exc
 
     return {
         "status": "active",
         "message": f"{body.plan.capitalize()} weekly coverage activated.",
         "plan": body.plan,
-        "weekly_benefit_w": weekly_benefit,
+        "weekly_benefit_w": int(weekly_benefit),
+        "weekly_premium_inr": int(weekly_premium),
+        "zone_id": persisted.get("zone_id", zone_id),
         "activated_at": persisted.get("activated_at", policy_row["activated_at"]),
         "valid_until": persisted.get("valid_until", policy_row["valid_until"]),
         "policy_id": persisted.get("policy_id", policy_id),

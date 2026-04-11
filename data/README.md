@@ -1,4 +1,4 @@
-# Data — Synthetic Data Generation & Schemas
+﻿# Data — Synthetic Data Generation & Schemas
 
 > This folder owns synthetic data generation, bootstrap sample rows, variable definitions, threshold references, and all CSV outputs used for analysis and demonstration. Every variable is documented with why it exists and how it influences premium or payout.
 
@@ -244,3 +244,22 @@ POST /simulate/claim-scenario
 ## Important Rule
 
 > No random nonsense. Every variable must be documented with why it exists and how it influences premium or payout. If a reviewer cannot trace a data field to a formula, the data quality story fails.
+
+
+## April 2026 Repo Update Addendum
+
+### Newly implemented in current repo
+
+- Canonical schema and patch migrations now cover review workflow,
+  payout settlement reliability, and event outbox durability.
+- Seed and joined training data continue to back internal calibration,
+  simulation, and reproducible demo flows.
+- Synthetic generation endpoints support rapid reseed during testing.
+
+### Planned and next tranche
+
+- Expand synthetic scenarios for edge conditions and fraud stress tests.
+- Add versioned data-shape notes for schema evolution safety.
+- Improve dataset lineage notes linking SQL seeds to ML inputs.
+- Add richer anonymized examples for explainability demos.
+

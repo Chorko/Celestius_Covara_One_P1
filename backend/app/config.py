@@ -9,6 +9,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+_TRUE_VALUES = {"1", "true", "yes", "on"}
+_FALSE_VALUES = {"0", "false", "no", "off"}
+
 
 @dataclass(frozen=True)
 class Settings:
@@ -33,6 +36,7 @@ class Settings:
 
     # KYC - Sandbox.co.in
     sandbox_kyc_api_key: str = os.getenv("SANDBOX_KYC_API_KEY", "")
+    sandbox_kyc_base_url: str = os.getenv("SANDBOX_KYC_BASE_URL", "https://api.sandbox.co.in")
 
     # Twilio
     twilio_account_sid: str = os.getenv("TWILIO_ACCOUNT_SID", "")
@@ -87,6 +91,23 @@ class Settings:
         os.getenv("EVENT_CONSUMER_MAX_ATTEMPTS", "5")
     )
 
+    # Review workflow SLA controls
+    review_sla_hours: int = int(os.getenv("REVIEW_SLA_HOURS", "24"))
+    review_sla_due_soon_hours: int = int(
+        os.getenv("REVIEW_SLA_DUE_SOON_HOURS", "4")
+    )
+
+    # Payout provider settings
+    payout_provider_key: str = os.getenv("PAYOUT_PROVIDER", "simulated_gateway")
+    payout_provider_api_base_url: str = os.getenv("PAYOUT_PROVIDER_API_BASE_URL", "")
+    payout_provider_api_key: str = os.getenv("PAYOUT_PROVIDER_API_KEY", "")
+    payout_provider_webhook_secret: str = os.getenv(
+        "PAYOUT_PROVIDER_WEBHOOK_SECRET", "dev-payout-webhook-secret"
+    )
+    payout_provider_timeout_seconds: int = int(
+        os.getenv("PAYOUT_PROVIDER_TIMEOUT_SECONDS", "10")
+    )
+
     # -- Dynamic API Key Discovery --
     # Instead of hardcoding N key fields, we scan env vars at runtime.
     # Just add WEATHER_API_KEY_1, WEATHER_API_KEY_2, ... to .env
@@ -118,6 +139,7 @@ class Settings:
 
     # App
     app_env: str = os.getenv("APP_ENV", "development")
+    strict_env_validation: str = os.getenv("STRICT_ENV_VALIDATION", "auto")
     cors_origins: list[str] = None  # type: ignore[assignment]
 
     def __post_init__(self):
@@ -130,13 +152,56 @@ class Settings:
     def validate(self) -> list[str]:
         """Return list of missing critical config vars."""
         missing = []
+
+        def is_blank(value: str | None) -> bool:
+            return not bool((value or "").strip())
+
         if not self.supabase_url:
             missing.append("SUPABASE_URL")
         if not self.supabase_anon_key:
             missing.append("SUPABASE_ANON_KEY")
         if not self.supabase_service_role_key:
             missing.append("SUPABASE_SERVICE_ROLE_KEY")
+
+        strict_mode = self.is_strict_env_validation_enabled()
+        if strict_mode:
+            if is_blank(self.device_context_hmac_secret):
+                missing.append("DEVICE_CONTEXT_HMAC_SECRET")
+
+            provider_key = (self.payout_provider_key or "").strip().lower()
+            http_provider_keys = {"http_gateway", "razorpayx", "cashfree", "provider_http"}
+            if provider_key in http_provider_keys:
+                if is_blank(self.payout_provider_api_base_url):
+                    missing.append(
+                        "PAYOUT_PROVIDER_API_BASE_URL (required for PAYOUT_PROVIDER=http_gateway)"
+                    )
+                if is_blank(self.payout_provider_api_key):
+                    missing.append(
+                        "PAYOUT_PROVIDER_API_KEY (required for PAYOUT_PROVIDER=http_gateway)"
+                    )
+
+            webhook_secret = (self.payout_provider_webhook_secret or "").strip()
+            if not webhook_secret or webhook_secret == "dev-payout-webhook-secret":
+                missing.append(
+                    "PAYOUT_PROVIDER_WEBHOOK_SECRET (must be non-default in strict mode)"
+                )
+
+            if (self.event_bus_backend or "").strip().lower() == "kafka" and is_blank(
+                self.kafka_bootstrap_servers
+            ):
+                missing.append(
+                    "KAFKA_BOOTSTRAP_SERVERS (required for EVENT_BUS_BACKEND=kafka)"
+                )
+
         return missing
+
+    def is_strict_env_validation_enabled(self) -> bool:
+        mode = (self.strict_env_validation or "auto").strip().lower()
+        if mode in _TRUE_VALUES:
+            return True
+        if mode in _FALSE_VALUES:
+            return False
+        return (self.app_env or "").strip().lower() in {"production", "staging"}
 
 
 settings = Settings()

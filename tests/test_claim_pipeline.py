@@ -123,3 +123,44 @@ class TestClaimPipeline:
         # Manual claims should at minimum go to review
         decision = result["review"]["decision"]
         assert decision in ("soft_hold_verification", "fraud_escalated_review")
+
+    def test_pipeline_includes_device_trust_summary(self):
+        result = self._run_clean_auto()
+        trust = result["fraud_analysis"].get("device_trust")
+        assert isinstance(trust, dict)
+        assert "device_trust_score" in trust
+        assert "device_trust_tier" in trust
+
+    def test_risky_device_signals_surface_in_fraud_flags(self):
+        result = run_claim_pipeline(
+            claim_id="test-003",
+            worker_context={
+                "active_days": 6,
+                "shift_overlap_ratio": 0.9,
+                "orders_before_disruption": 3,
+                "prior_claim_rate": 0.0,
+                "gps_consistency_score": 0.85,
+                "avg_hourly_income_inr": 150,
+                "trust_score": 0.8,
+            },
+            trigger_context={
+                "trigger_family": "heavy_rain",
+                "trigger_code": "T01",
+                "source_reliability": 0.90,
+                "source_type": "openweather",
+                "observed_value": 80,
+                "severity_band": "claim",
+            },
+            claim_mode="manual",
+            plan="essential",
+            device_context={
+                "context_present": True,
+                "signature_verified": True,
+                "attestation_verdict": "failed",
+                "is_rooted": True,
+                "signal_confidence": "high",
+            },
+        )
+
+        flags = result["fraud_analysis"].get("flags", [])
+        assert "attestation_failed" in flags

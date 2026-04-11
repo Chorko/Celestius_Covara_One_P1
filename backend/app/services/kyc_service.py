@@ -26,16 +26,51 @@ from ..config import settings
 
 logger = logging.getLogger("covara.kyc")
 
-SANDBOX_BASE_URL = "https://api.sandbox.co.in"
+SANDBOX_BASE_URL = settings.sandbox_kyc_base_url.rstrip("/")
 
 
 def _get_headers() -> dict:
     """Build auth headers for Sandbox.co.in API."""
+    api_key = settings.sandbox_kyc_api_key
     return {
-        "Authorization": settings.sandbox_kyc_api_key,
-        "x-api-key": settings.sandbox_kyc_api_key,
+        "Authorization": f"Bearer {api_key}",
+        "x-api-key": api_key,
         "x-api-version": "1.0",
         "Content-Type": "application/json",
+    }
+
+
+def _error_payload(exc: Exception) -> dict:
+    """Map provider/client errors into stable, debuggable response fields."""
+    if isinstance(exc, httpx.HTTPStatusError):
+        status_code = exc.response.status_code
+        try:
+            detail = exc.response.json()
+        except Exception:
+            detail = exc.response.text
+        return {
+            "success": False,
+            "error": f"sandbox_http_{status_code}",
+            "provider_status_code": status_code,
+            "provider_error": detail,
+            "mock": False,
+        }
+
+    if isinstance(exc, httpx.RequestError):
+        return {
+            "success": False,
+            "error": f"sandbox_request_error: {exc}",
+            "provider_status_code": None,
+            "provider_error": None,
+            "mock": False,
+        }
+
+    return {
+        "success": False,
+        "error": str(exc),
+        "provider_status_code": None,
+        "provider_error": None,
+        "mock": False,
     }
 
 
@@ -71,7 +106,7 @@ async def aadhaar_generate_otp(aadhaar_number: str) -> dict:
     payload = {"@entity": "in.co.sandbox.kyc.aadhaar.okyc.otp.request", "aadhaar_number": aadhaar_number}
     try:
         async with httpx.AsyncClient(timeout=15) as client:
-            resp = client.post(url, json=payload, headers=_get_headers())
+            resp = await client.post(url, json=payload, headers=_get_headers())
             resp.raise_for_status()
             data = resp.json()
         return {
@@ -82,7 +117,7 @@ async def aadhaar_generate_otp(aadhaar_number: str) -> dict:
         }
     except Exception as e:
         logger.error(f"Aadhaar OTP generation failed: {e}")
-        return {"success": False, "error": str(e), "mock": False}
+        return _error_payload(e)
 
 
 async def aadhaar_verify_otp(reference_id: str, otp: str, share_code: str = "1234") -> dict:
@@ -125,7 +160,7 @@ async def aadhaar_verify_otp(reference_id: str, otp: str, share_code: str = "123
     }
     try:
         async with httpx.AsyncClient(timeout=15) as client:
-            resp = client.post(url, json=payload, headers=_get_headers())
+            resp = await client.post(url, json=payload, headers=_get_headers())
             resp.raise_for_status()
             data = resp.json()
         kyc_data = data.get("data", {})
@@ -144,7 +179,7 @@ async def aadhaar_verify_otp(reference_id: str, otp: str, share_code: str = "123
         }
     except Exception as e:
         logger.error(f"Aadhaar OTP verify failed: {e}")
-        return {"success": False, "error": str(e), "mock": False}
+        return _error_payload(e)
 
 
 # ── TIER 1B: PAN Verification (optional, collected for record) ───────
@@ -171,7 +206,7 @@ async def verify_pan(pan_number: str) -> dict:
     url = f"{SANDBOX_BASE_URL}/pans/{pan_number}/verify"
     try:
         async with httpx.AsyncClient(timeout=15) as client:
-            resp = client.get(url, headers=_get_headers())
+            resp = await client.get(url, headers=_get_headers())
             resp.raise_for_status()
             data = resp.json()
         pan_data = data.get("data", {})
@@ -185,7 +220,7 @@ async def verify_pan(pan_number: str) -> dict:
         }
     except Exception as e:
         logger.error(f"PAN verify failed for {pan_number}: {e}")
-        return {"success": False, "error": str(e), "mock": False}
+        return _error_payload(e)
 
 
 # ── TIER 1B: Bank Account Verification (required for payout) ─────────
@@ -215,7 +250,7 @@ async def verify_bank_account(account_number: str, ifsc: str) -> dict:
     payload = {"ifsc": ifsc}
     try:
         async with httpx.AsyncClient(timeout=15) as client:
-            resp = client.post(url, json=payload, headers=_get_headers())
+            resp = await client.post(url, json=payload, headers=_get_headers())
             resp.raise_for_status()
             data = resp.json()
         bank_data = data.get("data", {})
@@ -230,7 +265,7 @@ async def verify_bank_account(account_number: str, ifsc: str) -> dict:
         }
     except Exception as e:
         logger.error(f"Bank verify failed for {account_number}: {e}")
-        return {"success": False, "error": str(e), "mock": False}
+        return _error_payload(e)
 
 
 # ── KYC TIER HELPER ─────────────────────────────────────────────────

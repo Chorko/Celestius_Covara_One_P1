@@ -3,10 +3,17 @@ kind: Ingress
 metadata:
   name: covara-ingress
   annotations:
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
 spec:
   ingressClassName: nginx
+  tls:
+  - hosts:
+    - covara.local
+    secretName: covara-tls
   rules:
   - host: covara.local
     http:

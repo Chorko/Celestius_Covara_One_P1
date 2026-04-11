@@ -67,6 +67,25 @@ create table if not exists public.zones (
     polygon_geojson jsonb
 );
 
+  create table if not exists public.policies (
+    id uuid primary key default gen_random_uuid(),
+    policy_id text unique not null,
+    worker_profile_id uuid not null references public.worker_profiles(profile_id) on delete cascade,
+    zone_id uuid references public.zones(id),
+    plan_type text not null check (plan_type in ('essential', 'plus')),
+    coverage_amount numeric(10,2) not null,
+    premium_amount numeric(10,2) not null,
+    status text not null check (status in ('active', 'expired', 'cancelled')),
+    activated_at timestamptz not null default now(),
+    valid_until timestamptz not null,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
+  );
+
+  create unique index if not exists idx_policies_worker_active
+    on public.policies(worker_profile_id)
+    where status = 'active';
+
 do $$
 begin
     if not exists (
@@ -141,11 +160,21 @@ create table if not exists public.manual_claims (
     id uuid primary key default gen_random_uuid(),
     worker_profile_id uuid not null references public.worker_profiles(profile_id) on delete cascade,
     trigger_event_id uuid references public.trigger_events(id),
+    assigned_reviewer_profile_id uuid references public.insurer_profiles(profile_id) on delete set null,
     claim_mode text not null check (claim_mode in ('manual','trigger_auto')),
+    assignment_state text not null default 'unassigned' check (
+      assignment_state in ('unassigned','assigned','in_review','escalated','resolved')
+    ),
     claim_reason text not null,
     stated_lat numeric(9,6),
     stated_lng numeric(9,6),
     claimed_at timestamptz not null default now(),
+    assigned_at timestamptz,
+    review_due_at timestamptz,
+    first_reviewed_at timestamptz,
+    last_reviewed_at timestamptz,
+    escalated_at timestamptz,
+    escalation_reason text,
     shift_id uuid references public.worker_shifts(id),
     claim_status text not null check (claim_status in (
       'submitted','held','approved','rejected','paid',
@@ -196,6 +225,81 @@ create table if not exists public.payout_recommendations (
     created_at timestamptz not null default now()
 );
 
+create table if not exists public.payout_requests (
+    id uuid primary key default gen_random_uuid(),
+    claim_id uuid not null references public.manual_claims(id) on delete cascade,
+    worker_profile_id uuid not null references public.worker_profiles(profile_id) on delete cascade,
+    payout_recommendation_id uuid references public.payout_recommendations(id) on delete set null,
+    amount numeric(10,2) not null check (amount >= 0),
+    currency text not null default 'INR',
+    provider_key text not null,
+    provider_reference_id text,
+    correlation_id text not null,
+    idempotency_key text not null,
+    status text not null default 'initiated' check (
+      status in ('initiated','pending','processing','settled','failed','reversed','cancelled','manual_review')
+    ),
+    failure_code text,
+    failure_reason text,
+    retry_count integer not null default 0,
+    next_retry_at timestamptz,
+    initiated_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    settled_at timestamptz,
+    initiated_by_profile_id uuid references public.profiles(id) on delete set null,
+    initiation_source text,
+    metadata jsonb not null default '{}'::jsonb,
+    unique (claim_id),
+    unique (idempotency_key)
+);
+
+create unique index if not exists idx_payout_requests_provider_reference
+  on public.payout_requests(provider_key, provider_reference_id)
+  where provider_reference_id is not null;
+
+create index if not exists idx_payout_requests_status
+  on public.payout_requests(status, next_retry_at, updated_at desc);
+
+create table if not exists public.payout_settlement_events (
+    id uuid primary key default gen_random_uuid(),
+    payout_request_id uuid references public.payout_requests(id) on delete set null,
+    provider_key text not null,
+    provider_event_id text not null,
+    provider_reference_id text,
+    event_type text not null,
+    signature_valid boolean not null default false,
+    processing_status text not null default 'received' check (
+      processing_status in ('received','processed','duplicate','rejected','failed')
+    ),
+    error_message text,
+    payload jsonb not null default '{}'::jsonb,
+    payload_hash text,
+    source_ip text,
+    received_at timestamptz not null default now(),
+    processed_at timestamptz,
+    unique (provider_key, provider_event_id)
+);
+
+create index if not exists idx_payout_settlement_events_request
+  on public.payout_settlement_events(payout_request_id, received_at desc);
+
+create table if not exists public.payout_status_transitions (
+    id uuid primary key default gen_random_uuid(),
+    payout_request_id uuid not null references public.payout_requests(id) on delete cascade,
+    previous_status text,
+    new_status text not null,
+    transition_reason text,
+    actor_type text not null default 'system' check (
+      actor_type in ('system','provider_webhook','admin')
+    ),
+    actor_profile_id uuid references public.profiles(id) on delete set null,
+    transition_metadata jsonb not null default '{}'::jsonb,
+    created_at timestamptz not null default now()
+);
+
+create index if not exists idx_payout_status_transitions_request
+  on public.payout_status_transitions(payout_request_id, created_at);
+
 create table if not exists public.audit_events (
     id uuid primary key default gen_random_uuid(),
     actor_profile_id uuid references public.profiles(id) on delete set null,
@@ -225,6 +329,9 @@ comment on table public.platform_order_events is 'Synthetic or future platform-A
 comment on table public.trigger_events is 'Normalized public and internal disruption events.';
 comment on table public.manual_claims is 'Manual or auto-routed claim intake records.';
 comment on table public.payout_recommendations is 'Formula outputs: B, p, S, E, C, FH, U, Cap, expected payout, premium, recommended payout.';
+comment on table public.payout_requests is 'Durable payout execution state for approved claims with provider and retry metadata.';
+comment on table public.payout_settlement_events is 'Raw settlement webhooks persisted idempotently by provider event id.';
+comment on table public.payout_status_transitions is 'Append-only payout status transition trail for auditability and reconciliation.';
 
 
 -- ┌──────────────────────────────────────────────────────────────────┐
@@ -283,10 +390,14 @@ $$;
 alter table public.profiles enable row level security;
 alter table public.worker_profiles enable row level security;
 alter table public.insurer_profiles enable row level security;
+alter table public.policies enable row level security;
 alter table public.manual_claims enable row level security;
 alter table public.claim_evidence enable row level security;
 alter table public.claim_reviews enable row level security;
 alter table public.payout_recommendations enable row level security;
+alter table public.payout_requests enable row level security;
+alter table public.payout_settlement_events enable row level security;
+alter table public.payout_status_transitions enable row level security;
 alter table public.trigger_events enable row level security;
 alter table public.zones enable row level security;
 
@@ -296,6 +407,11 @@ drop policy if exists "Profiles: Admins can read all" on public.profiles;
 drop policy if exists "WorkerProfiles: Workers can read own" on public.worker_profiles;
 drop policy if exists "WorkerProfiles: Admins can read all" on public.worker_profiles;
 drop policy if exists "InsurerProfiles: Admins can read all" on public.insurer_profiles;
+drop policy if exists "Policies: Workers can read own" on public.policies;
+drop policy if exists "Policies: Workers can insert own" on public.policies;
+drop policy if exists "Policies: Workers can update own" on public.policies;
+drop policy if exists "Policies: Admins can read all" on public.policies;
+drop policy if exists "Policies: Admins can update all" on public.policies;
 drop policy if exists "Claims: Workers can read own" on public.manual_claims;
 drop policy if exists "Claims: Workers can insert own" on public.manual_claims;
 drop policy if exists "Claims: Admins can read all" on public.manual_claims;
@@ -307,6 +423,15 @@ drop policy if exists "Reviews: Admins can read all" on public.claim_reviews;
 drop policy if exists "Reviews: Admins can insert" on public.claim_reviews;
 drop policy if exists "Payouts: Workers can read own" on public.payout_recommendations;
 drop policy if exists "Payouts: Admins can read all" on public.payout_recommendations;
+drop policy if exists "Payout Requests: Workers can read own" on public.payout_requests;
+drop policy if exists "Payout Requests: Admins can read all" on public.payout_requests;
+drop policy if exists "Payout Requests: Service manage" on public.payout_requests;
+drop policy if exists "Payout Settlements: Workers can read own" on public.payout_settlement_events;
+drop policy if exists "Payout Settlements: Admins can read all" on public.payout_settlement_events;
+drop policy if exists "Payout Settlements: Service manage" on public.payout_settlement_events;
+drop policy if exists "Payout Transitions: Workers can read own" on public.payout_status_transitions;
+drop policy if exists "Payout Transitions: Admins can read all" on public.payout_status_transitions;
+drop policy if exists "Payout Transitions: Service manage" on public.payout_status_transitions;
 drop policy if exists "Triggers: Read access for all authenticated" on public.trigger_events;
 drop policy if exists "Zones: Read access for all authenticated" on public.zones;
 
@@ -318,6 +443,12 @@ create policy "WorkerProfiles: Workers can read own" on public.worker_profiles f
 create policy "WorkerProfiles: Admins can read all" on public.worker_profiles for select to authenticated using (public.current_user_role() = 'insurer_admin');
 
 create policy "InsurerProfiles: Admins can read all" on public.insurer_profiles for select to authenticated using (public.current_user_role() = 'insurer_admin');
+
+create policy "Policies: Workers can read own" on public.policies for select to authenticated using (worker_profile_id = auth.uid());
+create policy "Policies: Workers can insert own" on public.policies for insert to authenticated with check (worker_profile_id = auth.uid());
+create policy "Policies: Workers can update own" on public.policies for update to authenticated using (worker_profile_id = auth.uid()) with check (worker_profile_id = auth.uid());
+create policy "Policies: Admins can read all" on public.policies for select to authenticated using (public.current_user_role() = 'insurer_admin');
+create policy "Policies: Admins can update all" on public.policies for update to authenticated using (public.current_user_role() = 'insurer_admin') with check (public.current_user_role() = 'insurer_admin');
 
 create policy "Claims: Workers can read own" on public.manual_claims for select to authenticated using (worker_profile_id = auth.uid());
 create policy "Claims: Workers can insert own" on public.manual_claims for insert to authenticated with check (worker_profile_id = auth.uid());
@@ -333,6 +464,26 @@ create policy "Reviews: Admins can insert" on public.claim_reviews for insert to
 
 create policy "Payouts: Workers can read own" on public.payout_recommendations for select to authenticated using (claim_id in (select id from public.manual_claims where worker_profile_id = auth.uid()));
 create policy "Payouts: Admins can read all" on public.payout_recommendations for select to authenticated using (public.current_user_role() = 'insurer_admin');
+
+create policy "Payout Requests: Workers can read own" on public.payout_requests for select to authenticated using (worker_profile_id = auth.uid());
+create policy "Payout Requests: Admins can read all" on public.payout_requests for select to authenticated using (public.current_user_role() = 'insurer_admin');
+create policy "Payout Requests: Service manage" on public.payout_requests for all to service_role using (true) with check (true);
+
+create policy "Payout Settlements: Workers can read own" on public.payout_settlement_events for select to authenticated using (
+  payout_request_id in (
+    select id from public.payout_requests where worker_profile_id = auth.uid()
+  )
+);
+create policy "Payout Settlements: Admins can read all" on public.payout_settlement_events for select to authenticated using (public.current_user_role() = 'insurer_admin');
+create policy "Payout Settlements: Service manage" on public.payout_settlement_events for all to service_role using (true) with check (true);
+
+create policy "Payout Transitions: Workers can read own" on public.payout_status_transitions for select to authenticated using (
+  payout_request_id in (
+    select id from public.payout_requests where worker_profile_id = auth.uid()
+  )
+);
+create policy "Payout Transitions: Admins can read all" on public.payout_status_transitions for select to authenticated using (public.current_user_role() = 'insurer_admin');
+create policy "Payout Transitions: Service manage" on public.payout_status_transitions for all to service_role using (true) with check (true);
 
 create policy "Triggers: Read access for all authenticated" on public.trigger_events for select to authenticated using (true);
 create policy "Zones: Read access for all authenticated" on public.zones for select to authenticated using (true);
@@ -481,6 +632,48 @@ grant all   on public.validated_regional_incidents to service_role;
 -- §5.6 Worker Phone Numbers
 alter table public.worker_profiles
   add column if not exists phone_number text;
+
+-- §5.7 Review Assignment + SLA Workflow
+alter table public.manual_claims
+  add column if not exists assigned_reviewer_profile_id uuid references public.insurer_profiles(profile_id) on delete set null;
+alter table public.manual_claims
+  add column if not exists assignment_state text;
+alter table public.manual_claims
+  add column if not exists assigned_at timestamptz;
+alter table public.manual_claims
+  add column if not exists review_due_at timestamptz;
+alter table public.manual_claims
+  add column if not exists first_reviewed_at timestamptz;
+alter table public.manual_claims
+  add column if not exists last_reviewed_at timestamptz;
+alter table public.manual_claims
+  add column if not exists escalated_at timestamptz;
+alter table public.manual_claims
+  add column if not exists escalation_reason text;
+
+update public.manual_claims
+set assignment_state = 'unassigned'
+where assignment_state is null;
+
+alter table public.manual_claims
+  alter column assignment_state set default 'unassigned';
+
+alter table public.manual_claims
+  drop constraint if exists manual_claims_assignment_state_check;
+
+alter table public.manual_claims
+  add constraint manual_claims_assignment_state_check
+  check (assignment_state in (
+    'unassigned', 'assigned', 'in_review', 'escalated', 'resolved'
+  ));
+
+create index if not exists idx_manual_claims_assigned_reviewer
+  on public.manual_claims(assigned_reviewer_profile_id)
+  where assigned_reviewer_profile_id is not null;
+
+create index if not exists idx_manual_claims_review_due
+  on public.manual_claims(review_due_at)
+  where claim_status in ('submitted', 'soft_hold_verification', 'fraud_escalated_review');
 
 
 -- ┌──────────────────────────────────────────────────────────────────┐

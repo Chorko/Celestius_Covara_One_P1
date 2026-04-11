@@ -34,9 +34,16 @@ FROM deps AS production
 COPY backend/ ./backend/
 COPY .env.example ./.env.example
 
+# Run container as non-root user.
+RUN addgroup --system --gid 1001 covara && \
+    adduser --system --uid 1001 --ingroup covara covara && \
+    chown -R covara:covara /app
+
+USER covara
+
 # Health check — hits the /health endpoint
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready', timeout=3)"
 
 EXPOSE 8000
 

@@ -32,9 +32,20 @@ export default function AdminUsers() {
     setLoading(false)
   }, [supabase])
 
-  useEffect(() => { loadWorkers() }, [loadWorkers])
+  useEffect(() => {
+    queueMicrotask(() => {
+      void loadWorkers()
+    })
+  }, [loadWorkers])
 
-  const handleSearch = (e: React.FormEvent) => { e.preventDefault(); cityFilter.trim() ? loadWorkers(cityFilter.trim()) : loadWorkers() }
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (cityFilter.trim()) {
+      void loadWorkers(cityFilter.trim())
+      return
+    }
+    void loadWorkers()
+  }
 
   const toggleExpand = async (workerId: string) => {
     if (expandedWorker === workerId) { setExpandedWorker(null); return }
