@@ -1,136 +1,3134 @@
-openapi: "3.0.3"
-info:
-  title: Covara One Mock API
-  description: |
-    Minimal runnable scaffold for the DEVTrails parametric income-protection platform.
-    This API exposes three read-only demonstration endpoints that return data already
-    documented in the repository. It is not a production backend.
-  version: 0.1.0-scaffold
-  contact:
-    name: DEVTrails Team
-
-servers:
-  - url: http://localhost:8000
-    description: Local development server
-
-paths:
-  /health:
-    get:
-      summary: Health check
-      description: Returns service status and version.
-      operationId: healthCheck
-      tags: [System]
-      responses:
-        "200":
-          description: Service is healthy
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: ok
-                  service:
-                    type: string
-                    example: covara-one-mock-api
-                  version:
-                    type: string
-                    example: 0.1.0-scaffold
-                  phase:
-                    type: string
-                    example: "documentation-first — this is a demo scaffold, not a production backend"
-
-  /triggers/library:
-    get:
-      summary: Trigger library
-      description: Returns the full 15-trigger library as documented in the root README.
-      operationId: getTriggerLibrary
-      tags: [Triggers]
-      responses:
-        "200":
-          description: Trigger library returned
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  count:
-                    type: integer
-                    example: 15
-                  triggers:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        id:
-                          type: string
-                          example: T2
-                        name:
-                          type: string
-                          example: Heavy Rain Claim
-                        threshold:
-                          type: string
-                          example: "24h rain >= 64.5 mm"
-                        tier:
-                          type: string
-                          enum: [Early Warning, Claim Trigger, Severe Escalation]
-                        anchoring:
-                          type: string
-                          enum: [public, operational]
-                        source:
-                          type: string
-                          example: IMD
-                  note:
-                    type: string
-
-  /claims/sample:
-    get:
-      summary: Sample claim
-      description: Returns the sample claim JSON from claim-engine/examples/sample_claim.json.
-      operationId: getSampleClaim
-      tags: [Claims]
-      responses:
-        "200":
-          description: Sample claim returned
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SampleClaim"
-
-components:
-  schemas:
-    SampleClaim:
-      type: object
-      description: A complete claim object showing the 8-stage pipeline trace.
-      properties:
-        claim_id:
-          type: string
-        worker_id:
-          type: string
-        trigger_id:
-          type: string
-        city:
-          type: string
-        zone_id:
-          type: string
-        event_type:
-          type: string
-        pipeline_stage:
-          type: string
-        decision:
-          type: object
-          properties:
-            status:
-              type: string
-              enum: [auto_approved, held_for_review, escalated, rejected]
-            fraud_band:
-              type: string
-              enum: [low, medium, high]
-        payout_calculation:
-          type: object
-          properties:
-            final_payout:
-              type: number
-            currency:
-              type: string
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Covara One API",
+    "description": "Backend API for the Covara One parametric income-protection platform. Includes zero-touch auto-claims, live trigger ingestion (OpenWeather/TomTom/CPCB), 5-layer fraud detection, IRDAI-compliant KYC (Sandbox.co.in), and Twilio OTP + WhatsApp notifications.",
+    "version": "0.5.0"
+  },
+  "paths": {
+    "/auth/me": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Get Me",
+        "description": "Return the current authenticated user's profile and role.\n\nIf the user has no profile yet (just signed up via Google OAuth),\nreturns needs_onboarding=True so the frontend can redirect to\nthe onboarding flow.",
+        "operationId": "get_me_auth_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/complete-onboarding/worker": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Complete Worker Onboarding",
+        "description": "Create profile + worker_profiles rows for a Google OAuth user\nwho hasn't completed onboarding yet.",
+        "operationId": "complete_worker_onboarding_auth_complete_onboarding_worker_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OnboardingWorkerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/complete-onboarding/insurer": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Complete Insurer Onboarding",
+        "description": "Create profile + insurer_profiles rows for a Google OAuth user\nwho registers as an insurer/admin.",
+        "operationId": "complete_insurer_onboarding_auth_complete_onboarding_insurer_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OnboardingInsurerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workers/me": {
+      "get": {
+        "tags": [
+          "Workers"
+        ],
+        "summary": "Get My Worker Profile",
+        "description": "Return the authenticated worker's full profile (profiles + worker_profiles).",
+        "operationId": "get_my_worker_profile_workers_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Workers"
+        ],
+        "summary": "Update My Worker Profile",
+        "description": "Update the authenticated worker's profile.",
+        "operationId": "update_my_worker_profile_workers_me_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkerProfileUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workers/me/stats": {
+      "get": {
+        "tags": [
+          "Workers"
+        ],
+        "summary": "Get My Worker Stats",
+        "description": "Return historical logic. If new user, dynamically synthesize 14 days of realistic platform stats.",
+        "operationId": "get_my_worker_stats_workers_me_stats_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workers/": {
+      "get": {
+        "tags": [
+          "Workers"
+        ],
+        "summary": "List Workers",
+        "description": "List worker profiles. Insurer/admin only.",
+        "operationId": "list_workers_workers__get",
+        "parameters": [
+          {
+            "name": "city",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "City"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workers/{worker_id}": {
+      "get": {
+        "tags": [
+          "Workers"
+        ],
+        "summary": "Get Worker Detail",
+        "description": "Get a single worker's full profile. Insurer/admin only.",
+        "operationId": "get_worker_detail_workers__worker_id__get",
+        "parameters": [
+          {
+            "name": "worker_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Worker Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/zones/": {
+      "get": {
+        "tags": [
+          "Zones"
+        ],
+        "summary": "List Zones",
+        "description": "List operational zones, optionally filtered by city.\n\nReturns zone id, name, city, and center coordinates.\nPolygon GeoJSON is excluded from list view for performance.",
+        "operationId": "list_zones_zones__get",
+        "parameters": [
+          {
+            "name": "city",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "City"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/zones/{zone_id}": {
+      "get": {
+        "tags": [
+          "Zones"
+        ],
+        "summary": "Get Zone Detail",
+        "description": "Get full zone detail including polygon GeoJSON.",
+        "operationId": "get_zone_detail_zones__zone_id__get",
+        "parameters": [
+          {
+            "name": "zone_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Zone Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/zones/cities/list": {
+      "get": {
+        "tags": [
+          "Zones"
+        ],
+        "summary": "List Cities",
+        "description": "Return distinct cities that have zones defined.",
+        "operationId": "list_cities_zones_cities_list_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/claims/": {
+      "post": {
+        "tags": [
+          "Claims"
+        ],
+        "summary": "Submit Claim",
+        "description": "Submit a manual claim.",
+        "operationId": "submit_claim_claims__post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManualClaimRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Claims"
+        ],
+        "summary": "List Claims",
+        "description": "List claims. Workers see their own; Admins see all.",
+        "operationId": "list_claims_claims__get",
+        "parameters": [
+          {
+            "name": "queue",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "all | mine | unassigned | overdue",
+              "default": "all",
+              "title": "Queue"
+            },
+            "description": "all | mine | unassigned | overdue"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/claims": {
+      "post": {
+        "tags": [
+          "Claims"
+        ],
+        "summary": "Submit Claim",
+        "description": "Submit a manual claim.",
+        "operationId": "submit_claim_claims_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManualClaimRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Claims"
+        ],
+        "summary": "List Claims",
+        "description": "List claims. Workers see their own; Admins see all.",
+        "operationId": "list_claims_claims_get",
+        "parameters": [
+          {
+            "name": "queue",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "all | mine | unassigned | overdue",
+              "default": "all",
+              "title": "Queue"
+            },
+            "description": "all | mine | unassigned | overdue"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/claims/{claim_id}": {
+      "get": {
+        "tags": [
+          "Claims"
+        ],
+        "summary": "Get Claim Detail",
+        "description": "Get single claim detail, evidence, and payout recommendations.",
+        "operationId": "get_claim_detail_claims__claim_id__get",
+        "parameters": [
+          {
+            "name": "claim_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Claim Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/claims/{claim_id}/assign": {
+      "post": {
+        "tags": [
+          "Claims"
+        ],
+        "summary": "Assign Claim",
+        "description": "Assign claim ownership and SLA due timestamp for review operations.",
+        "operationId": "assign_claim_claims__claim_id__assign_post",
+        "parameters": [
+          {
+            "name": "claim_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Claim Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignClaimRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/claims/{claim_id}/review": {
+      "post": {
+        "tags": [
+          "Claims"
+        ],
+        "summary": "Admin Review Claim",
+        "description": "Submit a manual decision/review for a claim.",
+        "operationId": "admin_review_claim_claims__claim_id__review_post",
+        "parameters": [
+          {
+            "name": "claim_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Claim Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminReviewRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/claims/{claim_id}/flag": {
+      "post": {
+        "tags": [
+          "Claims"
+        ],
+        "summary": "Flag Post Approval",
+        "description": "Flag a previously approved/paid claim for post-approval fraud.\nApplies trust score penalty to the worker and logs for audit.",
+        "operationId": "flag_post_approval_claims__claim_id__flag_post",
+        "parameters": [
+          {
+            "name": "claim_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Claim Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostApprovalFlagRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/claims/auto-process": {
+      "post": {
+        "tags": [
+          "Claims"
+        ],
+        "summary": "Zero-Touch Auto-Claim Engine",
+        "description": "Scans recent trigger events and automatically creates claims for every eligible worker \u2014 no manual filing required. This is the parametric insurance core: workers get paid without lifting a finger. Admin only. Safe to run repeatedly \u2014 duplicate claims are prevented by DB constraints.",
+        "operationId": "auto_process_claims_claims_auto_process_post",
+        "parameters": [
+          {
+            "name": "lookback_hours",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 6,
+              "title": "Lookback Hours"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/claims/offline-sync": {
+      "post": {
+        "tags": [
+          "Claims"
+        ],
+        "summary": "Offline Claim Sync ('Dark Zone')",
+        "description": "Called when a worker regains internet connectivity after being in a 'Dark Zone' (e.g., cell towers knocked out during a storm). Batches offline GPS timestamps. Claims are marked 'soft_hold_verification' to allow DBSCAN and regional correlation to verify if the zone actually experienced a network outage.",
+        "operationId": "sync_offline_claims_claims_offline_sync_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OfflineSyncRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/events/outbox/relay": {
+      "post": {
+        "tags": [
+          "Events"
+        ],
+        "summary": "Relay pending outbox events",
+        "description": "Publishes pending/failed outbox events through the configured event bus and updates delivery status with retry backoff on failure.",
+        "operationId": "relay_outbox_events_events_outbox_relay_post",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/events/outbox/status": {
+      "get": {
+        "tags": [
+          "Events"
+        ],
+        "summary": "Outbox status counts",
+        "operationId": "get_outbox_status_events_outbox_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/events/outbox/dead-letter": {
+      "get": {
+        "tags": [
+          "Events"
+        ],
+        "summary": "List dead-letter outbox events",
+        "operationId": "list_dead_letters_events_outbox_dead_letter_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/events/outbox/dead-letter/requeue": {
+      "post": {
+        "tags": [
+          "Events"
+        ],
+        "summary": "Requeue dead-letter outbox events",
+        "operationId": "requeue_dead_letters_events_outbox_dead_letter_requeue_post",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/events/consumers/status": {
+      "get": {
+        "tags": [
+          "Events"
+        ],
+        "summary": "Consumer ledger status counts",
+        "operationId": "get_consumer_status_events_consumers_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/events/consumers/dead-letter": {
+      "get": {
+        "tags": [
+          "Events"
+        ],
+        "summary": "List dead-letter consumer entries",
+        "operationId": "list_consumer_dead_letters_events_consumers_dead_letter_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/events/consumers/dead-letter/requeue": {
+      "post": {
+        "tags": [
+          "Events"
+        ],
+        "summary": "Requeue dead-letter consumer entries",
+        "operationId": "requeue_consumer_dead_letters_events_consumers_dead_letter_requeue_post",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/triggers/library": {
+      "get": {
+        "tags": [
+          "Triggers"
+        ],
+        "summary": "Get Trigger Library",
+        "description": "Returns the static 15-trigger lookup library.",
+        "operationId": "get_trigger_library_triggers_library_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/triggers/overlap": {
+      "get": {
+        "tags": [
+          "Triggers"
+        ],
+        "summary": "Get Overlapping",
+        "description": "Find all trigger events that temporally overlap with a worker's\nshift window in the given zone.  Uses the trigger-engine overlap\nlogic (event started before shift ends AND event ended after shift\nstarts or is still ongoing).",
+        "operationId": "get_overlapping_triggers_overlap_get",
+        "parameters": [
+          {
+            "name": "zone_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Zone Id"
+            }
+          },
+          {
+            "name": "shift_start",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Shift Start"
+            }
+          },
+          {
+            "name": "shift_end",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Shift End"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/triggers/live": {
+      "get": {
+        "tags": [
+          "Triggers"
+        ],
+        "summary": "Get Live Triggers",
+        "description": "Get currently active triggers. For demo, it fetches recent triggers without an end_date\nor ended in the future, or just the most recent triggers ordered by start_date.",
+        "operationId": "get_live_triggers_triggers_live_get",
+        "parameters": [
+          {
+            "name": "city",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "City"
+            }
+          },
+          {
+            "name": "zone_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Zone Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/triggers/simulate": {
+      "post": {
+        "tags": [
+          "Triggers"
+        ],
+        "summary": "Simulate Trigger",
+        "description": "Ingest a mock trigger event into the system. Admin only.",
+        "operationId": "simulate_trigger_triggers_simulate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimulateTriggerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/policies/quote": {
+      "get": {
+        "tags": [
+          "Policies"
+        ],
+        "summary": "Get Premium Quote",
+        "description": "Computes and returns the weekly premium quote with parametric\npayout bands for the selected plan.",
+        "operationId": "get_premium_quote_policies_quote_get",
+        "parameters": [
+          {
+            "name": "plan",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Plan: 'essential' or 'plus'",
+              "default": "essential",
+              "title": "Plan"
+            },
+            "description": "Plan: 'essential' or 'plus'"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/policies/activate": {
+      "post": {
+        "tags": [
+          "Policies"
+        ],
+        "summary": "Activate Policy",
+        "description": "Activates a weekly policy for the selected plan.\nPersists the policy record to the 'policies' table in Supabase.",
+        "operationId": "activate_policy_policies_activate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActivatePolicyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/analytics/summary": {
+      "get": {
+        "tags": [
+          "Analytics"
+        ],
+        "summary": "Get Dashboard Summary",
+        "description": "Returns aggregate metrics for the admin dashboard.",
+        "operationId": "get_dashboard_summary_analytics_summary_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ingest/weather": {
+      "get": {
+        "tags": [
+          "Data Ingestion"
+        ],
+        "summary": "Ingest Weather",
+        "description": "Fetch current weather data via the resilient provider pool.\nIf zone_id is provided, also evaluates against trigger thresholds\nand creates trigger_events for any crossed thresholds.",
+        "operationId": "ingest_weather_ingest_weather_get",
+        "parameters": [
+          {
+            "name": "lat",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "default": 19.08,
+              "title": "Lat"
+            }
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "default": 72.88,
+              "title": "Lon"
+            }
+          },
+          {
+            "name": "zone_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Zone ID to evaluate triggers for",
+              "title": "Zone Id"
+            },
+            "description": "Zone ID to evaluate triggers for"
+          },
+          {
+            "name": "city",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "City name for trigger metadata",
+              "title": "City"
+            },
+            "description": "City name for trigger metadata"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ingest/aqi": {
+      "get": {
+        "tags": [
+          "Data Ingestion"
+        ],
+        "summary": "Ingest Aqi",
+        "description": "Fetch current AQI data via the resilient provider pool.\nIf zone_id is provided, also evaluates against trigger thresholds\nand creates trigger_events for any crossed thresholds.",
+        "operationId": "ingest_aqi_ingest_aqi_get",
+        "parameters": [
+          {
+            "name": "lat",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "default": 19.08,
+              "title": "Lat"
+            }
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "default": 72.88,
+              "title": "Lon"
+            }
+          },
+          {
+            "name": "zone_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Zone ID to evaluate triggers for",
+              "title": "Zone Id"
+            },
+            "description": "Zone ID to evaluate triggers for"
+          },
+          {
+            "name": "city",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "City name for trigger metadata",
+              "title": "City"
+            },
+            "description": "City name for trigger metadata"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ingest/traffic": {
+      "get": {
+        "tags": [
+          "Data Ingestion"
+        ],
+        "summary": "Ingest Traffic",
+        "description": "Fetch current traffic data via the resilient provider pool.\nIf zone_id is provided, also evaluates against trigger thresholds\nand creates trigger_events for any crossed thresholds.",
+        "operationId": "ingest_traffic_ingest_traffic_get",
+        "parameters": [
+          {
+            "name": "lat",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "default": 19.08,
+              "title": "Lat"
+            }
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "default": 72.88,
+              "title": "Lon"
+            }
+          },
+          {
+            "name": "zone_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Zone ID to evaluate triggers for",
+              "title": "Zone Id"
+            },
+            "description": "Zone ID to evaluate triggers for"
+          },
+          {
+            "name": "city",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "City name for trigger metadata",
+              "title": "City"
+            },
+            "description": "City name for trigger metadata"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ingest/health": {
+      "get": {
+        "tags": [
+          "Data Ingestion"
+        ],
+        "summary": "Pool Health",
+        "description": "Returns health diagnostics for all API provider pools.\nShows: provider status, call counts, error rates, cache sizes.",
+        "operationId": "pool_health_ingest_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ingest/scan-all-zones": {
+      "post": {
+        "tags": [
+          "Data Ingestion"
+        ],
+        "summary": "Scan All Zones",
+        "description": "Batch scan: Fetches weather, AQI, and traffic data for ALL configured\nzones and evaluates every reading against the trigger threshold table.\n\nCreates trigger_events for any crossed thresholds.\nRespects the 6-hour cooldown to prevent duplicate triggers.\n\nThis is the main endpoint for scheduled/cron-based trigger ingestion.\nAdmin only.",
+        "operationId": "scan_all_zones_ingest_scan_all_zones_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ingest/compute-dynamic-thresholds": {
+      "post": {
+        "tags": [
+          "Data Ingestion"
+        ],
+        "summary": "Compute Dynamic Thresholds",
+        "description": "Computes and upserts dynamic environmental thresholds for all zones\nfor the current month based on historical API data simulations.\nAdmin only.",
+        "operationId": "compute_dynamic_thresholds_ingest_compute_dynamic_thresholds_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/kyc/otp/send": {
+      "post": {
+        "tags": [
+          "KYC & Verification"
+        ],
+        "summary": "Send Phone Otp",
+        "description": "Send OTP to worker's phone via Twilio Verify (SMS).\nUsed for Tier 0 KYC and step-up authentication.",
+        "operationId": "send_phone_otp_kyc_otp_send_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendOTPRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/kyc/otp/verify": {
+      "post": {
+        "tags": [
+          "KYC & Verification"
+        ],
+        "summary": "Verify Phone Otp",
+        "description": "Verify OTP code entered by worker.\nOn success, marks phone as verified in worker_profiles.",
+        "operationId": "verify_phone_otp_kyc_otp_verify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyOTPRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/kyc/aadhaar/initiate": {
+      "post": {
+        "tags": [
+          "KYC & Verification"
+        ],
+        "summary": "Initiate Aadhaar Kyc",
+        "description": "Start Aadhaar OTP eKYC.\nSends OTP to the mobile number registered with UIDAI (not our system).\nWorker must enter this OTP on their Aadhaar-linked phone.",
+        "operationId": "initiate_aadhaar_kyc_kyc_aadhaar_initiate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AadhaarInitiateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/kyc/aadhaar/verify": {
+      "post": {
+        "tags": [
+          "KYC & Verification"
+        ],
+        "summary": "Verify Aadhaar Kyc",
+        "description": "Verify Aadhaar OTP and retrieve verified identity from UIDAI.\nOn success, updates worker_profiles with aadhaar_verified = true.",
+        "operationId": "verify_aadhaar_kyc_kyc_aadhaar_verify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AadhaarVerifyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/kyc/bank/verify": {
+      "post": {
+        "tags": [
+          "KYC & Verification"
+        ],
+        "summary": "Verify Bank",
+        "description": "Verify bank account via penny-less verification (Sandbox.co.in).\nRequired before any payout can be processed.",
+        "operationId": "verify_bank_kyc_bank_verify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BankVerifyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/kyc/pan/verify": {
+      "post": {
+        "tags": [
+          "KYC & Verification"
+        ],
+        "summary": "Verify Pan Card",
+        "description": "Verify PAN card (optional for our premium/payout range).\nMandatory only if annual payout exceeds \u20b91,00,000 (IRDAI AML rule).\nCollected for completeness and higher trust tier.",
+        "operationId": "verify_pan_card_kyc_pan_verify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PANVerifyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/kyc/status/{worker_id}": {
+      "get": {
+        "tags": [
+          "KYC & Verification"
+        ],
+        "summary": "Get Kyc Status",
+        "description": "Get the current KYC tier and verification status for a worker.",
+        "operationId": "get_kyc_status_kyc_status__worker_id__get",
+        "parameters": [
+          {
+            "name": "worker_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Worker Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/simulate/mock-data/generate": {
+      "post": {
+        "tags": [
+          "Simulation & Mock Data"
+        ],
+        "summary": "Generate Mock Data",
+        "description": "Generates synthetic data into the DB based on the seed scripts.",
+        "operationId": "generate_mock_data_simulate_mock_data_generate_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/simulate/claim-scenario": {
+      "post": {
+        "tags": [
+          "Simulation & Mock Data"
+        ],
+        "summary": "Simulate Claim Scenario",
+        "description": "Simulates a claim through the 8-stage pipeline using real\nfunctions without committing records. Returns detailed diagnostics.",
+        "operationId": "simulate_claim_scenario_simulate_claim_scenario_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScenarioRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ops/metrics": {
+      "get": {
+        "tags": [
+          "Operations"
+        ],
+        "summary": "In-memory observability metrics snapshot",
+        "operationId": "get_ops_metrics_ops_metrics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ops/status": {
+      "get": {
+        "tags": [
+          "Operations"
+        ],
+        "summary": "Operational status overview",
+        "operationId": "get_ops_status_ops_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/payouts/claims/{claim_id}/initiate": {
+      "post": {
+        "tags": [
+          "Payouts"
+        ],
+        "summary": "Initiate payout for an approved claim",
+        "operationId": "initiate_claim_payout_payouts_claims__claim_id__initiate_post",
+        "parameters": [
+          {
+            "name": "claim_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Claim Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PayoutInitiateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/payouts/claims/{claim_id}/retry": {
+      "post": {
+        "tags": [
+          "Payouts"
+        ],
+        "summary": "Retry a failed/manual-review payout",
+        "operationId": "retry_claim_payout_payouts_claims__claim_id__retry_post",
+        "parameters": [
+          {
+            "name": "claim_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Claim Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PayoutRetryRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/payouts/claims/{claim_id}": {
+      "get": {
+        "tags": [
+          "Payouts"
+        ],
+        "summary": "Get payout request and settlement trace for a claim",
+        "operationId": "get_claim_payout_trace_payouts_claims__claim_id__get",
+        "parameters": [
+          {
+            "name": "claim_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Claim Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/payouts/webhooks/{provider_key}": {
+      "post": {
+        "tags": [
+          "Payouts"
+        ],
+        "summary": "Provider settlement webhook",
+        "description": "Receives provider settlement callbacks. Signature is verified via X-Payout-Signature, then events are processed idempotently by provider event id.",
+        "operationId": "payout_webhook_payouts_webhooks__provider_key__post",
+        "parameters": [
+          {
+            "name": "provider_key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Provider Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rewards/balance": {
+      "get": {
+        "tags": [
+          "Rewards"
+        ],
+        "summary": "Rewards Balance",
+        "description": "Get current coin balance and redemption options.",
+        "operationId": "rewards_balance_rewards_balance_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rewards/history": {
+      "get": {
+        "tags": [
+          "Rewards"
+        ],
+        "summary": "Rewards History",
+        "description": "Get recent coin transaction history.",
+        "operationId": "rewards_history_rewards_history_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rewards/check-in": {
+      "post": {
+        "tags": [
+          "Rewards"
+        ],
+        "summary": "Daily Check In",
+        "description": "Check in to earn weekly login bonus coins.",
+        "operationId": "daily_check_in_rewards_check_in_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rewards/redeem/discount": {
+      "post": {
+        "tags": [
+          "Rewards"
+        ],
+        "summary": "Redeem Discount Endpoint",
+        "description": "Redeem 100 coins for a \u20b95 premium discount.",
+        "operationId": "redeem_discount_endpoint_rewards_redeem_discount_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rewards/redeem/free-week": {
+      "post": {
+        "tags": [
+          "Rewards"
+        ],
+        "summary": "Redeem Free Week Endpoint",
+        "description": "Redeem 500 coins for a free week of coverage.",
+        "operationId": "redeem_free_week_endpoint_rewards_redeem_free_week_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Root",
+        "description": "API root \u2014 returns basic info.",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Health Check",
+        "description": "Health check with config status.",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ready": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Readiness Check",
+        "description": "Readiness signal with key runtime component states.",
+        "operationId": "readiness_check_ready_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/seed": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Run Seed",
+        "description": "Run the seed data loader. Insurer/admin only.\n\nSeeds zones and trigger events into the database.\nSafe to run multiple times \u2014 uses upsert for zones.",
+        "operationId": "run_seed_admin_seed_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AadhaarInitiateRequest": {
+        "properties": {
+          "aadhaar_number": {
+            "type": "string",
+            "maxLength": 12,
+            "minLength": 12,
+            "title": "Aadhaar Number"
+          }
+        },
+        "type": "object",
+        "required": [
+          "aadhaar_number"
+        ],
+        "title": "AadhaarInitiateRequest"
+      },
+      "AadhaarVerifyRequest": {
+        "properties": {
+          "reference_id": {
+            "type": "string",
+            "title": "Reference Id"
+          },
+          "otp": {
+            "type": "string",
+            "maxLength": 6,
+            "minLength": 6,
+            "title": "Otp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reference_id",
+          "otp"
+        ],
+        "title": "AadhaarVerifyRequest"
+      },
+      "ActivatePolicyRequest": {
+        "properties": {
+          "plan": {
+            "type": "string",
+            "title": "Plan",
+            "default": "essential"
+          }
+        },
+        "type": "object",
+        "title": "ActivatePolicyRequest"
+      },
+      "AdminReviewRequest": {
+        "properties": {
+          "decision": {
+            "type": "string",
+            "title": "Decision"
+          },
+          "decision_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "decision"
+        ],
+        "title": "AdminReviewRequest"
+      },
+      "AssignClaimRequest": {
+        "properties": {
+          "reviewer_profile_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewer Profile Id"
+          },
+          "due_in_hours": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due In Hours"
+          },
+          "assignment_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignment Note"
+          }
+        },
+        "type": "object",
+        "title": "AssignClaimRequest"
+      },
+      "BankVerifyRequest": {
+        "properties": {
+          "account_number": {
+            "type": "string",
+            "title": "Account Number"
+          },
+          "ifsc": {
+            "type": "string",
+            "maxLength": 11,
+            "minLength": 11,
+            "title": "Ifsc"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_number",
+          "ifsc"
+        ],
+        "title": "BankVerifyRequest"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "ManualClaimRequest": {
+        "properties": {
+          "claim_reason": {
+            "type": "string",
+            "title": "Claim Reason"
+          },
+          "stated_lat": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stated Lat"
+          },
+          "stated_lng": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stated Lng"
+          },
+          "trigger_event_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger Event Id"
+          },
+          "shift_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shift Id"
+          },
+          "evidence_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Url"
+          },
+          "plan": {
+            "type": "string",
+            "title": "Plan",
+            "default": "essential"
+          }
+        },
+        "type": "object",
+        "required": [
+          "claim_reason"
+        ],
+        "title": "ManualClaimRequest"
+      },
+      "OfflineSyncPayload": {
+        "properties": {
+          "stated_lat": {
+            "type": "number",
+            "title": "Stated Lat"
+          },
+          "stated_lng": {
+            "type": "number",
+            "title": "Stated Lng"
+          },
+          "offline_timestamp": {
+            "type": "string",
+            "title": "Offline Timestamp"
+          },
+          "claim_reason": {
+            "type": "string",
+            "title": "Claim Reason",
+            "default": "Dark Zone Offline Sync"
+          }
+        },
+        "type": "object",
+        "required": [
+          "stated_lat",
+          "stated_lng",
+          "offline_timestamp"
+        ],
+        "title": "OfflineSyncPayload"
+      },
+      "OfflineSyncRequest": {
+        "properties": {
+          "sync_payloads": {
+            "items": {
+              "$ref": "#/components/schemas/OfflineSyncPayload"
+            },
+            "type": "array",
+            "title": "Sync Payloads"
+          },
+          "plan": {
+            "type": "string",
+            "title": "Plan",
+            "default": "essential"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sync_payloads"
+        ],
+        "title": "OfflineSyncRequest"
+      },
+      "OnboardingInsurerRequest": {
+        "properties": {
+          "full_name": {
+            "type": "string",
+            "title": "Full Name"
+          },
+          "company_name": {
+            "type": "string",
+            "title": "Company Name"
+          },
+          "job_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "full_name",
+          "company_name"
+        ],
+        "title": "OnboardingInsurerRequest",
+        "description": "Complete insurer/admin profile after Google OAuth signup."
+      },
+      "OnboardingWorkerRequest": {
+        "properties": {
+          "full_name": {
+            "type": "string",
+            "title": "Full Name"
+          },
+          "platform_name": {
+            "type": "string",
+            "title": "Platform Name"
+          },
+          "city": {
+            "type": "string",
+            "title": "City"
+          },
+          "vehicle_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vehicle Type"
+          },
+          "avg_hourly_income_inr": {
+            "type": "number",
+            "title": "Avg Hourly Income Inr"
+          },
+          "gps_consent": {
+            "type": "boolean",
+            "title": "Gps Consent",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "full_name",
+          "platform_name",
+          "city",
+          "avg_hourly_income_inr"
+        ],
+        "title": "OnboardingWorkerRequest",
+        "description": "Complete worker profile after Google OAuth signup."
+      },
+      "PANVerifyRequest": {
+        "properties": {
+          "pan_number": {
+            "type": "string",
+            "maxLength": 10,
+            "minLength": 10,
+            "title": "Pan Number"
+          }
+        },
+        "type": "object",
+        "required": [
+          "pan_number"
+        ],
+        "title": "PANVerifyRequest"
+      },
+      "PayoutInitiateRequest": {
+        "properties": {
+          "provider_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Key"
+          },
+          "initiation_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Initiation Note"
+          }
+        },
+        "type": "object",
+        "title": "PayoutInitiateRequest"
+      },
+      "PayoutRetryRequest": {
+        "properties": {
+          "provider_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Key"
+          },
+          "retry_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry Note"
+          }
+        },
+        "type": "object",
+        "title": "PayoutRetryRequest"
+      },
+      "PostApprovalFlagRequest": {
+        "properties": {
+          "fraud_severity": {
+            "type": "string",
+            "title": "Fraud Severity",
+            "default": "moderate"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "title": "PostApprovalFlagRequest"
+      },
+      "ScenarioRequest": {
+        "properties": {
+          "worker_id": {
+            "type": "string",
+            "title": "Worker Id"
+          },
+          "zone_id": {
+            "type": "string",
+            "title": "Zone Id"
+          },
+          "trigger_family": {
+            "type": "string",
+            "title": "Trigger Family"
+          },
+          "raw_value": {
+            "type": "number",
+            "title": "Raw Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "worker_id",
+          "zone_id",
+          "trigger_family",
+          "raw_value"
+        ],
+        "title": "ScenarioRequest"
+      },
+      "SendOTPRequest": {
+        "properties": {
+          "phone_number": {
+            "type": "string",
+            "title": "Phone Number",
+            "description": "E.164 format",
+            "example": "+919876543210"
+          }
+        },
+        "type": "object",
+        "required": [
+          "phone_number"
+        ],
+        "title": "SendOTPRequest"
+      },
+      "SimulateTriggerRequest": {
+        "properties": {
+          "city": {
+            "type": "string",
+            "title": "City"
+          },
+          "zone_id": {
+            "type": "string",
+            "title": "Zone Id"
+          },
+          "trigger_family": {
+            "type": "string",
+            "title": "Trigger Family"
+          },
+          "trigger_code": {
+            "type": "string",
+            "title": "Trigger Code"
+          },
+          "observed_value": {
+            "type": "number",
+            "title": "Observed Value"
+          },
+          "severity_band": {
+            "type": "string",
+            "title": "Severity Band"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "city",
+          "zone_id",
+          "trigger_family",
+          "trigger_code",
+          "observed_value",
+          "severity_band"
+        ],
+        "title": "SimulateTriggerRequest"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "VerifyOTPRequest": {
+        "properties": {
+          "phone_number": {
+            "type": "string",
+            "title": "Phone Number"
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 8,
+            "minLength": 4,
+            "title": "Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "phone_number",
+          "code"
+        ],
+        "title": "VerifyOTPRequest"
+      },
+      "WorkerProfileUpdate": {
+        "properties": {
+          "platform_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Platform Name"
+          },
+          "city": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City"
+          },
+          "preferred_zone_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferred Zone Id"
+          },
+          "vehicle_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vehicle Type"
+          },
+          "avg_hourly_income_inr": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Hourly Income Inr"
+          },
+          "gps_consent": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gps Consent"
+          }
+        },
+        "type": "object",
+        "title": "WorkerProfileUpdate",
+        "description": "Fields a worker can update on their own profile."
+      }
+    }
+  }
+}

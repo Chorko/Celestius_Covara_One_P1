@@ -9,6 +9,7 @@ import sys, os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import asyncio
+import httpx
 from unittest.mock import patch
 from backend.app.services.kyc_service import (
     aadhaar_generate_otp,
@@ -26,6 +27,53 @@ from backend.app.services.twilio_service import (
     send_whatsapp_template,
     MESSAGE_TEMPLATES,
 )
+
+
+def _make_fake_async_client(*, payload: dict, status_code: int = 200):
+    calls: list[dict] = []
+
+    class _FakeResponse:
+        def __init__(self, data: dict, code: int):
+            self._data = data
+            self.status_code = code
+            self.text = str(data)
+            self.request = httpx.Request("GET", "https://example.test")
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise httpx.HTTPStatusError(
+                    f"HTTP {self.status_code}",
+                    request=self.request,
+                    response=httpx.Response(
+                        self.status_code,
+                        request=self.request,
+                        json=self._data,
+                    ),
+                )
+
+        def json(self):
+            return self._data
+
+    class _FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            self.args = args
+            self.kwargs = kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def get(self, url, headers=None):
+            calls.append({"method": "GET", "url": url, "headers": headers, "json": None})
+            return _FakeResponse(payload, status_code)
+
+        async def post(self, url, json=None, headers=None):
+            calls.append({"method": "POST", "url": url, "headers": headers, "json": json})
+            return _FakeResponse(payload, status_code)
+
+    return _FakeAsyncClient, calls
 
 
 # ── KYC Tier Computation ─────────────────────────────────────────────
@@ -151,3 +199,63 @@ class TestKYCMock:
         assert result["success"] is True
         assert result["verified"] is True
         assert result.get("name_at_bank") is not None
+
+
+class TestKYCRealPath:
+    """Focused real-path tests with mocked HTTP transport (non-mock mode forced)."""
+
+    @patch("backend.app.services.kyc_service._mock_mode", return_value=False)
+    def test_pan_verify_real_path_awaits_http_and_parses_response(self, _mock_mode):
+        fake_client, calls = _make_fake_async_client(
+            payload={
+                "data": {
+                    "registered_name": "REAL USER",
+                    "type": "individual",
+                    "pan_status": "active",
+                }
+            }
+        )
+        with patch("backend.app.services.kyc_service.httpx.AsyncClient", fake_client):
+            result = asyncio.run(verify_pan("ABCDE1234F"))
+
+        assert result["success"] is True
+        assert result["verified"] is True
+        assert result["name"] == "REAL USER"
+        assert result["mock"] is False
+
+        assert len(calls) == 1
+        assert calls[0]["method"] == "GET"
+        assert "/pans/ABCDE1234F/verify" in calls[0]["url"]
+        assert calls[0]["headers"]["Authorization"].startswith("Bearer ")
+        assert "x-api-key" in calls[0]["headers"]
+
+    @patch("backend.app.services.kyc_service._mock_mode", return_value=False)
+    def test_aadhaar_generate_real_path_awaits_http_and_maps_reference(self, _mock_mode):
+        fake_client, calls = _make_fake_async_client(
+            payload={"message": "OTP sent", "data": {"reference_id": "REF-001"}}
+        )
+        with patch("backend.app.services.kyc_service.httpx.AsyncClient", fake_client):
+            result = asyncio.run(aadhaar_generate_otp("999941057058"))
+
+        assert result["success"] is True
+        assert result["reference_id"] == "REF-001"
+        assert result["mock"] is False
+
+        assert len(calls) == 1
+        assert calls[0]["method"] == "POST"
+        assert calls[0]["json"]["aadhaar_number"] == "999941057058"
+        assert "/kyc/aadhaar/okyc/otp" in calls[0]["url"]
+
+    @patch("backend.app.services.kyc_service._mock_mode", return_value=False)
+    def test_pan_verify_real_path_maps_http_status_error(self, _mock_mode):
+        fake_client, _calls = _make_fake_async_client(
+            payload={"message": "Unauthorized"},
+            status_code=401,
+        )
+        with patch("backend.app.services.kyc_service.httpx.AsyncClient", fake_client):
+            result = asyncio.run(verify_pan("ABCDE1234F"))
+
+        assert result["success"] is False
+        assert result["mock"] is False
+        assert result["error"] == "sandbox_http_401"
+        assert result["provider_status_code"] == 401

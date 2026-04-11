@@ -346,6 +346,7 @@ def run_claim_pipeline(
             "fraud_band": fraud_res["fraud_band"],
             "flags": fraud_res.get("flags", []),
             "flag_count": fraud_res.get("flag_count", 0),
+            "device_trust": fraud_res.get("device_trust"),
             "requires_liveness_check": fraud_res.get(
                 "requires_liveness_check", False
             ),

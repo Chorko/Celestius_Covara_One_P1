@@ -50,9 +50,15 @@ export default function AdminTriggers() {
         setSimForm(s => ({ ...s, zone_id: zoneList[0].id, city: zoneList[0].city }))
       }
     } catch (e) { console.error('Could not load zones', e) }
-  }, [supabase]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [supabase, simForm.zone_id])
 
-  useEffect(() => { loadTriggers(); loadHistoryTriggers(); loadZones() }, [loadTriggers, loadHistoryTriggers, loadZones])
+  useEffect(() => {
+    queueMicrotask(() => {
+      void loadTriggers()
+      void loadHistoryTriggers()
+      void loadZones()
+    })
+  }, [loadTriggers, loadHistoryTriggers, loadZones])
 
   const handleSimulate = async (e: React.FormEvent) => {
     e.preventDefault(); setIsSimulating(true); setSimResult(null)

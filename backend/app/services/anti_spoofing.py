@@ -317,12 +317,22 @@ def check_movement_plausibility(
 # ── Emulator / Root Detection ────────────────────────────────────────────
 
 
+def _coerce_unit_float(value) -> float | None:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+
+    return max(0.0, min(1.0, parsed))
+
+
 def check_emulator_signals(device_context: dict) -> dict:
     """
-    Detect rooted devices, emulator fingerprints, mock-location permission,
-    developer-mode, and sensor inconsistency.
+    Evaluate mobile trust posture from emulator/root/debugger signals,
+    attestation status, and signed-device-context quality.
     """
     flags = []
+    advisory = []
 
     device_name = (device_context.get("device_model") or "").lower()
     user_agent = (device_context.get("user_agent") or "").lower()
@@ -333,6 +343,10 @@ def check_emulator_signals(device_context: dict) -> dict:
 
     if device_context.get("is_rooted"):
         flags.append("rooted_device")
+    if device_context.get("is_emulator"):
+        flags.append("runtime_emulator_signal")
+    if device_context.get("debugger_attached"):
+        flags.append("debugger_attached")
     if device_context.get("mock_location_enabled"):
         flags.append("mock_location_enabled")
     if device_context.get("developer_mode"):
@@ -342,15 +356,93 @@ def check_emulator_signals(device_context: dict) -> dict:
     if not device_context.get("has_gyroscope", True):
         flags.append("missing_gyroscope")
 
+    malicious_packages = device_context.get("malicious_packages_found")
+    if isinstance(malicious_packages, list) and malicious_packages:
+        flags.append("malicious_packages_detected")
+
+    context_present = bool(device_context.get("context_present"))
+    signature_verified = bool(device_context.get("signature_verified"))
+    if context_present and not signature_verified:
+        flags.append("unsigned_device_context")
+
+    attestation_verdict = str(
+        device_context.get("attestation_verdict") or "missing"
+    ).strip().lower()
+    if attestation_verdict in {"failed", "invalid", "device_not_trusted"}:
+        flags.append("attestation_failed")
+    elif attestation_verdict in {"not_configured", "not_available", "error", "missing"}:
+        advisory.append("attestation_unavailable")
+
+    signal_confidence = str(
+        device_context.get("signal_confidence") or "unknown"
+    ).strip().lower()
+    if signal_confidence not in {"low", "medium", "high"}:
+        signal_confidence = "unknown"
+
+    trust_score = _coerce_unit_float(device_context.get("device_trust_score"))
+    if trust_score is None:
+        if not context_present:
+            trust_score = 0.55
+        elif not signature_verified:
+            trust_score = 0.35
+        else:
+            trust_score = 0.70
+
+    trust_tier = str(device_context.get("device_trust_tier") or "").strip().lower()
+    if trust_tier not in {"high", "moderate", "low", "high_risk"}:
+        if trust_score >= 0.80:
+            trust_tier = "high"
+        elif trust_score >= 0.60:
+            trust_tier = "moderate"
+        elif trust_score >= 0.40:
+            trust_tier = "low"
+        else:
+            trust_tier = "high_risk"
+
+    risk_score = min(0.70, len(flags) * 0.12)
+    if "rooted_device" in flags:
+        risk_score += 0.22
+    if "runtime_emulator_signal" in flags:
+        risk_score += 0.18
+    if "attestation_failed" in flags:
+        risk_score += 0.18
+
+    risk_score += (1.0 - trust_score) * 0.45
+
+    if signal_confidence == "medium":
+        risk_score += 0.05
+    elif signal_confidence in {"low", "unknown"}:
+        risk_score += 0.10
+
+    if not context_present:
+        risk_score = max(risk_score, 0.35)
+    elif not signature_verified:
+        risk_score = max(risk_score, 0.65)
+
+    risk_score = max(0.0, min(1.0, risk_score))
+
+    if risk_score >= 0.75:
+        risk_level = "critical"
+    elif risk_score >= 0.45:
+        risk_level = "elevated"
+    elif not context_present:
+        risk_level = "uncertain"
+    else:
+        risk_level = "low"
+
     return {
-        "emulator_detected": len(flags) > 0,
+        "emulator_detected": len(flags) > 0 or risk_level in {"elevated", "critical"},
         "flags": flags,
+        "advisory": advisory,
         "flag_count": len(flags),
-        "risk_level": (
-            "critical"
-            if len(flags) >= 2
-            else ("elevated" if len(flags) == 1 else "low")
-        ),
+        "risk_score": round(risk_score, 4),
+        "risk_level": risk_level,
+        "context_present": context_present,
+        "signature_verified": signature_verified,
+        "signal_confidence": signal_confidence,
+        "attestation_verdict": attestation_verdict,
+        "device_trust_score": round(trust_score, 4),
+        "device_trust_tier": trust_tier,
     }
 
 
@@ -427,11 +519,25 @@ def verify_anti_spoofing(
     score_components.append(("movement_plausibility", move_score, 0.25))
 
     # Emulator detection (weight: 0.15)
-    emu_scores = {"low": 1.0, "elevated": 0.3, "critical": 0.0}
+    emu_scores = {
+        "low": 1.0,
+        "uncertain": 0.65,
+        "elevated": 0.35,
+        "critical": 0.0,
+    }
+    device_integrity_score = emu_scores.get(emulator_check["risk_level"], 0.5)
+    trust_hint_score = emulator_check.get("device_trust_score")
+    if isinstance(trust_hint_score, (int, float)):
+        device_integrity_score = min(device_integrity_score, float(trust_hint_score))
+
+    if not emulator_check.get("context_present"):
+        # Missing context is uncertainty, not immediate spoofing.
+        device_integrity_score = min(device_integrity_score, 0.65)
+
     score_components.append(
         (
-            "emulator_check",
-            emu_scores.get(emulator_check["risk_level"], 0.5),
+            "device_integrity",
+            max(0.0, min(1.0, device_integrity_score)),
             0.15,
         )
     )
@@ -454,6 +560,10 @@ def verify_anti_spoofing(
         flags_fired.append("impossible_travel")
     if emulator_check["emulator_detected"]:
         flags_fired.append("emulator_detected")
+    if "attestation_failed" in emulator_check.get("flags", []):
+        flags_fired.append("attestation_failed")
+    if emulator_check.get("device_trust_tier") == "high_risk":
+        flags_fired.append("high_risk_device_trust")
 
     if composite >= 0.7:
         verdict = "pass"
@@ -467,6 +577,10 @@ def verify_anti_spoofing(
         "anti_spoof_verdict": verdict,
         "flags_fired": flags_fired,
         "flag_count": len(flags_fired),
+        "device_trust_score": emulator_check.get("device_trust_score"),
+        "device_trust_tier": emulator_check.get("device_trust_tier"),
+        "signal_confidence": emulator_check.get("signal_confidence"),
+        "attestation_verdict": emulator_check.get("attestation_verdict"),
         "requires_liveness_check": device_check.get(
             "requires_liveness", False
         ),

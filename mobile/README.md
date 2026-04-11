@@ -1,4 +1,4 @@
-# Covara Worker Mobile (Implementation Start)
+﻿# Covara Worker Mobile (Implementation Start)
 
 This package is the mobile implementation kickoff for signed claim submission.
 
@@ -38,3 +38,21 @@ npm run start
 - Root/jailbreak and advanced emulator checks are placeholders until native bridges are added.
 - Full auth screens and offline queueing are not complete yet.
 - UI is functional but intentionally minimal while core security path is being wired first.
+
+
+## April 2026 Repo Update Addendum
+
+### Newly implemented in current repo
+
+- Expo kickoff app now submits claims with signed device-context headers.
+- Device-context contract v2 alignment includes key-id and nonce semantics.
+- Backend verifier path is integrated for signature and replay checks.
+- TypeScript diagnostics were hardened through local tsconfig settings.
+
+### Planned and next tranche
+
+- Add stronger native attestation checks for rooted or emulated environments.
+- Introduce short-lived signing key rotation patterns.
+- Build full auth UX and robust offline queueing for unstable networks.
+- Expand worker flows beyond kickoff claim submission.
+

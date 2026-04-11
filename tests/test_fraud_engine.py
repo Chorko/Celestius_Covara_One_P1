@@ -158,3 +158,51 @@ class TestFeatureVector:
         ]
         for key in expected_keys:
             assert key in fv, f"Missing feature vector key: {key}"
+
+
+class TestDeviceTrustIngestion:
+
+    def test_missing_device_context_is_uncertain_not_hard_fail(self):
+        result = evaluate_fraud_risk(
+            worker_context=_base_worker(),
+            trigger_context=_base_trigger(),
+            device_context={},
+        )
+
+        anti_spoof = result["layers"]["anti_spoofing"]
+        assert anti_spoof["verdict"] in ("pass", "review")
+        assert anti_spoof["device_trust_score"] is not None
+        assert anti_spoof["device_trust_tier"] in (
+            "high",
+            "moderate",
+            "low",
+            "high_risk",
+        )
+        assert anti_spoof["attestation_verdict"] in (
+            "missing",
+            "not_configured",
+            "not_available",
+            "error",
+            "failed",
+            "invalid",
+            "device_not_trusted",
+            "passed",
+        )
+
+    def test_attestation_failure_is_elevated_in_flags(self):
+        result = evaluate_fraud_risk(
+            worker_context=_base_worker(),
+            trigger_context=_base_trigger(),
+            device_context={
+                "context_present": True,
+                "signature_verified": True,
+                "attestation_verdict": "failed",
+                "signal_confidence": "high",
+                "is_rooted": True,
+            },
+        )
+
+        anti_spoof = result["layers"]["anti_spoofing"]
+        assert anti_spoof["attestation_verdict"] == "failed"
+        assert "attestation_failed" in result["flags"]
+        assert result["device_trust"]["attestation_verdict"] == "failed"

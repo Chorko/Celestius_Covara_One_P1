@@ -7,6 +7,7 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
+    "validate:env": "node ./scripts/validate-env.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

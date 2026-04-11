@@ -28,6 +28,18 @@ const ZoneRiskMap = dynamic(() => import('@/components/admin/ZoneRiskMap'), {
 interface ClaimItem { id: string; claim_status: string; claim_reason: string; claimed_at: string; worker_profiles?: { platform_name?: string; city?: string }; [key: string]: any }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
+function PieTooltipContent({ active, payload }: { active?: boolean; payload?: { name: string; value: number }[] }) {
+  if (active && payload?.length) {
+    return (
+      <div className="card p-3 text-xs" style={{ boxShadow: 'var(--shadow-lg)' }}>
+        <p className="font-semibold" style={{ color: 'var(--text-primary)' }}>{payload[0].name}</p>
+        <p style={{ color: 'var(--text-secondary)' }}>{payload[0].value} events</p>
+      </div>
+    )
+  }
+  return null
+}
+
 export default function AdminDashboard() {
   const { profile } = useUserStore()
   const supabase = createClient()
@@ -91,20 +103,13 @@ export default function AdminDashboard() {
     setChartsLoading(false)
   }, [supabase])
 
-  useEffect(() => { loadDashboard() }, [loadDashboard])
+  useEffect(() => {
+    queueMicrotask(() => {
+      void loadDashboard()
+    })
+  }, [loadDashboard])
 
   const CHART_COLORS = ['#2563eb', '#22c55e', '#eab308', '#ef4444', '#6366f1', '#f97316']
-  const PIE_TOOLTIP = ({ active, payload }: { active?: boolean; payload?: { name: string; value: number }[] }) => {
-    if (active && payload?.length) {
-      return (
-        <div className="card p-3 text-xs" style={{ boxShadow: 'var(--shadow-lg)' }}>
-          <p className="font-semibold" style={{ color: 'var(--text-primary)' }}>{payload[0].name}</p>
-          <p style={{ color: 'var(--text-secondary)' }}>{payload[0].value} events</p>
-        </div>
-      )
-    }
-    return null
-  }
 
   const statusBadge = (status: string) => {
     switch (status) {
@@ -259,7 +264,7 @@ export default function AdminDashboard() {
                     <Pie data={triggerDistribution} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={55} outerRadius={90} paddingAngle={3} strokeWidth={0}>
                       {triggerDistribution.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
                     </Pie>
-                    <Tooltip content={<PIE_TOOLTIP />} />
+                    <Tooltip content={<PieTooltipContent />} />
                     <Legend wrapperStyle={{ fontSize: '12px', color: 'var(--text-tertiary)' }} />
                   </PieChart>
                 </ResponsiveContainer>

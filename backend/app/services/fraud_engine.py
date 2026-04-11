@@ -178,6 +178,10 @@ def evaluate_fraud_risk(
         "score": anti_spoof_score,
         "verdict": anti_spoof_result["anti_spoof_verdict"],
         "flags_fired": anti_spoof_result.get("flags_fired", []),
+        "device_trust_score": anti_spoof_result.get("device_trust_score"),
+        "device_trust_tier": anti_spoof_result.get("device_trust_tier"),
+        "signal_confidence": anti_spoof_result.get("signal_confidence"),
+        "attestation_verdict": anti_spoof_result.get("attestation_verdict"),
         "requires_liveness": anti_spoof_result.get(
             "requires_liveness_check", False
         ),
@@ -484,6 +488,32 @@ def evaluate_fraud_risk(
             else 0
         ),
         "emulator_root_flag": 1 if "emulator_detected" in unique_flags else 0,
+        "device_trust_score": anti_spoof_result.get("device_trust_score"),
+        "device_context_present": (
+            1
+            if anti_spoof_result.get("checks", {})
+            .get("emulator_detection", {})
+            .get("context_present")
+            else 0
+        ),
+        "device_signature_verified": (
+            1
+            if anti_spoof_result.get("checks", {})
+            .get("emulator_detection", {})
+            .get("signature_verified")
+            else 0
+        ),
+        "attestation_failed_flag": (
+            1 if "attestation_failed" in unique_flags else 0
+        ),
+    }
+
+    device_trust = {
+        "device_trust_score": anti_spoof_result.get("device_trust_score"),
+        "device_trust_tier": anti_spoof_result.get("device_trust_tier"),
+        "signal_confidence": anti_spoof_result.get("signal_confidence"),
+        "attestation_verdict": anti_spoof_result.get("attestation_verdict"),
+        "risk_signals": anti_spoof_result.get("flags_fired", []),
     }
 
     return {
@@ -498,6 +528,7 @@ def evaluate_fraud_risk(
         ),
         "requires_throttling": region_result.get("requires_throttling", False),
         "trust_update": trust_update,
+        "device_trust": device_trust,
         "layers": layer_results,
         "feature_vector": feature_vector,
         "signal_weights": SIGNAL_WEIGHTS,

@@ -1,4 +1,4 @@
-# Frontend — Dashboards & Worker Experience
+﻿# Frontend — Dashboards & Worker Experience
 
 > The frontend makes the entire insurance journey understandable for two personas: **gig workers** and **insurer operations reviewers**. The UI is not just for beauty — it is part of the explanation layer for judges.
 
@@ -134,3 +134,24 @@ const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/endpoint`, {
 | Consumer dead-letter list/requeue | `GET /events/consumers/dead-letter`, `POST /events/consumers/dead-letter/requeue` |
 | Live trigger feed | `GET /triggers/live` |
 | Mock trigger injection | `POST /triggers/inject` |
+
+
+## April 2026 Repo Update Addendum
+
+### Newly implemented in current repo
+
+- Worker claims and rewards UX now uses backend endpoints for submit,
+  history, check-in, and redemption actions.
+- Admin reviews workflow is integrated with ownership assignment,
+  SLA visibility, and filtered queue actions.
+- Admin event operations page is integrated for outbox and consumer status,
+  plus dead-letter inspection and requeue controls.
+- Middleware-protected worker/admin sections are aligned with session checks.
+
+### Planned and next tranche
+
+- Improve loading and resilience UX for long-running ops views.
+- Expand admin analytics depth and cross-links to claim drill-downs.
+- Add stronger client-side telemetry and release-safe feature toggles.
+- Continue mobile-web parity for worker journey milestones.
+

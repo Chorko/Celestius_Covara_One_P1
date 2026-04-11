@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useUserStore } from '@/store'
 import { createClient } from '@/lib/supabase'
 import {
-  Shield, ShieldCheck, Clock,
+  Shield, ShieldCheck,
   CheckCircle, CreditCard, X, Sparkles, IndianRupee, Lock, Brain,
   RefreshCw, TrendingUp, AlertTriangle, Activity
 } from 'lucide-react'
@@ -291,7 +291,7 @@ export default function WorkerPricing() {
             <AlertTriangle size={16} className="mt-0.5 shrink-0" style={{ color: 'var(--danger)' }} />
             <p className="text-xs leading-relaxed" style={{ color: 'var(--text-tertiary)' }}>
               <span className="font-semibold" style={{ color: 'var(--text-secondary)' }}>Standard Exclusions (Per IRDAI Guidelines):</span>{' '}
-              Please note that Covara One's parametric insurance does not cover disruptions or losses arising directly or indirectly from acts of War, Invasion, Act of foreign enemy, Hostilities (whether war be declared or not), Civil War, Rebellion, Revolution, or global Pandemics.
+              Please note that Covara One&apos;s parametric insurance does not cover disruptions or losses arising directly or indirectly from acts of War, Invasion, Act of foreign enemy, Hostilities (whether war be declared or not), Civil War, Rebellion, Revolution, or global Pandemics.
             </p>
           </div>
         </section>

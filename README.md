@@ -1,9 +1,4 @@
-<!-- ═══════════════════════════════════════════════════════════════════════════ -->
-<!--                            C O V A R A   O N E                           -->
-<!--        AI-Powered Parametric Income Protection for Gig Workers            -->
-<!-- ═══════════════════════════════════════════════════════════════════════════ -->
-
-<div align="center">
+﻿<div align="center">
 
 ![Header](https://capsule-render.vercel.app/api?type=waving&color=0:0F0C29,50:302B63,100:24243E&height=220&section=header&text=🛡️%20Covara%20One&fontSize=70&fontColor=ffffff&animation=fadeIn&fontAlignY=35&desc=Zero-Touch%20Parametric%20Income%20Shield%20for%20Gig%20Workers&descSize=18&descAlignY=55&descAlign=50)
 
@@ -1595,4 +1590,34 @@ Celestius_DEVTrails_P1/
 ![Footer](https://capsule-render.vercel.app/api?type=waving&color=0:0F0C29,50:302B63,100:24243E&height=120&section=footer)
 
 </div>
+
+
+
+## April 2026 Repo Update Addendum
+
+### Newly implemented in current repo
+
+- End-to-end event reliability stack is active: durable outbox writes, relay loop,
+  dead-letter listing and requeue operations, and idempotent consumer ledger.
+- Optional Kafka consumer path is wired with manual commit semantics and parity
+  with in-memory dispatch handlers.
+- Claims review workflow now includes assignment ownership, queue filters,
+  SLA due timestamps, and admin review enforcement.
+- Payout workflow now includes provider abstraction, durable payout requests,
+  settlement transitions, webhook verification, and idempotency controls.
+- Mobile signed device-context contract has v2 protections (nonce replay guard,
+  key-id based secret resolution, and signature verification).
+- Worker and admin web experiences now call backend claims, rewards,
+  and event-ops endpoints for live product flows.
+
+### Planned and next tranche
+
+- Continue rollout toward Kafka-first event transport where required by load.
+- Expand mobile attestation depth and move to stronger key lifecycle handling.
+- Add deeper observability and SLO tracking for outbox relay and consumers.
+- Extend release automation and staging promotion checks from runbook gates.
+- Expand benchmark-driven ML calibration and drift monitoring workflows.
+
+
+
 

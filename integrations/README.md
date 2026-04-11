@@ -1,4 +1,4 @@
-# Integrations — External Connectors & Mock Strategy
+﻿# Integrations — External Connectors & Mock Strategy
 
 > This folder documents all third-party and mock integrations used by the project. The challenge allows mocks where direct platform APIs are unavailable. This folder shows exactly **what is real, what is simulated, and why**.
 
@@ -268,3 +268,21 @@ Platform-specific APIs (delivery order volume, outage heartbeats, GPS traces) ar
 ## Why This Folder Matters
 
 Judges need to know **exactly** what data is real and what is simulated. A transparent mock strategy with documented assumptions is more credible than hiding behind vague "API integration" claims. This folder proves we know the difference and designed the system to work with either real or mock data sources. Every API is mapped to its specific role in trigger validation, anti-spoofing defense, and dashboard context.
+
+
+## April 2026 Repo Update Addendum
+
+### Newly implemented in current repo
+
+- Connector strategy supports provider pools and graceful fallback behavior.
+- KYC and OTP integration paths are separated into dedicated services.
+- Payout integration now uses provider abstraction and workflow orchestration.
+- Event transport integration now supports both in-memory and Kafka modes.
+
+### Planned and next tranche
+
+- Expand provider failover and retry policies with richer observability.
+- Add deeper reconciliation hooks for payout and message processing.
+- Increase typed contracts for third-party payload normalization.
+- Continue staged rollout checks for strict-production readiness.
+

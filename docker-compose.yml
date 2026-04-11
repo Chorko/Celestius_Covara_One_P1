@@ -24,8 +24,18 @@ services:
       - .env
     environment:
       - APP_ENV=production
+      - STRICT_ENV_VALIDATION=${STRICT_ENV_VALIDATION:-true}
+      - SUPABASE_URL=${SUPABASE_URL:?SUPABASE_URL is required}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:?SUPABASE_ANON_KEY is required}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:?SUPABASE_SERVICE_ROLE_KEY is required}
+      - DEVICE_CONTEXT_HMAC_SECRET=${DEVICE_CONTEXT_HMAC_SECRET:?DEVICE_CONTEXT_HMAC_SECRET is required}
+      - PAYOUT_PROVIDER_WEBHOOK_SECRET=${PAYOUT_PROVIDER_WEBHOOK_SECRET:?PAYOUT_PROVIDER_WEBHOOK_SECRET is required}
       - CORS_ORIGINS=http://localhost:3000,http://frontend:3000
       - REDIS_URL=redis://redis:6379
+      - PAYOUT_PROVIDER=${PAYOUT_PROVIDER:-simulated_gateway}
+      - PAYOUT_PROVIDER_API_BASE_URL=${PAYOUT_PROVIDER_API_BASE_URL:-}
+      - PAYOUT_PROVIDER_API_KEY=${PAYOUT_PROVIDER_API_KEY:-}
+      - PAYOUT_PROVIDER_TIMEOUT_SECONDS=${PAYOUT_PROVIDER_TIMEOUT_SECONDS:-10}
       - EVENT_BUS_BACKEND=${EVENT_BUS_BACKEND:-inmemory}
       - EVENT_BUS_TOPIC_PREFIX=${EVENT_BUS_TOPIC_PREFIX:-covara}
       - EVENT_BUS_PUBLISH_ON_WRITE=${EVENT_BUS_PUBLISH_ON_WRITE:-true}
@@ -46,13 +56,15 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    init: true
     restart: unless-stopped
+    stop_grace_period: 20s
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
-      interval: 30s
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready', timeout=3)"]
+      interval: 20s
       timeout: 5s
-      retries: 3
-      start_period: 20s
+      retries: 5
+      start_period: 30s
     networks:
       - covara-net
 
@@ -62,16 +74,24 @@ services:
       context: .
       dockerfile: frontend/Dockerfile
       args:
-        - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
-        - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
-        - NEXT_PUBLIC_API_URL=http://backend:8000
+        - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:?NEXT_PUBLIC_SUPABASE_URL is required}
+        - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY:?NEXT_PUBLIC_SUPABASE_ANON_KEY is required}
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://backend:8000}
     container_name: covara-frontend
     ports:
       - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:?NEXT_PUBLIC_SUPABASE_URL is required}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY:?NEXT_PUBLIC_SUPABASE_ANON_KEY is required}
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://backend:8000}
     depends_on:
       backend:
         condition: service_healthy
+    init: true
     restart: unless-stopped
+    stop_grace_period: 20s
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
       interval: 30s

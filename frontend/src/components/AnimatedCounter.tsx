@@ -30,7 +30,6 @@ export default function AnimatedCounter({
 
   useEffect(() => {
     if (value === 0) {
-      setDisplay('0')
       return
     }
 
@@ -62,9 +61,11 @@ export default function AnimatedCounter({
     }
   }, [value, duration, decimals])
 
+  const shown = value === 0 ? '0' : display
+
   return (
     <span className={`stat-number ${className}`}>
-      {prefix}{display}{suffix}
+      {prefix}{shown}{suffix}
     </span>
   )
 }

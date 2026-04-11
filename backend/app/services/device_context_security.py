@@ -116,6 +116,7 @@ def _normalize_context_aliases(context: dict[str, Any]) -> dict[str, Any]:
         "mock_location_detected": "mock_location_enabled",
         "developer_mode_active": "developer_mode",
         "is_jailbroken": "is_rooted",
+        "debugger_detected": "debugger_attached",
     }
 
     for source_key, target_key in alias_pairs.items():
@@ -123,6 +124,87 @@ def _normalize_context_aliases(context: dict[str, Any]) -> dict[str, Any]:
             normalized[target_key] = normalized[source_key]
 
     return normalized
+
+
+def summarize_device_context_trust(
+    *,
+    context: dict[str, Any],
+    context_present: bool,
+    signature_verified: bool,
+) -> dict[str, Any]:
+    """Summarize device trust quality for claim/review surfaces.
+
+    This is deliberately heuristic and attestation-ready: missing attestation does
+    not hard-fail claims but lowers trust confidence.
+    """
+    signals: list[str] = []
+
+    if not context_present:
+        return {
+            "context_present": False,
+            "signature_verified": False,
+            "device_trust_score": 0.45,
+            "device_trust_tier": "low",
+            "signal_confidence": "low",
+            "attestation_verdict": "missing",
+            "risk_signals": ["missing_device_context"],
+        }
+
+    score = 0.85 if signature_verified else 0.20
+
+    if bool(context.get("is_rooted")):
+        score -= 0.30
+        signals.append("rooted_device")
+    if bool(context.get("is_emulator")):
+        score -= 0.20
+        signals.append("emulator_runtime")
+    if bool(context.get("debugger_attached")):
+        score -= 0.18
+        signals.append("debugger_attached")
+    if bool(context.get("mock_location_enabled") or context.get("mock_location_detected")):
+        score -= 0.20
+        signals.append("mock_location_detected")
+
+    malicious = context.get("malicious_packages_found")
+    if isinstance(malicious, list) and malicious:
+        score -= min(0.25, 0.07 * len(malicious))
+        signals.append("malicious_packages_detected")
+
+    attestation = str(context.get("attestation_verdict") or "").strip().lower()
+    if attestation in {"failed", "invalid", "device_not_trusted"}:
+        score -= 0.25
+        signals.append("attestation_failed")
+    elif attestation in {"not_configured", "not_available", "error", ""}:
+        score -= 0.10
+        signals.append("attestation_unavailable")
+
+    confidence = str(context.get("signal_confidence") or "").strip().lower()
+    if confidence in {"low", "unknown", ""}:
+        score -= 0.10
+        signals.append("low_signal_confidence")
+    elif confidence == "medium":
+        score -= 0.04
+
+    score = max(0.0, min(1.0, round(score, 4)))
+
+    if score >= 0.80:
+        tier = "high"
+    elif score >= 0.60:
+        tier = "moderate"
+    elif score >= 0.40:
+        tier = "low"
+    else:
+        tier = "high_risk"
+
+    return {
+        "context_present": True,
+        "signature_verified": bool(signature_verified),
+        "device_trust_score": score,
+        "device_trust_tier": tier,
+        "signal_confidence": confidence or "unknown",
+        "attestation_verdict": attestation or "missing",
+        "risk_signals": signals,
+    }
 
 
 def verify_signed_device_context(

@@ -57,29 +57,46 @@ Required behavior:
   "device_model": "Pixel 8",
   "hardware_id": "a8c9e5b7...",
   "is_rooted": false,
+  "is_emulator": false,
+  "debugger_attached": false,
   "developer_mode_active": false,
   "mock_location_detected": false,
+  "mock_location_source": "none",
   "malicious_packages_found": [],
   "vpn_active": false,
   "has_accelerometer": true,
-  "has_gyroscope": true
+  "has_gyroscope": true,
+  "integrity_verdict": "moderate",
+  "signal_confidence": "medium",
+  "collection_method": "heuristic",
+  "collection_warnings": [],
+  "unsupported_checks": [],
+  "attestation_provider": "none",
+  "attestation_verdict": "not_configured",
+  "attestation_token_present": false
 }
 ```
 
 Recommended optional fields:
 - app_version
 - app_build_number
-- integrity_verdict
 - location_permission_scope
 - precise_location_enabled
+
+Attestation fields are intentionally attestation-ready:
+- provider can be none while integration is pending.
+- verdict can be not_configured or not_available without hard-failing claims.
+- backend consumes these as trust-weighting inputs, not standalone deny signals.
 
 ## Backend behavior
 
 - No context header:
   - Request accepted (legacy mode).
+  - Trust summary downgraded to low confidence (not hard-failed).
 - Context header present + valid signature + valid freshness + non-replayed nonce:
   - Request accepted.
   - Verified context passed into anti-spoofing and persisted in claim explanation output.
+  - Backend derives device_trust_score and device_trust_tier for claim/review surfaces.
 - Context header present + any invalid security condition:
   - Request rejected with HTTP 400.
 
@@ -89,6 +106,7 @@ Backend normalizes these aliases:
 - mock_location_detected -> mock_location_enabled
 - developer_mode_active -> developer_mode
 - is_jailbroken -> is_rooted
+- debugger_detected -> debugger_attached
 
 ## Key management
 
