@@ -1,0 +1,9 @@
+$kind: http-request
+name: /kyc/pan/verify
+url: /kyc/pan/verify
+method: POST
+body:
+  type: json
+  content: ""
+examples: .resources/-kyc-pan-verify.resources/examples
+order: 1632886422163739

@@ -1,0 +1,6 @@
+$kind: http-request
+name: /kyc/bank/verify
+url: /kyc/bank/verify
+method: POST
+examples: .resources/-kyc-bank-verify.resources/examples
+order: 4031190927146290
