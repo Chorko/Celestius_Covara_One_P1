@@ -49,7 +49,7 @@
 | OpenWeather API | ✅ Live | Weather + temperature triggers (real API key) |
 | CPCB AQI (data.gov.in) | ✅ Live | 511-station AQI feed (real API key) |
 | TomTom Traffic + Routing | ✅ Live | Real-time flow + route plausibility for fraud detection |
-| KYC — Sandbox.co.in | ✅ Implemented | Aadhaar OTP + PAN + bank verification (3-tier progressive KYC) |
+| KYC — Postman Mock (PAN, Bank) | ✅ Implemented | Postman Mock server; switchable to Sandbox.co.in for production |
 | Twilio WhatsApp + OTP | ✅ Implemented | 7 notification templates + Verify OTP (sandboxed) |
 | Redis caching layer | ✅ Implemented | fastapi-cache2[redis] with TTL decorators on high-frequency endpoints |
 | Observability baseline | ✅ Implemented | Request/correlation IDs, structured logs, in-memory ops metrics, readiness + ops status endpoints |
@@ -66,7 +66,7 @@
 | Regional AQI Calibration | ✅ Implemented | City-specific baselines (Delhi 250+ vs Mumbai 150+) |
 | Dynamic Threshold Engine | ✅ Implemented | Monthly p50/p75/p90 distribution calculations (Python + DB) |
 | Indian Zone Network | ✅ Implemented | 65 detailed zones across 15 cities with validated PIN codes |
-| Payment gateway (UPI) | ✅ Mock | `payment_mock.py` — async, RazorpayX-format, failure simulation |
+| Payment gateway (Stripe Test Mode) | ✅ Live (Test) | Provider adapter with `http_gateway` (Stripe) + `simulated_gateway` + 61 webhook events |
 
 **Legend:** ✅ Implemented & Live — ⚠️ Implemented with Known Limitation — 📋 Planned
 
@@ -107,8 +107,8 @@ The backend now exposes practical observability signals for staging and ops conf
 | Integration | Current | Target | Condition |
 |---|---|---|---|
 | **Weather** | OpenWeather API (live) | IMD direct APIs | After IMD IP whitelist approval |
-| **KYC Level 4+** | Sandbox.co.in | DigiLocker (MeitY/NIC) | After official MeitY partnership |
-| **Payment Disbursement** | Mock (DB record only) | Razorpay / Cashfree UPI Payouts | After payment gateway agreement |
+| **KYC Level 4+** | Postman Mock | Sandbox.co.in → DigiLocker (MeitY) | After official API partnership |
+| **Payment Disbursement** | Stripe Test Mode (live) | Stripe Live Mode | After Stripe live mode activation |
 
 ---
 

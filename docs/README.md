@@ -1,4 +1,4 @@
-﻿# Docs - Documentation Index
+# Docs - Documentation Index
 
 > This folder is the non-code explanation layer of the project. It contains architecture diagrams, formula references, pitch assets, and supporting documentation that allow judges and reviewers to understand the platform without inspecting source code.
 
@@ -12,6 +12,7 @@ This folder is the repository documentation index.
 - `DEPLOYMENT_RELEASE_RUNBOOK.md` - release/deploy/smoke/rollback process
 - `EVENT_BUS_KAFKA_ROADMAP.md` - event bus evolution and Kafka path
 - `MOBILE_DEVICE_CONTEXT_CONTRACT.md` - signed mobile telemetry contract
+- `STRIPE_WEBHOOK_EVENTS.md` - Stripe webhook event catalog (61 events)
 
 ## Diagrams
 
@@ -85,6 +86,11 @@ Current chart/image assets in `assets/insurance/`:
 ```
 docs/
 ├── README.md                     ← You are here
+├── IMPLEMENTATION_STATUS.md      ← Full technical reference
+├── DEPLOYMENT_RELEASE_RUNBOOK.md ← Release/deploy/smoke/rollback
+├── EVENT_BUS_KAFKA_ROADMAP.md    ← Event bus evolution
+├── MOBILE_DEVICE_CONTEXT_CONTRACT.md ← Mobile telemetry contract
+├── STRIPE_WEBHOOK_EVENTS.md     ← Stripe webhook event catalog
 ├── diagrams/                     ← Standalone Mermaid source files (.mmd)
 │   ├── overall-system-architecture.mmd
 │   ├── worker-journey.mmd
@@ -305,4 +311,12 @@ A strong docs folder means judges do not need to guess what the product does, ho
 - Add more operations evidence snapshots as reliability tests expand.
 - Extend diagram updates when event and payout workflows evolve.
 - Continue tightening release governance across environments.
+
+### Deployment & Integration Updates (April 12, 2026)
+
+- Backend deployed to Render as Docker Web Service at `covara-backend.onrender.com`.
+- Stripe Test Mode integrated via provider-agnostic `PayoutProviderAdapter` with 61 webhook events.
+- KYC provider switched from Sandbox.co.in to Postman Mock Server.
+- Webhook endpoint: `https://covara-backend.onrender.com/payouts/webhooks/http_gateway`.
+- Full event catalog: [STRIPE_WEBHOOK_EVENTS.md](STRIPE_WEBHOOK_EVENTS.md).
 

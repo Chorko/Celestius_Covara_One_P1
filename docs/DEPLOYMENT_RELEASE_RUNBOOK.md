@@ -157,9 +157,44 @@ Suggested Kubernetes rollback command:
 kubectl rollout undo deployment/covara-backend
 kubectl rollout undo deployment/covara-frontend
 
-## 9. Known External Blockers
+## 9. Render Deployment (Current Production)
 
-1. Real payout provider live credential validation remains blocked
-   until production provider secrets/endpoints are supplied.
-2. Centralized telemetry sink and alert-routing infrastructure remain
+The backend is deployed to Render as a Docker Web Service.
+
+| Setting | Value |
+|---|---|
+| **Service URL** | `https://covara-backend.onrender.com` |
+| **Dockerfile Path** | `backend/Dockerfile` |
+| **Docker Build Context** | `.` (repo root) |
+| **Root Directory** | `backend/` |
+| **Branch** | `main` |
+| **PORT** | Set by Render automatically (currently 10000) |
+| **WEB_CONCURRENCY** | 1 (set by Render based on instance) |
+
+### Environment Variables
+
+All secrets are managed in Render Environment → not committed to git.
+Import from `render.env` (local only) for initial setup.
+
+Key strict-mode requirements:
+- `APP_ENV=production`
+- `PAYOUT_PROVIDER_WEBHOOK_SECRET` must be real `whsec_*` value (not dev default)
+- `DEVICE_CONTEXT_HMAC_SECRET` must be set
+
+### Smoke Checks (Render)
+
+```
+curl https://covara-backend.onrender.com/health
+curl https://covara-backend.onrender.com/ready
+```
+
+### Manual Redeploy
+
+Env var changes require **Manual Deploy → Deploy latest commit** in Render dashboard.
+
+## 10. Known External Blockers
+
+1. Stripe is in **Test Mode** — switch to Live Mode requires business verification.
+2. KYC uses **Postman Mock Server** — switch to Sandbox.co.in or DigiLocker for production.
+3. Centralized telemetry sink and alert-routing infrastructure remain
    future work (current observability baseline is in-process).
