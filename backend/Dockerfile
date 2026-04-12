@@ -43,13 +43,14 @@ USER covara
 
 # Health check — hits the /health endpoint
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready', timeout=3)"
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:${PORT:-8000}/ready', timeout=3)"
 
-EXPOSE 8000
+EXPOSE ${PORT:-8000}
 
-# Run with uvicorn — 4 workers for production
-CMD ["uvicorn", "backend.app.main:app", \
-     "--host", "0.0.0.0", \
-     "--port", "8000", \
-     "--workers", "4", \
-     "--log-level", "info"]
+# Run with uvicorn — use PORT env var (required by Render) and WEB_CONCURRENCY for workers
+CMD uvicorn backend.app.main:app \
+     --host 0.0.0.0 \
+     --port ${PORT:-8000} \
+     --workers ${WEB_CONCURRENCY:-1} \
+     --log-level info
+
