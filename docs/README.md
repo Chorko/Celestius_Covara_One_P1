@@ -37,9 +37,10 @@ docs/
 ├── README.md                     ← You are here
 ├── IMPLEMENTATION_STATUS.md      ← Full technical reference
 ├── DEPLOYMENT_RELEASE_RUNBOOK.md ← Release/deploy/smoke/rollback
+├── RENDER_STRIPE_POSTMAN_HANDOFF.md ← Render/Stripe/Postman deployment handoff
+├── STRIPE_WEBHOOK_EVENTS.md     ← Stripe webhook event catalog
 ├── EVENT_BUS_KAFKA_ROADMAP.md    ← Event bus evolution
 ├── MOBILE_DEVICE_CONTEXT_CONTRACT.md ← Mobile telemetry contract
-├── STRIPE_WEBHOOK_EVENTS.md     ← Stripe webhook event catalog
 ├── diagrams/                     ← Standalone Mermaid source files (.mmd)
 │   ├── overall-system-architecture.mmd
 │   ├── worker-journey.mmd

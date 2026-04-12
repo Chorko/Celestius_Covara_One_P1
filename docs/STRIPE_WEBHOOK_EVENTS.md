@@ -5,7 +5,7 @@
 | Setting | Value |
 |---|---|
 | **Endpoint URL** | `https://covara-backend.onrender.com/payouts/webhooks/http_gateway` |
-| **Signing Secret** | `whsec_REDACTED_ROTATE_THIS_SECRET` — stored in Render env as `PAYOUT_PROVIDER_WEBHOOK_SECRET` |
+| **Signing Secret** | `whsec_...` (redacted) — stored in Render env as `PAYOUT_PROVIDER_WEBHOOK_SECRET`. See `render.env` (local only, gitignored). |
 | **Mode** | Test Mode |
 | **Created** | 2026-04-12 |
 
