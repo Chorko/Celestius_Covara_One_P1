@@ -2,6 +2,7 @@
 
 import os
 import sys
+from datetime import datetime, timezone, timedelta
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, patch
@@ -153,12 +154,13 @@ def _build_client(current_user: dict) -> TestClient:
 
 class TestClaimsReviewWorkflow:
     def test_assign_claim_sets_owner_and_due(self):
+        recent = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
         sb = _FakeSupabase(
             claim_rows=[
                 {
                     "id": "claim-1",
                     "claim_status": "submitted",
-                    "claimed_at": "2026-04-09T10:00:00Z",
+                    "claimed_at": recent,
                     "assignment_state": "unassigned",
                     "assigned_reviewer_profile_id": None,
                 }
