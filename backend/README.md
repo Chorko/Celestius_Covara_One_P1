@@ -1,4 +1,4 @@
-﻿# Backend - API Layer & Service Orchestration
+# Backend - API Layer & Service Orchestration
 
 > The backend orchestrates the insurance logic. It should be easy to read, easy to demo, and segmented cleanly enough that an evaluator can follow the flow without reverse-engineering the code.
 
@@ -46,7 +46,7 @@
 | Supabase SQL schema (14 tables, unified migration) | ✅ Implemented |
 | Row-Level Security policies | ✅ Implemented |
 | CLI seed system | ✅ Implemented |
-| KYC service (Sandbox.co.in — Aadhaar, PAN, Bank) | ✅ Implemented |
+| KYC service (Postman Mock — PAN, Bank Verify) | ✅ Implemented |
 | Twilio WhatsApp + OTP (7 templates) | ✅ Implemented |
 | OpenWeather live data (weather + temp triggers) | ✅ Live |
 | CPCB AQI live data (data.gov.in, 511 stations) | ✅ Live |
@@ -59,7 +59,7 @@
 | ML live inference | ✅ Implemented (`get_claim_probability()` — lazy-loads `severity_rf.joblib`, falls back to p=0.15 if model missing) |
 | DBSCAN cluster intelligence (Layer 4) | ✅ Implemented (`sklearn.cluster.DBSCAN` on lat/lng/timestamp batch) |
 | Simulation & mock-data endpoints | ✅ Implemented (`/simulate/claim-scenario`, `/simulate/mock-data/generate`) |
-| Payment gateway service | ✅ Implemented (provider adapter workflow with `http_gateway` + `simulated_gateway` + `mock_fallback`) |
+| Payment gateway service | ✅ Implemented (provider adapter workflow with `http_gateway` / Stripe Test Mode + `simulated_gateway` + `mock_fallback`) |
 | Gamification & Rewards engine | ✅ Implemented (`coins_ledger` + 5 endpoints + auto-claim integration) |
 | Rate Limiting & OWASP Headers | ✅ Implemented (`slowapi` + explicit CORS + 6 security headers) |
 ---
@@ -93,6 +93,7 @@ docker compose up --build
 Then open:
 - http://localhost:8000/docs (Swagger UI — all endpoints)
 - http://localhost:8000/health
+- **Live deployment**: https://covara-backend.onrender.com/docs
 
 ---
 
@@ -241,7 +242,7 @@ flowchart TD
 
 | Module | File | Responsibility |
 |--------|------|---------------|
-| **KYC Service** | `kyc_service.py` | Sandbox.co.in Aadhaar OTP, PAN verify, bank verify. 3-tier progressive KYC ladder. |
+| **KYC Service** | `kyc_service.py` | Postman Mock for PAN/Bank verify. Switchable to Sandbox.co.in. 3-tier progressive KYC ladder. |
 | **Twilio Service** | `twilio_service.py` | WhatsApp + OTP. 7 notification templates. Mock fallback. |
 | **Trigger Evaluator** | `trigger_evaluator.py` | Threshold evaluation bridge for all 15+ trigger families. |
 | **Zone Coordinates** | `zone_coordinates.py` | Zone-to-coordinate mapping for batch scanning. |
@@ -275,6 +276,15 @@ flowchart TD
 - Add deeper payout reconciliation and provider failover strategy.
 - Progress from optional Kafka mode toward environment-specific defaults.
 - Continue strict production validation for integrations and secrets.
+
+### Deployment Updates (April 12, 2026)
+
+- Backend deployed to **Render** as Docker Web Service (`covara-backend.onrender.com`).
+- **Stripe Test Mode** integrated via `PayoutProviderAdapter` with 61 webhook events.
+- **Postman Mock** KYC server replaces Sandbox.co.in for reliable development.
+- Webhook: `POST /payouts/webhooks/http_gateway` with `whsec_*` signature verification.
+- Strict env validation enforced in production (`APP_ENV=production`).
+- Full webhook event catalog: [docs/STRIPE_WEBHOOK_EVENTS.md](../docs/STRIPE_WEBHOOK_EVENTS.md).
 
 
 
