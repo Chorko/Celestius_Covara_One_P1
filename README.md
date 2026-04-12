@@ -786,86 +786,13 @@ flowchart TD
 ---
 
 
-## 🔐 Adversarial Defense & Anti-Spoofing Strategy
-
-> [!CAUTION]
-> **Market-Shift Context:** A sophisticated syndicate of 500 delivery workers in a tier-1 city has successfully exploited a beta parametric insurance platform using coordinated GPS spoofing via Telegram groups — faking locations in severe weather zones while resting at home, triggering mass false payouts and draining the liquidity pool. Simple GPS verification is officially obsolete. This section documents how Covara One defends against this exact attack vector.
-
-```mermaid
-flowchart TD
-    classDef intake fill:#1D4ED8,color:#fff,stroke:#1E3A8A,stroke-width:2px;
-    classDef truth fill:#059669,color:#fff,stroke:#047857,stroke-width:2px;
-    classDef checks fill:#7C3AED,color:#fff,stroke:#5B21B6,stroke-width:2px;
-    classDef checks2 fill:#9333EA,color:#fff,stroke:#7E22CE,stroke-width:2px;
-    classDef checks3 fill:#B45309,color:#fff,stroke:#92400E,stroke-width:2px;
-    classDef score fill:#4F46E5,color:#fff,stroke:#3730A3,stroke-width:3px;
-    classDef pass fill:#16A34A,color:#fff,stroke:#15803D,stroke-width:2px;
-    classDef warn fill:#CA8A04,color:#fff,stroke:#A16207,stroke-width:2px;
-    classDef hold fill:#EA580C,color:#fff,stroke:#C2410C,stroke-width:2px;
-    classDef fail fill:#DC2626,color:#fff,stroke:#991B1B,stroke-width:2px;
-
-    CS{{📋 Claim Submitted}}:::intake
-
-    L1[/🌦️ LAYER 1 — Event Truth/]:::truth
-    L2[/👷 LAYER 2 — Worker Truth/]:::truth
-
-    subgraph L3G ["LAYER 3 — Anti-Spoofing"]
-        direction LR
-        AS1([📍 EXIF vs GPS]):::checks
-        AS2([⏱️ Timestamp freshness]):::checks
-        AS3([🌐 VPN / Proxy IP]):::checks
-        AS4([📱 Device continuity]):::checks
-        AS5([🚀 Impossible travel]):::checks
-    end
-
-    subgraph L4G ["LAYER 4 — Image Forensics"]
-        direction LR
-        IF1([🔍 EXIF integrity]):::checks2
-        IF2([🤖 AI detection]):::checks2
-        IF3([📸 Camera match]):::checks2
-        IF4([🖼️ ELA Analysis]):::checks2
-    end
-
-    subgraph L5G ["LAYER 5 — Behav & Region"]
-        direction LR
-        BR1([📊 Zone affinity]):::checks3
-        BR2([⏰ Pre-trigger presence]):::checks3
-        BR3([🔗 Cluster intel]):::checks3
-        BR4([📈 Zone claim spike]):::checks3
-    end
-
-    SE{{⚖️ Signal Confidence Scoring}}:::score
-
-    D1[[✅ auto_approve]]:::pass
-    D2[[🔎 needs_review]]:::warn
-    D3[[⚠️ hold_for_fraud]]:::hold
-    D4[[🛑 batch_hold]]:::fail
-    D5[[❌ reject_spoof]]:::fail
-
-    CB>🚨 Circuit Breaker]:::fail
-    TS[(📉 Trust Score)]:::hold
-
-    CS --> L1
-    L1 --> L2
-    L2 --> L3G
-    L3G --> L4G
-    L4G --> L5G
-    L5G --> SE
-
-    SE --> D1
-    SE --> D2
-    SE --> D3
-    SE --> D4
-    SE --> D5
-
-    BR4 --> CB
-    D3 --> TS
-    D5 --> TS
-    TS -.->|"future claims<br/>review default"| SE
-```
-
-> **How to read this diagram:** A claim enters at the top and passes through 5 verification layers. Each layer produces weighted signals that feed the scoring engine. The scoring engine maps the composite fraud score to one of 5 decision bands. Circuit-breakers protect the liquidity pool during mass-attack scenarios, and trust score penalties feed back into future claim evaluations.
-
+## 🔐 Adversarial Defense & Anti-Spoofing Strategy
+
+> [!CAUTION]
+> **Market-Shift Context:** A sophisticated syndicate of 500 delivery workers in a tier-1 city has successfully exploited a beta parametric insurance platform using coordinated GPS spoofing via Telegram groups — faking locations in severe weather zones while resting at home, triggering mass false payouts and draining the liquidity pool. Simple GPS verification is officially obsolete. This section documents how Covara One defends against this exact attack vector.
+
+> The 5-layer pipeline architecture is shown in the **Fraud Fortress diagram above**. Below is the detailed defense strategy for each layer.
+
 ### 1. The Differentiation: Genuine Worker vs. Bad Actor
 
 Covara One does **not** trust raw GPS coordinates alone. The platform differentiates genuinely stranded delivery partners from spoofers using **multi-signal verification** — a layered approach where no single data point can trigger or block a payout in isolation.
