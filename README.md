@@ -1,4 +1,4 @@
-﻿<div align="center">
+<div align="center">
 
 ![Header](https://capsule-render.vercel.app/api?type=waving&color=0:0F0C29,50:302B63,100:24243E&height=220&section=header&text=🛡️%20Covara%20One&fontSize=70&fontColor=ffffff&animation=fadeIn&fontAlignY=35&desc=Zero-Touch%20Parametric%20Income%20Shield%20for%20Gig%20Workers&descSize=18&descAlignY=55&descAlign=50)
 
@@ -467,8 +467,8 @@ flowchart TD
 | **Auth** | Supabase Auth (Google OAuth + email), Edge SSR Middleware | ✅ Live |
 | **Database** | Supabase Postgres, 14 tables, Row-Level Security | ✅ Live |
 | **ML** | scikit-learn Random Forest (live predict_proba), DBSCAN | ✅ Live |
-| **Infrastructure** | Docker multi-stage, GitHub Actions CI/CD, K8s manifests | ✅ Ready |
-| **Payments** | UPI mock (RazorpayX-format, async, failure simulation) | ✅ Mock |
+| **Infrastructure** | Docker multi-stage, GitHub Actions CI/CD, K8s manifests, Render | ✅ Deployed |
+| **Payments** | Stripe Test Mode (61 webhook events), provider-agnostic adapter | ✅ Live (Test) |
 
 </div>
 
@@ -600,6 +600,7 @@ All external data sources used by the platform, consolidated with URLs and integ
 | 17 | **Google Maps Distance Matrix** *(Planned)* | [developers.google.com/maps](https://developers.google.com/maps/documentation/distance-matrix) | Multi-route corridor travel times | Enhanced T12 traffic analysis | 📋 Planned |
 | 18 | **IMD Direct API** *(Planned)* | [imd.gov.in](https://mausam.imd.gov.in/) | Official rainfall/heat data (IP-whitelisted) | Replace OpenWeather for official sourcing | 📋 Planned |
 | 19 | **DigiLocker** (MeitY) *(Planned)* | [digilocker.gov.in](https://www.digilocker.gov.in/) | Aadhaar, PAN, DL document verification | KYC Level 4+ upgrade | 📋 Planned |
+| 20 | **Stripe** | [stripe.com](https://stripe.com/) | Payment processing, payouts, webhook events | Payout settlement via provider adapter (61 events configured) | ✅ Test Mode |
 
 > **Legend:** ✅ Live/Integrated — 📚 Reference source — 📋 Planned integration
 
@@ -1617,6 +1618,15 @@ Celestius_DEVTrails_P1/
 - Add deeper observability and SLO tracking for outbox relay and consumers.
 - Extend release automation and staging promotion checks from runbook gates.
 - Expand benchmark-driven ML calibration and drift monitoring workflows.
+
+### Deployment & Integration Updates (April 12, 2026)
+
+- **Backend deployed** to Render as Docker Web Service at `covara-backend.onrender.com`.
+- **Stripe Test Mode** integrated via provider-agnostic `PayoutProviderAdapter` with 61 webhook events configured.
+- **KYC provider** switched from Sandbox.co.in to Postman Mock Server for reliable development.
+- **Webhook endpoint** registered at `https://covara-backend.onrender.com/payouts/webhooks/http_gateway`.
+- Full webhook event catalog documented in [docs/STRIPE_WEBHOOK_EVENTS.md](docs/STRIPE_WEBHOOK_EVENTS.md).
+- Strict environment validation enforced in production (`STRICT_ENV_VALIDATION=auto`).
 
 
 

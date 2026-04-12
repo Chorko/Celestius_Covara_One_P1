@@ -1,0 +1,23 @@
+$kind: http-example
+request:
+  url: ""
+  method: GET
+response:
+  statusCode: 200
+  statusText: OK
+  body:
+    type: json
+    content: "{\r
+
+      \  \"status\": \"success\",\r
+
+      \  \"account_number\": \"0000000000\",\r
+
+      \  \"ifsc\": \"SBIN0000001\",\r
+
+      \  \"name_at_bank\": \"Test User\",\r
+
+      \  \"verified\": true\r
+
+      }"
+order: 1775917266982
