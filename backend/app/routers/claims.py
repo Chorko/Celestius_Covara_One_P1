@@ -449,21 +449,26 @@ async def submit_claim(
 @router.get("/")
 async def list_claims(
     queue: str = Query("all", description="all | mine | unassigned | overdue"),
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(25, ge=1, le=100, description="Items per page (max 100)"),
     user: dict = Depends(get_current_user),
 ):
-    """List claims. Workers see their own; Admins see all."""
+    """List claims with pagination. Workers see their own; Admins see all."""
     sb = get_supabase_admin()
     queue_key = (queue or "all").strip().lower()
+    offset = (page - 1) * page_size
 
     query = sb.table("manual_claims").select(
-        "*, worker_profiles(city, platform_name), trigger_events(trigger_family)"
+        "*, worker_profiles(city, platform_name), trigger_events(trigger_family)",
+        count="exact",
     )
 
     if user["role"] == "worker":
         query = query.eq("worker_profile_id", user["id"])
 
-    resp = query.order("claimed_at", desc=True).limit(100).execute()
+    resp = query.order("claimed_at", desc=True).range(offset, offset + page_size - 1).execute()
     claims = resp.data or []
+    total_count = resp.count or len(claims)
 
     if user["role"] == "worker":
         return {"claims": claims}
@@ -522,7 +527,16 @@ async def list_claims(
         return (sla_rank, due_rank)
 
     claims.sort(key=_sort_claim)
-    return {"claims": claims, "queue": queue_key}
+    return {
+        "claims": claims,
+        "queue": queue_key,
+        "pagination": {
+            "page": page,
+            "page_size": page_size,
+            "total": total_count,
+            "total_pages": max(1, (total_count + page_size - 1) // page_size),
+        },
+    }
 
 
 @router.get("/{claim_id}")

@@ -7,7 +7,7 @@
 [![Guidewire DEVTrails](https://img.shields.io/badge/🏆_Guidewire-DEVTrails_2026-6D28D9?style=for-the-badge)](https://devtrails.guidewire.com)
 [![Team](https://img.shields.io/badge/Team-Celestius-7C3AED?style=for-the-badge&logo=rocket&logoColor=white)](#-team-celestius)
 [![Phase](https://img.shields.io/badge/Phase_2-Production_Hardened-4F46E5?style=for-the-badge&logo=shield&logoColor=white)](#)
-[![Tests](https://img.shields.io/badge/Smoke_Tests-65_Passing-16A34A?style=for-the-badge&logo=python&logoColor=white)](#)
+[![Tests](https://img.shields.io/badge/Tests-70+_Passing-16A34A?style=for-the-badge&logo=python&logoColor=white)](#)
 
 <br>
 
@@ -1249,7 +1249,7 @@ The Random Forest baseline was benchmarked against XGBoost ([Chen & Guestrin, 20
 | **Auth** | Client-side guard | Next.js Edge SSR Middleware — flash-free, server-enforced |
 | **Caching** | None | Redis + `fastapi-cache2` TTL decorators on live feeds |
 | **Infrastructure & Security** | ZIP file | Docker multi-stage + GitHub Actions CI/CD + K8s manifests, OWASP Headers, and Rate Limiting (`slowapi`) |
-| **Testing** | None | 65 comprehensive smoke test validations — 100% pass rate |
+| **Testing** | None | 70+ comprehensive test validations (unit + smoke + HTTP) — 100% pass rate |
 | **Stress tested** | Not mentioned | Mumbai monsoon simulator: 10,000 workers, 3-day event |
 
 </div>
@@ -1478,7 +1478,7 @@ Celestius_DEVTrails_P1/
 ├── fraud/                           ← Ghost Shift Detector architecture docs
 ├── data/                            ← Seed CSVs, schemas, threshold references
 ├── integrations/                    ← Live API connectors + payment mock
-├── tests/                           ← 65 smoke test validations (100% pass rate)
+├── tests/                           ← 70+ test validations (unit + smoke + HTTP)
 └── .github/workflows/               ← CI/CD: lint→test→docker→security audit
 ```
 
