@@ -1,0 +1,49 @@
+# Covara SQL Runbook (Organized)
+
+This folder is now split into **active** scripts and **archive** scripts.
+
+## Active Scripts (use these)
+
+1. `00_unified_migration.sql`
+- Base bootstrap schema, auth trigger, RLS baseline, storage policies, grants.
+
+2. `01_enterprise_alignment_patch_2026_04_12.sql`
+- Aligns the base schema to the current production/final schema shape.
+- Includes compatibility updates for claim workflow, payout tables, KYC audit table, rewards/index compatibility, event reliability glue, and policy/RLS hardening.
+
+3. `02_rpc_postrun_hotfix_2026_04_12.sql` (optional)
+- Only run if the RPC `public.persist_claim_with_outbox(jsonb,jsonb,text,text,text,jsonb)` is missing/mismatched in a post-run environment.
+
+4. `06_synthetic_seed.sql`
+- Demo baseline seed set.
+
+5. `16_synthetic_seed_200.sql`
+- Additional large synthetic data pack (200 generated records for trigger/claim/payout stress testing).
+
+6. `08_fix_demo_auth_users.sql` (repair helper)
+- Use only if Supabase Auth returns 500 during login (e.g. "Database error querying schema").
+- Run once to clean stale demo rows, then run `python scripts/seed_test_users.py` followed by `python scripts/force_sync_users.py` to recreate/update demo auth users and sync role/profile tables with service-role admin APIs.
+
+## Recommended Run Order (fresh environment)
+
+```sql
+-- Required
+backend/sql/00_unified_migration.sql
+backend/sql/01_enterprise_alignment_patch_2026_04_12.sql
+backend/sql/06_synthetic_seed.sql
+
+-- Optional scale seed
+backend/sql/16_synthetic_seed_200.sql
+
+-- Optional RPC repair (only if needed)
+backend/sql/02_rpc_postrun_hotfix_2026_04_12.sql
+```
+
+## Archive Scripts (historical)
+
+`backend/sql/archive/` contains legacy incremental migrations (`07` to `15`).
+These remain for audit/history and rollback investigation, but are no longer the primary run path.
+
+## Final Schema Reference
+
+`backend/sql/SCHEMA_FINAL_REFERENCE_2026_04_12.sql` stores the final live schema snapshot used as structural reference during this cleanup.
