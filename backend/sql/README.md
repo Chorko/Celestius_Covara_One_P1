@@ -25,7 +25,7 @@ This folder is split into active scripts and archive scripts.
 1. `16_synthetic_seed_200.sql`
   Additional large synthetic data pack for trigger/claim/payout stress.
 
-1. `19a_login_ready_workers_auth_cleanup.sql` (recovery-only)
+1. `backend/sql/helpers/19a_login_ready_workers_auth_cleanup.sql` (recovery-only)
   One-time cleanup for malformed synthetic auth rows created by legacy
   direct SQL inserts into Auth tables.
 
@@ -43,7 +43,7 @@ This folder is split into active scripts and archive scripts.
   Provisions 200 login-capable synthetic auth users via Supabase Admin API.
   Run with: `python scripts/provision_login_ready_workers_200.py --apply`
 
-1. `08_fix_demo_auth_users.sql` (repair helper)
+1. `backend/sql/helpers/08_fix_demo_auth_users.sql` (repair helper)
   Use only if demo logins return Supabase Auth 500 errors.
   Run cleanup SQL once, then run
   `python scripts/seed_test_users.py` and
@@ -71,7 +71,7 @@ backend/sql/02_rpc_postrun_hotfix_2026_04_12.sql
 ## Recovery Flow (if synthetic auth logins return 500)
 
 ```text
-backend/sql/19a_login_ready_workers_auth_cleanup.sql
+backend/sql/helpers/19a_login_ready_workers_auth_cleanup.sql
 python scripts/provision_login_ready_workers_200.py --apply
 backend/sql/19_login_ready_workers_200.sql
 ```
@@ -93,7 +93,12 @@ the SQL script prints:
 They remain for audit/history and rollback investigation, but are no longer
 the primary run path.
 
+`backend/sql/helpers/` contains operational recovery helpers that are run
+manually when needed. They are intentionally outside the strict top-level
+`NN_description.sql` migration sequence validated by
+`scripts/validate_sql_migrations.py`.
+
 ## Final Schema Reference
 
-`backend/sql/SCHEMA_FINAL_REFERENCE_2026_04_12.sql` stores the final live
+`backend/sql/reference/SCHEMA_FINAL_REFERENCE_2026_04_12.sql` stores the final live
 schema snapshot used as structural reference during this cleanup.

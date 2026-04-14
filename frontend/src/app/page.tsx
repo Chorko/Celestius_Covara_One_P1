@@ -91,7 +91,7 @@ export default function Home() {
       if (error.status === 0 || name === 'AuthRetryableFetchError' || msg.toLowerCase().includes('failed to fetch') || msg.toLowerCase().includes('network')) {
         setError('Cannot reach Supabase — your free-tier project may be paused. Visit the Supabase dashboard and click "Restore project", then try again.')
       } else if (msg.toLowerCase().includes('schema') || error.status === 500) {
-        setError('Auth service error (500) — demo accounts may be broken. Run 08_fix_demo_auth_users.sql and recreate accounts via Supabase Dashboard → Authentication → Users.')
+        setError('Auth service error (500) — demo accounts may be broken. Run backend/sql/helpers/08_fix_demo_auth_users.sql and recreate accounts via Supabase Dashboard -> Authentication -> Users.')
       } else {
         setError(msg || 'Sign in failed')
       }

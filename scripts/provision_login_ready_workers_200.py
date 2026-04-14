@@ -10,7 +10,7 @@ Usage:
   python scripts/provision_login_ready_workers_200.py --apply
 
 Recommended recovery flow for existing broken synthetic auth rows:
-  1) Run backend/sql/19a_login_ready_workers_auth_cleanup.sql
+    1) Run backend/sql/helpers/19a_login_ready_workers_auth_cleanup.sql
   2) Run this script with --apply
   3) Run backend/sql/19_login_ready_workers_200.sql
 """

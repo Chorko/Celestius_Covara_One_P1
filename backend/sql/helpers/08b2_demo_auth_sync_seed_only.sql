@@ -7,7 +7,8 @@
 --   after worker@demo.com/admin@demo.com are recreated in auth.users.
 --
 -- Run after:
---   08b1_demo_auth_cleanup_only.sql + manual user recreation in Auth dashboard.
+--   backend/sql/helpers/08b1_demo_auth_cleanup_only.sql
+--   + manual user recreation in Auth dashboard.
 -- ==========================================================================
 
 set statement_timeout = '0';

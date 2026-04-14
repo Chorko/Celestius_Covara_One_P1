@@ -10,7 +10,7 @@
 --   2) Recreate users in Supabase Auth dashboard:
 --      - worker@demo.com / demo1234 (Auto Confirm ON)
 --      - admin@demo.com  / demo1234 (Auto Confirm ON)
---   3) Then run 08b2_demo_auth_sync_seed_only.sql.
+--   3) Then run backend/sql/helpers/08b2_demo_auth_sync_seed_only.sql.
 -- ==========================================================================
 
 set statement_timeout = '0';

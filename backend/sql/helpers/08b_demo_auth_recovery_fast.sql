@@ -4,7 +4,7 @@
 -- ==========================================================================
 -- Purpose:
 --   Recover worker@demo.com and admin@demo.com quickly when the full
---   08_fix_demo_auth_users.sql times out in the SQL Editor.
+--   backend/sql/helpers/08_fix_demo_auth_users.sql times out in the SQL Editor.
 --
 -- Run pattern:
 --   Pass 1: run this script (it cleans stale demo rows).
@@ -14,9 +14,9 @@
 --   Pass 2: run this script again (it syncs role/profile + seeds persona).
 --
 -- If your connection is unstable and this still times out, use chunked mode:
---   1) 08b1_demo_auth_cleanup_only.sql
+--   1) backend/sql/helpers/08b1_demo_auth_cleanup_only.sql
 --   2) recreate users in Auth dashboard
---   3) 08b2_demo_auth_sync_seed_only.sql
+--   3) backend/sql/helpers/08b2_demo_auth_sync_seed_only.sql
 --
 -- Notes:
 --   - Narrow scope: only demo worker/admin accounts.
