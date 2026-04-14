@@ -466,9 +466,21 @@ async def list_claims(
     if user["role"] == "worker":
         query = query.eq("worker_profile_id", user["id"])
 
-    resp = query.order("claimed_at", desc=True).range(offset, offset + page_size - 1).execute()
-    claims = resp.data or []
-    total_count = resp.count or len(claims)
+    ordered_query = query.order("claimed_at", desc=True)
+    supports_range = hasattr(ordered_query, "range")
+
+    if supports_range:
+        resp = ordered_query.range(offset, offset + page_size - 1).execute()
+        claims = resp.data or []
+    else:
+        # Test doubles may not implement range/count; apply pagination in-memory.
+        resp = ordered_query.execute()
+        all_claims = resp.data or []
+        claims = all_claims[offset : offset + page_size]
+
+    total_count = getattr(resp, "count", None)
+    if not isinstance(total_count, int):
+        total_count = len(resp.data or [])
 
     if user["role"] == "worker":
         return {"claims": claims}

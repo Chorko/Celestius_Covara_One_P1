@@ -2,7 +2,7 @@
 -- 17_audit_seed_enhancements.sql
 -- Covara One — Audit-Driven Seed Enhancements
 --
--- Run AFTER 06_synthetic_seed.sql (or 08_fix_demo_auth_users.sql)
+-- Run AFTER 06_synthetic_seed.sql (or backend/sql/helpers/08_fix_demo_auth_users.sql)
 -- This version first verifies which workers actually exist
 -- in the database and only inserts for those workers.
 --
@@ -13,7 +13,7 @@
 -- 0. Resolve target workers dynamically
 --
 -- This script historically referenced fixed synthetic UUIDs
--- (aaaa...). After running 08_fix_demo_auth_users.sql, demo users
+-- (aaaa...). After running backend/sql/helpers/08_fix_demo_auth_users.sql, demo users
 -- can have new auth/profile IDs. We map up to 7 worker "slots"
 -- to whichever worker_profiles currently exist.
 -- ────────────────────────────────────────────────────────────

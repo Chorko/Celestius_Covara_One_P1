@@ -20,6 +20,7 @@ frontend/.next
 # Secrets / env files
 .env
 .env.*
+!.env.example
 render.env
 *.pem
 *.key
