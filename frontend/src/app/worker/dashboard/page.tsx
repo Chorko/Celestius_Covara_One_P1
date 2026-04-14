@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useUserStore } from '@/store'
 import { createClient } from '@/lib/supabase'
-import { backendGet } from '@/lib/backendApi'
+import { backendGet, backendPost, BackendApiError } from '@/lib/backendApi'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import {
   ShieldCheck,
@@ -29,6 +29,47 @@ interface ClaimsSummaryResponse {
   claims: ClaimStatusRow[]
 }
 
+interface PolicyQuoteResponse {
+  plan: string
+  weekly_premium_inr: number
+  max_payout_cap_inr: number
+  covered_weekly_income: number
+  exposure_multiplier: number
+  confidence_multiplier: number
+}
+
+interface PolicyActivationResponse {
+  status: string
+  message: string
+  policy_id: string
+  valid_until: string
+}
+
+function buildFallbackStats14Days(avgHourlyIncomeInr: number) {
+  const today = new Date()
+  const baseHourly = Number.isFinite(avgHourlyIncomeInr) && avgHourlyIncomeInr > 0
+    ? avgHourlyIncomeInr
+    : 85
+
+  return Array.from({ length: 14 }, (_, idx) => {
+    const date = new Date(today)
+    date.setDate(today.getDate() - (13 - idx))
+    const weekday = date.getDay()
+    const isWeekend = weekday === 0 || weekday === 6
+    const activeHours = isWeekend ? 8.25 : 9.5
+    const completedOrders = isWeekend ? 12 + (idx % 3) : 9 + (idx % 4)
+    const gross = Math.round(completedOrders * (baseHourly * 1.18 + ((idx % 3) * 7)))
+
+    return {
+      stat_date: date.toISOString().split('T')[0],
+      gross_earnings_inr: gross,
+      completed_orders: completedOrders,
+      gps_consistency_score: Number(Math.min(0.97, 0.84 + ((idx % 5) * 0.025)).toFixed(3)),
+      active_hours: activeHours,
+    }
+  })
+}
+
 export default function WorkerDashboard() {
   const { profile } = useUserStore()
   const supabase = createClient()
@@ -42,6 +83,7 @@ export default function WorkerDashboard() {
   /* eslint-enable @typescript-eslint/no-explicit-any */
   const [activating, setActivating] = useState(false)
   const [activationMsg, setActivationMsg] = useState<string | null>(null)
+  const [activationError, setActivationError] = useState<string | null>(null)
   const [dashboardError, setDashboardError] = useState<string | null>(null)
   // Per-section loading flags for progressive rendering
   const [workerLoading, setWorkerLoading] = useState(true)
@@ -103,7 +145,13 @@ export default function WorkerDashboard() {
             .eq('worker_profile_id', wData.profile_id)
             .order('stat_date', { ascending: true })
             .limit(14)
-          setStats(statsData || [])
+
+          const rows = statsData || []
+          if (rows.length === 0) {
+            setStats(buildFallbackStats14Days(Number(wData.avg_hourly_income_inr || 85)))
+          } else {
+            setStats(rows)
+          }
         } catch(e) { console.error('Could not fetch dashboard stats', e) }
 
         if (wData?.preferred_zone_id) {
@@ -112,6 +160,7 @@ export default function WorkerDashboard() {
               .from('trigger_events')
               .select('*')
               .eq('zone_id', wData.preferred_zone_id)
+              .is('ended_at', null)
               .order('started_at', { ascending: false })
               .limit(5)
             setActiveTriggers(tData || [])
@@ -122,7 +171,7 @@ export default function WorkerDashboard() {
       // Claims summary — per-section loading
       (async () => {
         try {
-          const response = await backendGet<ClaimsSummaryResponse>(supabase, '/claims/')
+          const response = await backendGet<ClaimsSummaryResponse>(supabase, '/claims?queue=all')
           const claimData = response.claims || []
 
           if (claimData) {
@@ -131,7 +180,23 @@ export default function WorkerDashboard() {
             const rejected = claimData.filter(c => ['rejected', 'post_approval_flagged'].includes(c.claim_status)).length
             setClaimCounts({ pending, approved, rejected, total: claimData.length })
           }
-        } catch (e) { console.error('Could not load claim counts', e) }
+        } catch (e) {
+          console.error('Could not load claim counts from backend, falling back to Supabase', e)
+          try {
+            const { data: claimRows } = await supabase
+              .from('manual_claims')
+              .select('claim_status')
+              .eq('worker_profile_id', wData.profile_id)
+
+            const localClaims = claimRows || []
+            const pending = localClaims.filter(c => ['submitted', 'soft_hold_verification', 'fraud_escalated_review'].includes(c.claim_status)).length
+            const approved = localClaims.filter(c => ['approved', 'auto_approved', 'paid'].includes(c.claim_status)).length
+            const rejected = localClaims.filter(c => ['rejected', 'post_approval_flagged'].includes(c.claim_status)).length
+            setClaimCounts({ pending, approved, rejected, total: localClaims.length })
+          } catch (fallbackError) {
+            console.error('Could not load claim counts from Supabase fallback', fallbackError)
+          }
+        }
         finally { setClaimsLoading(false) }
       })(),
 
@@ -154,18 +219,29 @@ export default function WorkerDashboard() {
 
           const fallback_weekly_gross = Math.round((wData.avg_hourly_income_inr || 0) * 8 * 6)
           const weekly_gross = observed_weekly_gross ?? fallback_weekly_gross
-          const B = Math.round(weekly_gross * 0.70)
-          const raw_cap = Math.round(B * 0.75)
-          const payout_cap = Math.min(raw_cap, 10000)
-          const cityFactor: Record<string, number> = { Mumbai: 1.3, Delhi: 1.2, Bangalore: 1.25 }
-          const C = cityFactor[wData.city] ?? 1.0
-          const E = wData.trust_score ?? 0.8
-          setPolicyQuote({
-            weekly_premium_inr: Math.round(B * 0.035 * E * C),
-            max_payout_cap_inr: payout_cap,
-            observed_weekly_gross: weekly_gross,
-            B, E: Math.round(E * 100) / 100, C,
-          })
+
+          try {
+            const quote = await backendGet<PolicyQuoteResponse>(supabase, '/policies/quote?plan=essential')
+            const coveredIncome = Math.round(quote.covered_weekly_income || (weekly_gross * 0.70))
+            setPolicyQuote({
+              weekly_premium_inr: quote.weekly_premium_inr || 28,
+              max_payout_cap_inr: quote.max_payout_cap_inr || 3000,
+              observed_weekly_gross: weekly_gross,
+              B: coveredIncome,
+              E: Number((quote.exposure_multiplier ?? 1).toFixed(2)),
+              C: Number((quote.confidence_multiplier ?? 1).toFixed(2)),
+            })
+          } catch {
+            const B = Math.round(weekly_gross * 0.70)
+            setPolicyQuote({
+              weekly_premium_inr: 28,
+              max_payout_cap_inr: 3000,
+              observed_weekly_gross: weekly_gross,
+              B,
+              E: Number((wData.trust_score ?? 0.8).toFixed(2)),
+              C: 1.0,
+            })
+          }
         } catch(e) { console.error('Could not compute policy quote', e) }
         finally { setQuoteLoading(false) }
       })(),
@@ -180,10 +256,25 @@ export default function WorkerDashboard() {
   const activatePolicy = async () => {
     setActivating(true)
     setActivationMsg(null)
-    // Simulate a payment processing delay (demo platform — no real backend needed)
-    await new Promise(resolve => setTimeout(resolve, 1800))
-    setActivating(false)
-    setActivationMsg('Coverage Active!')
+    setActivationError(null)
+
+    try {
+      const response = await backendPost<PolicyActivationResponse>(
+        supabase,
+        '/policies/activate',
+        { plan: 'essential' },
+      )
+      setActivationMsg(`Coverage active until ${new Date(response.valid_until).toLocaleDateString('en-IN')}`)
+      await loadDashboardData()
+    } catch (e: unknown) {
+      if (e instanceof BackendApiError) {
+        setActivationError(e.detail)
+      } else {
+        setActivationError(e instanceof Error ? e.message : 'Failed to activate coverage')
+      }
+    } finally {
+      setActivating(false)
+    }
   }
 
   const totalEarnings = stats.reduce((sum, s) => sum + (s.gross_earnings_inr || 0), 0)
@@ -193,6 +284,16 @@ export default function WorkerDashboard() {
   const avgGpsScore = stats.length
     ? Math.round(stats.reduce((sum, s) => sum + (s.gps_consistency_score || 0), 0) / stats.length * 100)
     : '--'
+  const projectedDailyTakeHome = stats.length
+    ? Math.round(totalEarnings / stats.length)
+    : Math.round((Number(workerDetails?.avg_hourly_income_inr || 85)) * 9)
+  const projectedMonthlyTakeHome = projectedDailyTakeHome * 26
+  const disruptionRiskLabel =
+    workerDetails?.city === 'Mumbai'
+      ? 'Monsoon and traffic disruption risk'
+      : workerDetails?.city === 'Delhi'
+        ? 'AQI and heatwave disruption risk'
+        : 'Mixed urban disruption risk'
 
   if (dashboardError && !workerDetails) {
     return (
@@ -292,7 +393,7 @@ export default function WorkerDashboard() {
             <div className="card px-4 py-2.5 flex flex-wrap items-center gap-4 text-sm">
               <span className="flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
                 <MapPin size={14} style={{ color: 'var(--accent)' }} />
-                {workerDetails.city} &middot; {workerDetails.zones?.zone_name}
+                {workerDetails.city} &middot; {workerDetails.zones?.zone_name || 'Zone pending'}
               </span>
               <span className="flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
                 <Truck size={14} style={{ color: 'var(--info)' }} />
@@ -300,7 +401,7 @@ export default function WorkerDashboard() {
               </span>
               <span className="flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
                 <Activity size={14} style={{ color: 'var(--warning)' }} />
-                Trust&nbsp;<strong style={{ color: 'var(--text-primary)' }}>{workerDetails.trust_score}</strong>
+                Trust&nbsp;<strong style={{ color: 'var(--text-primary)' }}>{Number(workerDetails.trust_score || 0).toFixed(2)}</strong>
               </span>
             </div>
           </div>
@@ -319,6 +420,34 @@ export default function WorkerDashboard() {
           ))}
         </section>
 
+        {/* ===== WORKER PERSONA SNAPSHOT ===== */}
+        <section className="section-enter">
+          <div className="card p-5" style={{ borderLeft: '3px solid var(--info)' }}>
+            <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
+              <h2 className="text-sm font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                Worker Persona Snapshot
+              </h2>
+              <span className="badge-info">{disruptionRiskLabel}</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+              <div className="p-3 rounded-lg" style={{ background: 'var(--bg-tertiary)' }}>
+                <p style={{ color: 'var(--text-tertiary)' }}>Projected Daily Gross</p>
+                <p className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>₹{projectedDailyTakeHome.toLocaleString('en-IN')}</p>
+              </div>
+              <div className="p-3 rounded-lg" style={{ background: 'var(--bg-tertiary)' }}>
+                <p style={{ color: 'var(--text-tertiary)' }}>Projected Monthly Gross</p>
+                <p className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>₹{projectedMonthlyTakeHome.toLocaleString('en-IN')}</p>
+              </div>
+              <div className="p-3 rounded-lg" style={{ background: 'var(--bg-tertiary)' }}>
+                <p style={{ color: 'var(--text-tertiary)' }}>Current Plan Fit</p>
+                <p className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
+                  {projectedMonthlyTakeHome >= 30000 ? 'Plus Plan Candidate' : 'Essential Plan Candidate'}
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* ===== CLAIMS SUMMARY ===== */}
         <section className="section-enter">
           <div className="card p-5">
@@ -332,7 +461,11 @@ export default function WorkerDashboard() {
                   <Skeleton width="80px" height="0.75rem" />
                 </div>
               </div>
-            ) : claimCounts.total === 0 ? null : (
+            ) : claimCounts.total === 0 ? (
+              <div className="p-4 rounded-lg text-sm" style={{ background: 'var(--bg-tertiary)', color: 'var(--text-tertiary)' }}>
+                No claims filed yet. Once a disruption affects your zone, claim status updates will appear here.
+              </div>
+            ) : (
               <>
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-sm font-semibold uppercase tracking-wider flex items-center gap-2" style={{ color: 'var(--text-tertiary)' }}>
@@ -424,6 +557,11 @@ export default function WorkerDashboard() {
                       <Zap size={18} />
                       {activating ? 'Activating...' : 'Activate Coverage'}
                     </button>
+                  )}
+                  {activationError && (
+                    <p className="text-xs mt-2 text-center" style={{ color: 'var(--danger)' }}>
+                      {activationError}
+                    </p>
                   )}
                 </div>
               </div>

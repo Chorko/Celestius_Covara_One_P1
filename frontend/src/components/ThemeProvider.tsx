@@ -19,21 +19,22 @@ export function useTheme() {
   return useContext(ThemeContext)
 }
 
-function resolveInitialTheme(): Theme {
-  if (typeof window === 'undefined') {
-    return 'dark'
-  }
-
-  const saved = localStorage.getItem('covara-theme')
-  if (saved === 'dark' || saved === 'light') {
-    return saved
-  }
-
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-}
-
 export default function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>(resolveInitialTheme)
+  // Keep the first render deterministic for SSR hydration.
+  const [theme, setThemeState] = useState<Theme>('dark')
+
+  useEffect(() => {
+    const saved = localStorage.getItem('covara-theme')
+    const resolved: Theme =
+      saved === 'dark' || saved === 'light'
+        ? saved
+        : window.matchMedia('(prefers-color-scheme: dark)').matches
+          ? 'dark'
+          : 'light'
+
+    setThemeState(resolved)
+    document.documentElement.setAttribute('data-theme', resolved)
+  }, [])
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -42,24 +43,15 @@ export default function ThemeProvider({ children }: { children: React.ReactNode 
 
   const setTheme = useCallback((t: Theme) => {
     setThemeState(t)
-    document.documentElement.setAttribute('data-theme', t)
-    localStorage.setItem('covara-theme', t)
   }, [])
 
   const toggleTheme = useCallback(() => {
-    setTheme(theme === 'dark' ? 'light' : 'dark')
-  }, [theme, setTheme])
+    setThemeState((current) => (current === 'dark' ? 'light' : 'dark'))
+  }, [])
 
   return (
-    <>
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `(function(){try{var t=localStorage.getItem('covara-theme');if(t==='light'||t==='dark'){document.documentElement.setAttribute('data-theme',t)}else{document.documentElement.setAttribute('data-theme',window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light')}}catch(e){document.documentElement.setAttribute('data-theme','dark')}})()`,
-        }}
-      />
-      <ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>
-        {children}
-      </ThemeContext.Provider>
-    </>
+    <ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>
+      {children}
+    </ThemeContext.Provider>
   )
 }

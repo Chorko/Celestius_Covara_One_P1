@@ -9,24 +9,121 @@
 -- Safe to re-run (uses ON CONFLICT / upserts).
 -- ============================================================
 
+-- ────────────────────────────────────────────────────────────
+-- 0. Resolve target workers dynamically
+--
+-- This script historically referenced fixed synthetic UUIDs
+-- (aaaa...). After running 08_fix_demo_auth_users.sql, demo users
+-- can have new auth/profile IDs. We map up to 7 worker "slots"
+-- to whichever worker_profiles currently exist.
+-- ────────────────────────────────────────────────────────────
+CREATE TEMP TABLE IF NOT EXISTS tmp_audit_seed_workers (
+  slot integer PRIMARY KEY,
+  worker_profile_id uuid NOT NULL,
+  zone_id uuid
+) ON COMMIT DROP;
+
+TRUNCATE tmp_audit_seed_workers;
+
+WITH worker_candidates AS (
+  SELECT
+    wp.profile_id AS worker_profile_id,
+    COALESCE(
+      wp.preferred_zone_id,
+      (
+        SELECT z.id
+        FROM public.zones z
+        WHERE lower(z.city) = lower(COALESCE(wp.city, ''))
+        ORDER BY z.zone_name
+        LIMIT 1
+      ),
+      (
+        SELECT z2.id
+        FROM public.zones z2
+        ORDER BY z2.zone_name
+        LIMIT 1
+      )
+    ) AS zone_id,
+    CASE lower(COALESCE(p.email, ''))
+      WHEN 'ravi.kumar@demo.devtrails.in' THEN 1
+      WHEN 'priya.sharma@demo.devtrails.in' THEN 2
+      WHEN 'arun.patel@demo.devtrails.in' THEN 3
+      WHEN 'meena.devi@demo.devtrails.in' THEN 4
+      WHEN 'suresh.yadav@demo.devtrails.in' THEN 5
+      WHEN 'fatima.khan@demo.devtrails.in' THEN 6
+      WHEN 'worker@demo.com' THEN 7
+      ELSE 100
+    END AS preferred_slot
+  FROM public.worker_profiles wp
+  LEFT JOIN public.profiles p ON p.id = wp.profile_id
+),
+seeded_slots AS (
+  SELECT preferred_slot AS slot, worker_profile_id, zone_id
+  FROM (
+    SELECT
+      wc.*,
+      row_number() OVER (
+        PARTITION BY wc.preferred_slot
+        ORDER BY wc.worker_profile_id
+      ) AS rn
+    FROM worker_candidates wc
+    WHERE wc.preferred_slot BETWEEN 1 AND 7
+  ) ranked
+  WHERE rn = 1
+),
+fallback_pool AS (
+  SELECT
+    wc.worker_profile_id,
+    wc.zone_id,
+    row_number() OVER (
+      ORDER BY wc.preferred_slot, wc.worker_profile_id
+    ) AS rn
+  FROM worker_candidates wc
+  WHERE wc.worker_profile_id NOT IN (
+    SELECT ss.worker_profile_id FROM seeded_slots ss
+  )
+),
+missing_slots AS (
+  SELECT
+    gs AS slot,
+    row_number() OVER (ORDER BY gs) AS rn
+  FROM generate_series(1, 7) gs
+  WHERE gs NOT IN (SELECT ss.slot FROM seeded_slots ss)
+)
+INSERT INTO tmp_audit_seed_workers (slot, worker_profile_id, zone_id)
+SELECT ss.slot, ss.worker_profile_id, ss.zone_id
+FROM seeded_slots ss
+UNION ALL
+SELECT ms.slot, fp.worker_profile_id, fp.zone_id
+FROM missing_slots ms
+JOIN fallback_pool fp ON fp.rn = ms.rn;
+
 
 -- ────────────────────────────────────────────────────────────
--- 1. Policies for existing workers
---    Uses INSERT ... SELECT to only create policies for
---    workers that actually exist in worker_profiles.
+-- 1. Policies for resolved worker slots
 -- ────────────────────────────────────────────────────────────
 INSERT INTO public.policies (id, policy_id, worker_profile_id, zone_id, plan_type, coverage_amount, premium_amount, status, activated_at, valid_until)
-SELECT v.id, v.policy_id, v.worker_profile_id, v.zone_id, v.plan_type, v.coverage_amount, v.premium_amount, v.status, v.activated_at, v.valid_until
+SELECT
+  v.id,
+  v.policy_id,
+  sw.worker_profile_id,
+  COALESCE(sw.zone_id, v.fallback_zone_id),
+  v.plan_type,
+  v.coverage_amount,
+  v.premium_amount,
+  v.status,
+  v.activated_at,
+  v.valid_until
 FROM (VALUES
-  ('77770000-0000-0000-0000-000000000001'::uuid, 'COV-PLUS-RAVI-001',   'aaaa0000-0000-0000-0000-000000000001'::uuid, 'b7a1c2d3-e4f5-5678-abcd-100000000001'::uuid, 'plus',      4500.00::numeric, 42.00::numeric, 'active', '2026-03-01T00:00:00+05:30'::timestamptz, '2026-06-30T23:59:59+05:30'::timestamptz),
-  ('77770000-0000-0000-0000-000000000002'::uuid, 'COV-ESS-PRIYA-001',   'aaaa0000-0000-0000-0000-000000000002'::uuid, 'b7a1c2d3-e4f5-5678-abcd-100000000002'::uuid, 'essential',  3000.00::numeric, 28.00::numeric, 'active', '2026-03-01T00:00:00+05:30'::timestamptz, '2026-06-30T23:59:59+05:30'::timestamptz),
-  ('77770000-0000-0000-0000-000000000003'::uuid, 'COV-PLUS-ARUN-001',   'aaaa0000-0000-0000-0000-000000000003'::uuid, 'b7a1c2d3-e4f5-5678-abcd-100000000003'::uuid, 'plus',      4500.00::numeric, 42.00::numeric, 'active', '2026-03-01T00:00:00+05:30'::timestamptz, '2026-06-30T23:59:59+05:30'::timestamptz),
-  ('77770000-0000-0000-0000-000000000004'::uuid, 'COV-ESS-MEENA-001',   'aaaa0000-0000-0000-0000-000000000004'::uuid, 'b7a1c2d3-e4f5-5678-abcd-100000000004'::uuid, 'essential',  3000.00::numeric, 28.00::numeric, 'active', '2026-03-01T00:00:00+05:30'::timestamptz, '2026-06-30T23:59:59+05:30'::timestamptz),
-  ('77770000-0000-0000-0000-000000000005'::uuid, 'COV-PLUS-SURESH-001', 'aaaa0000-0000-0000-0000-000000000005'::uuid, 'b7a1c2d3-e4f5-5678-abcd-100000000005'::uuid, 'plus',      4500.00::numeric, 42.00::numeric, 'active', '2026-03-01T00:00:00+05:30'::timestamptz, '2026-06-30T23:59:59+05:30'::timestamptz),
-  ('77770000-0000-0000-0000-000000000006'::uuid, 'COV-ESS-FATIMA-001',  'aaaa0000-0000-0000-0000-000000000006'::uuid, 'b7a1c2d3-e4f5-5678-abcd-100000000007'::uuid, 'essential',  3000.00::numeric, 28.00::numeric, 'active', '2026-03-01T00:00:00+05:30'::timestamptz, '2026-06-30T23:59:59+05:30'::timestamptz),
-  ('77770000-0000-0000-0000-000000000007'::uuid, 'COV-ESS-DEMO-001',    'aaaa0000-0000-0000-0000-000000000201'::uuid, 'b7a1c2d3-e4f5-5678-abcd-100000000001'::uuid, 'essential',  3000.00::numeric, 28.00::numeric, 'active', '2026-03-01T00:00:00+05:30'::timestamptz, '2026-06-30T23:59:59+05:30'::timestamptz)
-) AS v(id, policy_id, worker_profile_id, zone_id, plan_type, coverage_amount, premium_amount, status, activated_at, valid_until)
-WHERE EXISTS (SELECT 1 FROM public.worker_profiles wp WHERE wp.profile_id = v.worker_profile_id)
+  (1::integer, '77770000-0000-0000-0000-000000000001'::uuid, 'COV-PLUS-RAVI-001',   'plus',      4500.00::numeric, 42.00::numeric, 'active', '2026-03-01T00:00:00+05:30'::timestamptz, '2026-06-30T23:59:59+05:30'::timestamptz, 'b7a1c2d3-e4f5-5678-abcd-100000000001'::uuid),
+  (2::integer, '77770000-0000-0000-0000-000000000002'::uuid, 'COV-ESS-PRIYA-001',   'essential', 3000.00::numeric, 28.00::numeric, 'active', '2026-03-01T00:00:00+05:30'::timestamptz, '2026-06-30T23:59:59+05:30'::timestamptz, 'b7a1c2d3-e4f5-5678-abcd-100000000002'::uuid),
+  (3::integer, '77770000-0000-0000-0000-000000000003'::uuid, 'COV-PLUS-ARUN-001',   'plus',      4500.00::numeric, 42.00::numeric, 'active', '2026-03-01T00:00:00+05:30'::timestamptz, '2026-06-30T23:59:59+05:30'::timestamptz, 'b7a1c2d3-e4f5-5678-abcd-100000000003'::uuid),
+  (4::integer, '77770000-0000-0000-0000-000000000004'::uuid, 'COV-ESS-MEENA-001',   'essential', 3000.00::numeric, 28.00::numeric, 'active', '2026-03-01T00:00:00+05:30'::timestamptz, '2026-06-30T23:59:59+05:30'::timestamptz, 'b7a1c2d3-e4f5-5678-abcd-100000000004'::uuid),
+  (5::integer, '77770000-0000-0000-0000-000000000005'::uuid, 'COV-PLUS-SURESH-001', 'plus',      4500.00::numeric, 42.00::numeric, 'active', '2026-03-01T00:00:00+05:30'::timestamptz, '2026-06-30T23:59:59+05:30'::timestamptz, 'b7a1c2d3-e4f5-5678-abcd-100000000005'::uuid),
+  (6::integer, '77770000-0000-0000-0000-000000000006'::uuid, 'COV-ESS-FATIMA-001',  'essential', 3000.00::numeric, 28.00::numeric, 'active', '2026-03-01T00:00:00+05:30'::timestamptz, '2026-06-30T23:59:59+05:30'::timestamptz, 'b7a1c2d3-e4f5-5678-abcd-100000000007'::uuid),
+  (7::integer, '77770000-0000-0000-0000-000000000007'::uuid, 'COV-ESS-DEMO-001',    'essential', 3000.00::numeric, 28.00::numeric, 'active', '2026-03-01T00:00:00+05:30'::timestamptz, '2026-06-30T23:59:59+05:30'::timestamptz, 'b7a1c2d3-e4f5-5678-abcd-100000000001'::uuid)
+) AS v(slot, id, policy_id, plan_type, coverage_amount, premium_amount, status, activated_at, valid_until, fallback_zone_id)
+JOIN tmp_audit_seed_workers sw ON sw.slot = v.slot
 ON CONFLICT (id) DO NOTHING;
 
 
@@ -44,22 +141,31 @@ ON CONFLICT (id) DO NOTHING;
 
 -- Fraud ring claims — only inserted for existing workers
 INSERT INTO public.manual_claims (id, worker_profile_id, trigger_event_id, claim_mode, claim_reason, stated_lat, stated_lng, claimed_at, claim_status)
-SELECT v.id, v.worker_profile_id, v.trigger_event_id, v.claim_mode, v.claim_reason, v.stated_lat, v.stated_lng, v.claimed_at, v.claim_status
+SELECT
+  v.id,
+  sw.worker_profile_id,
+  v.trigger_event_id,
+  v.claim_mode,
+  v.claim_reason,
+  v.stated_lat,
+  v.stated_lng,
+  v.claimed_at,
+  v.claim_status
 FROM (VALUES
-  ('11110000-0000-0000-0000-000000000021'::uuid, 'aaaa0000-0000-0000-0000-000000000001'::uuid, 'ffff0000-0000-0000-0000-000000000020'::uuid, 'manual',
+  (1::integer, '11110000-0000-0000-0000-000000000021'::uuid, 'ffff0000-0000-0000-0000-000000000020'::uuid, 'manual',
    'Heavy rain in Andheri. Roads flooded. Cannot deliver.', 19.13642::numeric, 72.82958::numeric, '2026-03-16T15:01:00+05:30'::timestamptz, 'rejected'),
-  ('11110000-0000-0000-0000-000000000022'::uuid, 'aaaa0000-0000-0000-0000-000000000002'::uuid, 'ffff0000-0000-0000-0000-000000000020'::uuid, 'manual',
+  (2::integer, '11110000-0000-0000-0000-000000000022'::uuid, 'ffff0000-0000-0000-0000-000000000020'::uuid, 'manual',
    'Severe waterlogging in Andheri West. Stuck at home.', 19.13645::numeric, 72.82961::numeric, '2026-03-16T15:01:30+05:30'::timestamptz, 'rejected'),
-  ('11110000-0000-0000-0000-000000000023'::uuid, 'aaaa0000-0000-0000-0000-000000000003'::uuid, 'ffff0000-0000-0000-0000-000000000020'::uuid, 'manual',
+  (3::integer, '11110000-0000-0000-0000-000000000023'::uuid, 'ffff0000-0000-0000-0000-000000000020'::uuid, 'manual',
    'Rain flooding in Andheri area. Lost shift earnings.', 19.13648::numeric, 72.82955::numeric, '2026-03-16T15:02:00+05:30'::timestamptz, 'rejected'),
-  ('11110000-0000-0000-0000-000000000024'::uuid, 'aaaa0000-0000-0000-0000-000000000004'::uuid, 'ffff0000-0000-0000-0000-000000000020'::uuid, 'manual',
+  (4::integer, '11110000-0000-0000-0000-000000000024'::uuid, 'ffff0000-0000-0000-0000-000000000020'::uuid, 'manual',
    'Cannot work due to heavy rain flooding.', 19.13640::numeric, 72.82963::numeric, '2026-03-16T15:02:30+05:30'::timestamptz, 'rejected'),
-  ('11110000-0000-0000-0000-000000000025'::uuid, 'aaaa0000-0000-0000-0000-000000000005'::uuid, 'ffff0000-0000-0000-0000-000000000020'::uuid, 'manual',
+  (5::integer, '11110000-0000-0000-0000-000000000025'::uuid, 'ffff0000-0000-0000-0000-000000000020'::uuid, 'manual',
    'Massive flooding near Link Road Andheri. Zero orders.', 19.13644::numeric, 72.82960::numeric, '2026-03-16T15:03:00+05:30'::timestamptz, 'rejected'),
-  ('11110000-0000-0000-0000-000000000026'::uuid, 'aaaa0000-0000-0000-0000-000000000006'::uuid, 'ffff0000-0000-0000-0000-000000000020'::uuid, 'manual',
+  (6::integer, '11110000-0000-0000-0000-000000000026'::uuid, 'ffff0000-0000-0000-0000-000000000020'::uuid, 'manual',
    'Heavy rain causing complete work stoppage in Andheri.', 19.13646::numeric, 72.82957::numeric, '2026-03-16T15:03:30+05:30'::timestamptz, 'rejected')
-) AS v(id, worker_profile_id, trigger_event_id, claim_mode, claim_reason, stated_lat, stated_lng, claimed_at, claim_status)
-WHERE EXISTS (SELECT 1 FROM public.worker_profiles wp WHERE wp.profile_id = v.worker_profile_id)
+) AS v(slot, id, trigger_event_id, claim_mode, claim_reason, stated_lat, stated_lng, claimed_at, claim_status)
+JOIN tmp_audit_seed_workers sw ON sw.slot = v.slot
 ON CONFLICT (id) DO NOTHING;
 
 -- Audit events for fraud ring (no FK to worker_profiles, always safe)
@@ -98,28 +204,34 @@ ON CONFLICT (id) DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- 5. Coins Ledger Entries (Rewards Demo)
---    Uses INSERT ... SELECT to only create for existing profiles.
+--    Uses resolved worker slots to support recreated demo IDs.
 -- ────────────────────────────────────────────────────────────
 INSERT INTO public.coins_ledger (id, profile_id, activity, coins, description, reference_id)
-SELECT v.id, v.profile_id, v.activity, v.coins, v.description, v.reference_id
+SELECT
+  v.id,
+  sw.worker_profile_id,
+  v.activity,
+  v.coins,
+  v.description,
+  v.reference_id
 FROM (VALUES
-  ('99990000-0000-0000-0000-000000000001'::uuid, 'aaaa0000-0000-0000-0000-000000000001'::uuid, 'signup_bonus',  50, 'Welcome bonus for signing up', NULL::text),
-  ('99990000-0000-0000-0000-000000000002'::uuid, 'aaaa0000-0000-0000-0000-000000000001'::uuid, 'claim_approved', 25, 'Reward for approved claim',    NULL::text),
-  ('99990000-0000-0000-0000-000000000003'::uuid, 'aaaa0000-0000-0000-0000-000000000001'::uuid, 'weekly_active',  10, 'Active rider bonus (week 10)',  NULL::text),
-  ('99990000-0000-0000-0000-000000000004'::uuid, 'aaaa0000-0000-0000-0000-000000000002'::uuid, 'signup_bonus',  50, 'Welcome bonus for signing up', NULL::text),
-  ('99990000-0000-0000-0000-000000000005'::uuid, 'aaaa0000-0000-0000-0000-000000000003'::uuid, 'signup_bonus',  50, 'Welcome bonus for signing up', NULL::text),
-  ('99990000-0000-0000-0000-000000000006'::uuid, 'aaaa0000-0000-0000-0000-000000000003'::uuid, 'claim_approved', 25, 'Reward for approved claim',    NULL::text),
-  ('99990000-0000-0000-0000-000000000007'::uuid, 'aaaa0000-0000-0000-0000-000000000004'::uuid, 'signup_bonus',  50, 'Welcome bonus for signing up', NULL::text),
-  ('99990000-0000-0000-0000-000000000008'::uuid, 'aaaa0000-0000-0000-0000-000000000005'::uuid, 'signup_bonus',  50, 'Welcome bonus for signing up', NULL::text),
-  ('99990000-0000-0000-0000-000000000009'::uuid, 'aaaa0000-0000-0000-0000-000000000005'::uuid, 'claim_approved', 25, 'Reward for approved claim',    NULL::text),
-  ('99990000-0000-0000-0000-000000000010'::uuid, 'aaaa0000-0000-0000-0000-000000000005'::uuid, 'fraud_penalty', -50, 'Coins deducted for fraud',     NULL::text),
-  ('99990000-0000-0000-0000-000000000011'::uuid, 'aaaa0000-0000-0000-0000-000000000006'::uuid, 'signup_bonus',  50, 'Welcome bonus for signing up', NULL::text),
-  ('99990000-0000-0000-0000-000000000012'::uuid, 'aaaa0000-0000-0000-0000-000000000201'::uuid, 'signup_bonus',  50, 'Welcome bonus for signing up', NULL::text),
-  ('99990000-0000-0000-0000-000000000013'::uuid, 'aaaa0000-0000-0000-0000-000000000201'::uuid, 'claim_approved', 25, 'Reward for approved claim',    NULL::text),
-  ('99990000-0000-0000-0000-000000000014'::uuid, 'aaaa0000-0000-0000-0000-000000000201'::uuid, 'weekly_active',  10, 'Active rider bonus (week 10)',  NULL::text),
-  ('99990000-0000-0000-0000-000000000015'::uuid, 'aaaa0000-0000-0000-0000-000000000201'::uuid, 'weekly_active',  10, 'Active rider bonus (week 11)',  NULL::text)
-) AS v(id, profile_id, activity, coins, description, reference_id)
-WHERE EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = v.profile_id)
+  (1::integer, '99990000-0000-0000-0000-000000000001'::uuid, 'signup_bonus',  50, 'Welcome bonus for signing up', NULL::text),
+  (1::integer, '99990000-0000-0000-0000-000000000002'::uuid, 'claim_approved', 25, 'Reward for approved claim',    NULL::text),
+  (1::integer, '99990000-0000-0000-0000-000000000003'::uuid, 'weekly_active',  10, 'Active rider bonus (week 10)',  NULL::text),
+  (2::integer, '99990000-0000-0000-0000-000000000004'::uuid, 'signup_bonus',  50, 'Welcome bonus for signing up', NULL::text),
+  (3::integer, '99990000-0000-0000-0000-000000000005'::uuid, 'signup_bonus',  50, 'Welcome bonus for signing up', NULL::text),
+  (3::integer, '99990000-0000-0000-0000-000000000006'::uuid, 'claim_approved', 25, 'Reward for approved claim',    NULL::text),
+  (4::integer, '99990000-0000-0000-0000-000000000007'::uuid, 'signup_bonus',  50, 'Welcome bonus for signing up', NULL::text),
+  (5::integer, '99990000-0000-0000-0000-000000000008'::uuid, 'signup_bonus',  50, 'Welcome bonus for signing up', NULL::text),
+  (5::integer, '99990000-0000-0000-0000-000000000009'::uuid, 'claim_approved', 25, 'Reward for approved claim',    NULL::text),
+  (5::integer, '99990000-0000-0000-0000-000000000010'::uuid, 'fraud_penalty', -50, 'Coins deducted for fraud',     NULL::text),
+  (6::integer, '99990000-0000-0000-0000-000000000011'::uuid, 'signup_bonus',  50, 'Welcome bonus for signing up', NULL::text),
+  (7::integer, '99990000-0000-0000-0000-000000000012'::uuid, 'signup_bonus',  50, 'Welcome bonus for signing up', NULL::text),
+  (7::integer, '99990000-0000-0000-0000-000000000013'::uuid, 'claim_approved', 25, 'Reward for approved claim',    NULL::text),
+  (7::integer, '99990000-0000-0000-0000-000000000014'::uuid, 'weekly_active',  10, 'Active rider bonus (week 10)',  NULL::text),
+  (7::integer, '99990000-0000-0000-0000-000000000015'::uuid, 'weekly_active',  10, 'Active rider bonus (week 11)',  NULL::text)
+) AS v(slot, id, activity, coins, description, reference_id)
+JOIN tmp_audit_seed_workers sw ON sw.slot = v.slot
 ON CONFLICT (id) DO NOTHING;
 
 

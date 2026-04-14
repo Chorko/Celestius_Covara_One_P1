@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useUserStore } from '@/store'
 import { createClient } from '@/lib/supabase'
+import { backendGet } from '@/lib/backendApi'
 import {
   Shield, ShieldCheck,
   CheckCircle, CreditCard, X, Sparkles, IndianRupee, Lock, Brain,
@@ -19,6 +20,8 @@ interface PlanTier {
   features: string[]
   target: string
 }
+
+type PlanId = 'essential' | 'plus'
 
 const PLANS: PlanTier[] = [
   {
@@ -65,15 +68,30 @@ function getWeeklyRiskFactor(city: string): { factor: number; label: string; tre
 }
 
 interface QuoteData {
-  weekly_premium_inr: number; max_payout_cap_inr: number; covered_income_b: number
-  observed_weekly_gross: number; exposure_e: number; confidence_base: number; risk_factor: number
-  B: number; E: number; C: number
+  observed_weekly_gross: number
+  covered_income_b: number
+  exposure_e: number
+  confidence_base: number
 }
+
+interface PolicyQuoteResponse {
+  plan: PlanId
+  weekly_premium_inr: number
+  max_payout_cap_inr: number
+  covered_weekly_income: number
+  exposure_multiplier: number
+  confidence_multiplier: number
+}
+
+const FIXED_PRICES: Record<PlanId, number> = { essential: 28, plus: 42 }
+const PLAN_WEEKLY_BENEFITS: Record<PlanId, number> = { essential: 3000, plus: 4500 }
 
 export default function WorkerPricing() {
   const { profile } = useUserStore()
   const supabase = createClient()
   const [quote, setQuote] = useState<QuoteData | null>(null)
+  const [planQuotes, setPlanQuotes] = useState<Record<PlanId, PolicyQuoteResponse> | null>(null)
+  const [quoteSource, setQuoteSource] = useState<'backend' | 'fallback'>('fallback')
   const [loading, setLoading] = useState(true)
   const [selectedPlan, setSelectedPlan] = useState<PlanTier | null>(null)
   const [showModal, setShowModal] = useState(false)
@@ -101,16 +119,47 @@ export default function WorkerPricing() {
         } catch { /* fallback below */ }
         const fallback = Math.round((wp.avg_hourly_income_inr || 0) * 8 * 6)
         const weekly_gross = observed_weekly_gross ?? fallback
-        const B = Math.round(weekly_gross * 0.70)
-        const raw_cap = Math.round(B * 0.75)
-        const payout_cap = Math.min(raw_cap, 10000)
         const risk = getWeeklyRiskFactor(wp.city)
         setRiskInfo(risk)
-        const cityFactor: Record<string, number> = { Mumbai: 1.3, Delhi: 1.2, Bangalore: 1.25 }
-        const C = cityFactor[wp.city] ?? 1.0
-        const E = wp.trust_score ?? 0.8
-        const weeklyPremium = Math.round(B * 0.035 * E * C * risk.factor)
-        setQuote({ weekly_premium_inr: weeklyPremium, max_payout_cap_inr: payout_cap, covered_income_b: B, observed_weekly_gross: weekly_gross, exposure_e: Math.round(E * 100) / 100, confidence_base: C, risk_factor: risk.factor, B, E: Math.round(E * 100) / 100, C })
+
+        const defaultCoveredIncome = Math.round(weekly_gross * 0.70)
+        const fallbackEssential: PolicyQuoteResponse = {
+          plan: 'essential',
+          weekly_premium_inr: FIXED_PRICES.essential,
+          max_payout_cap_inr: PLAN_WEEKLY_BENEFITS.essential,
+          covered_weekly_income: defaultCoveredIncome,
+          exposure_multiplier: Number((wp.trust_score ?? 0.8).toFixed(2)),
+          confidence_multiplier: 1,
+        }
+        const fallbackPlus: PolicyQuoteResponse = {
+          plan: 'plus',
+          weekly_premium_inr: FIXED_PRICES.plus,
+          max_payout_cap_inr: PLAN_WEEKLY_BENEFITS.plus,
+          covered_weekly_income: defaultCoveredIncome,
+          exposure_multiplier: Number((wp.trust_score ?? 0.8).toFixed(2)),
+          confidence_multiplier: 1,
+        }
+
+        const [essentialRes, plusRes] = await Promise.allSettled([
+          backendGet<PolicyQuoteResponse>(supabase, '/policies/quote?plan=essential'),
+          backendGet<PolicyQuoteResponse>(supabase, '/policies/quote?plan=plus'),
+        ])
+
+        const essentialQuote = essentialRes.status === 'fulfilled' ? essentialRes.value : fallbackEssential
+        const plusQuote = plusRes.status === 'fulfilled' ? plusRes.value : fallbackPlus
+
+        setPlanQuotes({ essential: essentialQuote, plus: plusQuote })
+        setQuoteSource(
+          essentialRes.status === 'fulfilled' || plusRes.status === 'fulfilled'
+            ? 'backend'
+            : 'fallback',
+        )
+        setQuote({
+          observed_weekly_gross: weekly_gross,
+          covered_income_b: Math.round(essentialQuote.covered_weekly_income || defaultCoveredIncome),
+          exposure_e: Number((essentialQuote.exposure_multiplier ?? fallbackEssential.exposure_multiplier).toFixed(2)),
+          confidence_base: Number((essentialQuote.confidence_multiplier ?? 1).toFixed(2)),
+        })
       }
     } catch (e) { console.error('Could not fetch policy quote', e) }
     setLoading(false)
@@ -128,14 +177,13 @@ export default function WorkerPricing() {
   const handleChoosePlan = (plan: PlanTier) => { setSelectedPlan(plan); setPaymentSuccess(false); setPaying(false); setShowModal(true) }
   const handlePay = () => { setPaying(true); setTimeout(() => { setPaying(false); setPaymentSuccess(true) }, 2000) }
   const closeModal = () => { setShowModal(false); setSelectedPlan(null); setPaymentSuccess(false) }
-  // Fixed IRDAI plan prices — always shown even if quote fetch fails
-  const FIXED_PRICES: Record<string, number> = { essential: 28, plus: 42 }
+
   const getPremium = (plan: PlanTier) => {
-    if (!quote) return FIXED_PRICES[plan.id]
-    const essentialBenefit = PLANS.find(p => p.id === 'essential')?.weeklyBenefit ?? 3000
-    const actuarial = Math.round(quote.weekly_premium_inr * (plan.weeklyBenefit / essentialBenefit))
-    return actuarial > 0 ? actuarial : FIXED_PRICES[plan.id]
+    return planQuotes?.[plan.id]?.weekly_premium_inr ?? FIXED_PRICES[plan.id]
   }
+
+  const essentialQuote = planQuotes?.essential
+  const plusQuote = planQuotes?.plus
 
   if (loading) {
     return (
@@ -163,7 +211,7 @@ export default function WorkerPricing() {
           </p>
           {quote && (
             <div className="mt-4 inline-flex items-center gap-2 badge-success text-xs">
-              <Sparkles size={12} /> Personalized weekly quote based on your profile
+              <Sparkles size={12} /> {quoteSource === 'backend' ? 'Premiums synced from live policy quote API' : 'IRDAI fixed weekly premiums shown (fallback mode)'}
             </div>
           )}
         </section>
@@ -300,7 +348,7 @@ export default function WorkerPricing() {
         {quote && (
           <section className="card p-6 animate-fade-in-up delay-400">
             <h3 className="text-sm font-semibold uppercase tracking-wider mb-4 flex items-center gap-2" style={{ color: 'var(--text-tertiary)' }}>
-              <Brain size={16} /> Your Weekly Premium Breakdown
+              <Brain size={16} /> Coverage Inputs Snapshot
             </h3>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
               {[
@@ -308,7 +356,12 @@ export default function WorkerPricing() {
                 { label: 'Covered Income (B)', value: `₹${quote.covered_income_b?.toLocaleString('en-IN') || '—'}`, sub: '0.70 × weekly gross' },
                 { label: 'Exposure Score (E)', value: `${quote.exposure_e || '—'}`, sub: 'Trust + accessibility' },
                 { label: 'City Factor (C)', value: `${quote.confidence_base || '—'}`, sub: 'Zone risk multiplier' },
-                { label: 'Weekly Premium', value: `₹${quote.weekly_premium_inr}`, sub: `B × 0.035 × E × C × ${quote.risk_factor?.toFixed(2)}`, highlight: true },
+                {
+                  label: 'Essential Weekly Premium',
+                  value: `₹${essentialQuote?.weekly_premium_inr ?? FIXED_PRICES.essential}`,
+                  sub: quoteSource === 'backend' ? 'From /policies/quote' : 'IRDAI fixed fallback',
+                  highlight: true,
+                },
               ].map((item, i) => (
                 <div key={i}>
                   <p className="text-xs mb-1" style={{ color: 'var(--text-tertiary)' }}>{item.label}</p>
@@ -318,7 +371,7 @@ export default function WorkerPricing() {
               ))}
             </div>
             <div className="mt-4 p-3 rounded-lg text-xs font-mono" style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-primary)', color: 'var(--text-secondary)' }}>
-              Payout Cap = 0.75 × B = 0.75 × ₹{quote.covered_income_b?.toLocaleString('en-IN')} = ₹{quote.max_payout_cap_inr?.toLocaleString('en-IN')} (weekly max)
+              Essential: ₹{(essentialQuote?.weekly_premium_inr ?? FIXED_PRICES.essential).toLocaleString('en-IN')}/week · Max payout ₹{(essentialQuote?.max_payout_cap_inr ?? PLAN_WEEKLY_BENEFITS.essential).toLocaleString('en-IN')} | Plus: ₹{(plusQuote?.weekly_premium_inr ?? FIXED_PRICES.plus).toLocaleString('en-IN')}/week · Max payout ₹{(plusQuote?.max_payout_cap_inr ?? PLAN_WEEKLY_BENEFITS.plus).toLocaleString('en-IN')}
             </div>
           </section>
         )}

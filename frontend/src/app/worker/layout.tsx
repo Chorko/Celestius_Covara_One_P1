@@ -28,7 +28,7 @@ export default function WorkerLayout({ children }: { children: React.ReactNode }
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
-  const { profile, logout } = useUserStore()
+  const { profile, logout, setUser, setProfile } = useUserStore()
   const [drawerOpen, setDrawerOpen] = useState(false)
 
   const handleSignOut = useCallback(async () => {
@@ -37,12 +37,50 @@ export default function WorkerLayout({ children }: { children: React.ReactNode }
     router.push('/')
   }, [supabase, logout, router])
 
-  // Redirect if no session
+  // Hydrate store state and enforce worker role.
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) router.push('/')
-    })
-  }, [supabase, router])
+    let active = true
+
+    const hydrate = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!active) {
+        return
+      }
+
+      if (!session) {
+        router.push('/')
+        return
+      }
+
+      setUser(session.user)
+
+      try {
+        const { data: profileRow } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .maybeSingle()
+
+        if (!active || !profileRow) {
+          return
+        }
+
+        setProfile(profileRow)
+
+        if (profileRow.role && profileRow.role !== 'worker') {
+          router.push(profileRow.role === 'insurer_admin' ? '/admin/dashboard' : '/')
+        }
+      } catch {
+        // Keep layout usable even if profile fetch is temporarily unavailable.
+      }
+    }
+
+    void hydrate()
+
+    return () => {
+      active = false
+    }
+  }, [supabase, router, setProfile, setUser])
 
   return (
     <div className="flex min-h-screen layout-root" style={{ background: 'var(--bg-primary)' }}>

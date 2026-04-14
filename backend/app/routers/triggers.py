@@ -4,10 +4,11 @@ Covara One — Triggers Router
 Handles:
 - GET /triggers/library (Static 15-trigger list)
 - GET /triggers/live (Active triggers filtered by city/zone)
+- GET /triggers/civic-news (NewsAPI civic disruption feed)
 - POST /triggers/simulate (Admin mock injection)
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime, timezone
@@ -15,6 +16,7 @@ from datetime import datetime, timezone
 from backend.app.dependencies import require_insurer_admin
 from backend.app.supabase_client import get_supabase_admin
 from backend.app.services.trigger_engine import TRIGGER_LIBRARY, get_overlapping_triggers
+from backend.app.services.news_ingest import fetch_civic_news
 
 router = APIRouter(prefix="/triggers", tags=["Triggers"])
 
@@ -77,6 +79,31 @@ async def get_live_triggers(
     # For demo purposes, we fetch the 20 most recent triggers
     resp = query.order("started_at", desc=True).limit(20).execute()
     return {"active_triggers": resp.data}
+
+
+@router.get("/civic-news")
+@cache(expire=300)
+async def get_civic_news(
+    city: Optional[str] = Query(
+        None,
+        description="Optional city to scope civic disruption news (e.g. Mumbai)",
+    )
+):
+    """Fetch civic disruption articles from configured news providers."""
+    result = await fetch_civic_news(city=city)
+    payload = result.get("data") if isinstance(result, dict) else {}
+
+    return {
+        "city": city,
+        "provider": result.get("provider") if isinstance(result, dict) else None,
+        "pool": result.get("pool") if isinstance(result, dict) else "news",
+        "cached": bool(result.get("cached", False)) if isinstance(result, dict) else False,
+        "total_results": int((payload or {}).get("total_results", 0)),
+        "high_relevance_count": int((payload or {}).get("high_relevance_count", 0)),
+        "articles": (payload or {}).get("articles", []),
+        "warning": result.get("warning") if isinstance(result, dict) else None,
+        "error": result.get("error") if isinstance(result, dict) else None,
+    }
 
 
 @router.post("/simulate", dependencies=[Depends(require_insurer_admin)])

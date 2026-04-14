@@ -1,5 +1,5 @@
 """
-Covara One — HTTP Smoke Test
+Covara One -- HTTP Smoke Test
 
 Hits all critical API endpoints and verifies they return expected
 status codes. Run against local or production to catch config issues.
@@ -24,7 +24,7 @@ except ImportError:
 
 DEFAULT_BASE_URL = os.getenv("NEXT_PUBLIC_API_URL", "http://127.0.0.1:8000")
 
-# ── Test definitions ──────────────────────────────────────────────────
+# -- Test definitions --
 # Each tuple: (method, path, expected_status, description)
 
 SMOKE_TESTS = [
@@ -42,7 +42,7 @@ SMOKE_TESTS = [
     ("GET", "/triggers/live", 200, "Live triggers"),
     ("GET", "/triggers/civic-news", 200, "NewsAPI civic news"),
 
-    # Analytics (requires auth — 401/403 expected without token)
+    # Analytics (requires auth -- 401/403 expected without token)
     ("GET", "/analytics/summary", [200, 401, 403], "Analytics summary"),
 
     # Claims (requires auth)
@@ -58,7 +58,7 @@ def run_smoke_tests(base_url: str) -> tuple[int, int, list[dict]]:
 
     url = base_url.rstrip("/")
     print(f"\n{'='*65}")
-    print(f"  Covara One — HTTP Smoke Test Suite")
+    print(f"  Covara One -- HTTP Smoke Test Suite")
     print(f"  Target: {url}")
     print(f"  Time:   {time.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"{'='*65}\n")
@@ -74,7 +74,7 @@ def run_smoke_tests(base_url: str) -> tuple[int, int, list[dict]]:
                 expected_list = expected if isinstance(expected, list) else [expected]
                 ok = resp.status_code in expected_list
 
-                status_icon = "✅" if ok else "❌"
+                status_icon = "[PASS]" if ok else "[FAIL]"
                 if ok:
                     passed += 1
                 else:
@@ -92,26 +92,26 @@ def run_smoke_tests(base_url: str) -> tuple[int, int, list[dict]]:
 
                 print(
                     f"  {status_icon} [{resp.status_code}] {method:4s} {path:30s} "
-                    f"({elapsed_ms:>4d}ms) — {description}"
+                    f"({elapsed_ms:>4d}ms) -- {description}"
                 )
 
             except httpx.ConnectError:
                 failed += 1
                 results.append({"path": path, "status": "CONN_ERR", "ok": False})
-                print(f"  ❌ [ERR] {method:4s} {path:30s} — CONNECTION REFUSED")
+                print(f"  [FAIL] [ERR] {method:4s} {path:30s} -- CONNECTION REFUSED")
 
             except Exception as e:
                 failed += 1
                 results.append({"path": path, "status": str(e), "ok": False})
-                print(f"  ❌ [ERR] {method:4s} {path:30s} — {e}")
+                print(f"  [FAIL] [ERR] {method:4s} {path:30s} -- {e}")
 
-    print(f"\n{'─'*65}")
+    print(f"\n{'-'*65}")
     print(f"  Results: {passed} passed, {failed} failed, {passed + failed} total")
     if failed == 0:
-        print(f"  🎉 All smoke tests passed!")
+        print(f"  All smoke tests passed!")
     else:
-        print(f"  ⚠️  {failed} test(s) failed — investigate before demo")
-    print(f"{'─'*65}\n")
+        print(f"  WARNING: {failed} test(s) failed -- investigate before demo")
+    print(f"{'-'*65}\n")
 
     return passed, failed, results
 

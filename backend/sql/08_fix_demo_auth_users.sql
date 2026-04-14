@@ -15,6 +15,8 @@
 --   3) Run this script again to sync roles, profile extension tables,
 --      and realistic worker demo persona data (zone, stats, claims, policy).
 --   4) If Auth API still returns 500, restart the Supabase project and retry.
+--   5) If SQL Editor times out on this full script, run
+--      08b_demo_auth_recovery_fast.sql (same two-pass workflow, smaller scope).
 --
 -- Notes:
 --   - This script is idempotent.

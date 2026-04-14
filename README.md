@@ -28,7 +28,7 @@
 
 ---
 
-## Engineering Snapshot (2026-04-05)
+## Engineering Snapshot (2026-04-14)
 
 - Database reliability migrations added and applied in sequence: `backend/sql/10_rewards_schema.sql`, `backend/sql/11_event_outbox.sql`, `backend/sql/12_event_reliability.sql`, `backend/sql/13_consumer_dead_letter.sql`.
 - Event reliability is now production-hardened with transactional outbox writes, relay retry/backoff, dead-letter handling, and consumer idempotency with max-attempt dead-letter escalation.
@@ -36,6 +36,10 @@
 - Operational admin endpoints are available under `/events/outbox/*` and `/events/consumers/*` for relay, status, dead-letter triage, and requeue.
 - Security hardening includes signed mobile device-context verification, explicit CORS/header allowlist, `slowapi` rate limits, and OWASP response headers.
 - Post-migration reliability validation is green, including focused consumer/outbox/Kafka tests and API-level tests for the new events consumer endpoints.
+- Worker premium consistency is hardened: dashboard and coverage pages both read backend quote APIs, with fixed IRDAI fallback values preserved.
+- Admin reviews queue UX now distinguishes fetch failure from true empty queue and shows a retry path for transient API outages.
+- Civic-news trigger ingestion is exposed through `GET /triggers/civic-news` and expects `NEWS_API_KEY` in deployment environment configuration.
+- Secret hygiene is tightened in ignore rules for future files (`.env.*`, key material, and Docker build-context exclusions).
 
 ---
 
@@ -786,13 +790,20 @@ flowchart TD
 ---
 
 
-## 🔐 Adversarial Defense & Anti-Spoofing Strategy
-
-> [!CAUTION]
-> **Market-Shift Context:** A sophisticated syndicate of 500 delivery workers in a tier-1 city has successfully exploited a beta parametric insurance platform using coordinated GPS spoofing via Telegram groups — faking locations in severe weather zones while resting at home, triggering mass false payouts and draining the liquidity pool. Simple GPS verification is officially obsolete. This section documents how Covara One defends against this exact attack vector.
-
-> The 5-layer pipeline architecture is shown in the **Fraud Fortress diagram above**. Below is the detailed defense strategy for each layer.
-
+## 🔐 Adversarial Defense & Anti-Spoofing Strategy
+
+
+
+> [!CAUTION]
+
+> **Market-Shift Context:** A sophisticated syndicate of 500 delivery workers in a tier-1 city has successfully exploited a beta parametric insurance platform using coordinated GPS spoofing via Telegram groups — faking locations in severe weather zones while resting at home, triggering mass false payouts and draining the liquidity pool. Simple GPS verification is officially obsolete. This section documents how Covara One defends against this exact attack vector.
+
+
+
+> The 5-layer pipeline architecture is shown in the **Fraud Fortress diagram above**. Below is the detailed defense strategy for each layer.
+
+
+
 ### 1. The Differentiation: Genuine Worker vs. Bad Actor
 
 Covara One does **not** trust raw GPS coordinates alone. The platform differentiates genuinely stranded delivery partners from spoofers using **multi-signal verification** — a layered approach where no single data point can trigger or block a payout in isolation.
@@ -1404,7 +1415,7 @@ gantt
 git clone https://github.com/Chorko/Celestius_DEVTrails_P1.git
 cd Celestius_DEVTrails_P1
 cp .env.example .env
-# Fill required keys in .env (Supabase, service role, external APIs)
+# Fill required keys in .env (Supabase, service role, external APIs incl. NEWS_API_KEY)
 ```
 
 **2. Seed the database:**
@@ -1554,6 +1565,7 @@ Celestius_DEVTrails_P1/
 - **Webhook endpoint** registered at `https://covara-backend.onrender.com/payouts/webhooks/http_gateway`.
 - Full webhook event catalog documented in [docs/STRIPE_WEBHOOK_EVENTS.md](docs/STRIPE_WEBHOOK_EVENTS.md).
 - Strict environment validation enforced in production (`STRICT_ENV_VALIDATION=auto`).
+- Civic-news ingestion path (`GET /triggers/civic-news`) requires `NEWS_API_KEY` in deployed runtime env files/imports.
 
 
 

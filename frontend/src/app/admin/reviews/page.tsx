@@ -54,6 +54,21 @@ interface ClaimDetailResponse {
   evidence: EvidenceItem[]
 }
 
+interface ReviewActionResponse {
+  status: string
+  claim_id: string
+  decision: string
+  assignment_state?: string
+  payout?: {
+    status?: string
+    payout?: {
+      provider_key?: string
+      provider_reference_id?: string
+    }
+    reason?: string
+  }
+}
+
 function formatApiError(error: unknown): string {
   if (error instanceof BackendApiError) {
     if (error.status === 401) {
@@ -81,13 +96,21 @@ export default function AdminReviews() {
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [assignLoading, setAssignLoading] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   const loadClaims = useCallback(async () => {
     try {
+      setLoadError(null)
       const response = await backendGet<ClaimsListResponse>(supabase, `/claims/?queue=${queueFilter}`)
       setClaims(response.claims || [])
       setActiveQueue(response.queue || queueFilter)
-    } catch (e) { console.error('Could not load claims', e) }
+    } catch (e: unknown) {
+      console.error('Could not load claims', e)
+      setClaims([])
+      setActiveQueue(queueFilter)
+      setLoadError(formatApiError(e))
+    }
   }, [supabase, queueFilter])
 
   useEffect(() => { loadClaims() }, [loadClaims])
@@ -96,6 +119,7 @@ export default function AdminReviews() {
     setSelectedClaim(claimId)
     setLoading(true)
     setActionError(null)
+    setActionSuccess(null)
     setPipelineExpanded(false)
 
     try {
@@ -118,6 +142,9 @@ export default function AdminReviews() {
     const claimId = detailData.claim.id
     setActionLoading(decision)
     setActionError(null)
+    setActionSuccess(null)
+
+    let response: ReviewActionResponse | null = null
 
     try {
       if (decision === 'flag_post_approval') {
@@ -125,8 +152,13 @@ export default function AdminReviews() {
           fraud_severity: 'moderate',
           reason: decisionReason || undefined,
         })
+        response = {
+          status: 'flagged',
+          claim_id: claimId,
+          decision,
+        }
       } else {
-        await backendPost(supabase, `/claims/${claimId}/review`, {
+        response = await backendPost<ReviewActionResponse>(supabase, `/claims/${claimId}/review`, {
           decision,
           decision_reason: decisionReason || undefined,
         })
@@ -135,6 +167,19 @@ export default function AdminReviews() {
       setActionError(formatApiError(e))
       setActionLoading(null)
       return
+    }
+
+    if (decision === 'approve') {
+      const payoutStatus = response?.payout?.status || 'unknown'
+      const provider = response?.payout?.payout?.provider_key
+      const providerRef = response?.payout?.payout?.provider_reference_id
+      const providerLabel = provider ? ` via ${provider}` : ''
+      const referenceLabel = providerRef ? ` (${providerRef})` : ''
+      setActionSuccess(`Claim approved. Payout initiation status: ${payoutStatus}${providerLabel}${referenceLabel}`)
+    } else if (decision === 'flag_post_approval') {
+      setActionSuccess('Claim flagged for post-approval fraud review.')
+    } else {
+      setActionSuccess(`Claim decision applied: ${decision}.`)
     }
 
     setActionLoading(null)
@@ -212,6 +257,22 @@ export default function AdminReviews() {
         <div className="p-5" style={{ borderBottom: '1px solid var(--border-primary)' }}>
           <h2 className="text-base font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}><FileSearch size={18} style={{ color: 'var(--accent)' }} /> Review Queue</h2>
           <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>{claims.length} claims in queue ({activeQueue})</p>
+          {actionSuccess && (
+            <div
+              className="mt-3 p-2.5 rounded-md text-xs"
+              style={{ background: 'var(--success-muted)', color: 'var(--success)', border: '1px solid var(--success)' }}
+            >
+              {actionSuccess}
+            </div>
+          )}
+          {loadError && (
+            <div
+              className="mt-3 p-2.5 rounded-md text-xs"
+              style={{ background: 'var(--warning-muted)', color: 'var(--warning)', border: '1px solid var(--warning)' }}
+            >
+              Queue temporarily unavailable: {loadError}
+            </div>
+          )}
           <div className="mt-3 grid grid-cols-2 gap-2">
             {([
               { key: 'all', label: 'All' },
@@ -236,7 +297,18 @@ export default function AdminReviews() {
         </div>
         <div className="flex-1 overflow-auto p-3 space-y-2">
           {claims.length === 0 ? (
-            <div className="text-center py-16 text-sm" style={{ color: 'var(--text-tertiary)' }}>No claims in queue</div>
+            <div className="text-center py-16 space-y-3" style={{ color: 'var(--text-tertiary)' }}>
+              <p className="text-sm">{loadError ? 'Unable to load claims right now' : 'No claims in queue'}</p>
+              {loadError && (
+                <button
+                  onClick={() => void loadClaims()}
+                  className="text-xs py-1.5 px-3 rounded-md border"
+                  style={{ borderColor: 'var(--border-secondary)', color: 'var(--text-secondary)', background: 'var(--bg-tertiary)' }}
+                >
+                  Retry
+                </button>
+              )}
+            </div>
           ) : ( claims.map(c => (
             <div key={c.id} onClick={() => loadDetail(c.id)}
               className="p-4 rounded-lg cursor-pointer transition-all"
