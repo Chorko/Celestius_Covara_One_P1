@@ -61,6 +61,7 @@
 | Simulation & mock-data endpoints | ✅ Implemented (`/simulate/claim-scenario`, `/simulate/mock-data/generate`) |
 | Payment gateway service | ✅ Implemented (provider adapter workflow with `http_gateway` / Stripe Test Mode + `simulated_gateway` + `mock_fallback`) |
 | Gamification & Rewards engine | ✅ Implemented (`coins_ledger` + 5 endpoints + auto-claim integration) |
+| Rule/model version governance | ✅ Implemented (`rule_versions` + `model_versions`, rollout controls, persisted version IDs on claim decisions) |
 | Rate Limiting & OWASP Headers | ✅ Implemented (`slowapi` + explicit CORS + 6 security headers) |
 ---
 
@@ -268,6 +269,11 @@ flowchart TD
 - Claims route now verifies signed device context headers when provided,
   with backward-compatible behavior when headers are absent.
 - OpenAPI generation script and contract tests are in place to detect route drift.
+- Rule/model version registry and rollout controls are now exposed via
+    `/ops/version-governance` and `/ops/version-governance/activate`, with
+    version IDs persisted in claim + review records.
+- Ops SLO surfacing now includes breach-aware thresholds and recommended
+    runbook actions via `/ops/status` and `/ops/slo`.
 
 ### Planned and next tranche
 

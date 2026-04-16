@@ -230,7 +230,7 @@ create table if not exists public.payout_requests (
     claim_id uuid not null references public.manual_claims(id) on delete cascade,
     worker_profile_id uuid not null references public.worker_profiles(profile_id) on delete cascade,
     payout_recommendation_id uuid references public.payout_recommendations(id) on delete set null,
-    amount numeric(10,2) not null check (amount >= 0),
+    amount numeric(10,2) not null check (amount > 0),
     currency text not null default 'INR',
     provider_key text not null,
     provider_reference_id text,
@@ -321,7 +321,8 @@ insert into public.reference_sources(ref_id, source_name, source_type, what_it_p
 ('R7','Breiman (2001) Random Forests','academic','Baseline model reference','Claim probability baseline justification','https://www.stat.berkeley.edu/~breiman/randomforest2001.pdf'),
 ('R8','Chen & Guestrin (2016) XGBoost','academic','Benchmark model reference','Future benchmark justification','https://arxiv.org/abs/1603.02754'),
 ('R9','Loss Data Analytics - Premium Foundations','actuarial','Premium principle and actuarial framing','Pricing/payout README reference block','https://openacttexts.github.io/Loss-Data-Analytics/ChapPremiumFoundations.html'),
-('R10','Mikosch - Non-Life Insurance Mathematics','actuarial','Non-life insurance mathematical framing','Pricing/payout README reference block','https://link.springer.com/book/10.1007/978-3-642-20548-3')
+('R10','Mikosch - Non-Life Insurance Mathematics','actuarial','Non-life insurance mathematical framing','Pricing/payout README reference block','https://link.springer.com/book/10.1007/978-3-642-20548-3'),
+('R11','Covara Internal Operational Signals','internal','Internal traffic, outage, and demand operations signals','Operational trigger source mapping for traffic/outage style events','https://covara.one/docs/internal-operational-signals')
 on conflict (ref_id) do nothing;
 
 comment on table public.platform_worker_daily_stats is 'Synthetic or future platform-API-like daily worker metrics for pricing and claims context.';
@@ -494,7 +495,7 @@ create policy "Zones: Read access for all authenticated" on public.zones for sel
 -- └──────────────────────────────────────────────────────────────────┘
 
 insert into storage.buckets (id, name, public)
-values ('claim-evidence', 'claim-evidence', true)
+values ('claim-evidence', 'claim-evidence', false)
 on conflict (id) do nothing;
 
 drop policy if exists "Authenticated users can upload evidence" on storage.objects;

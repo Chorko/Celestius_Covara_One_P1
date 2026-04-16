@@ -1473,14 +1473,81 @@
           "Analytics"
         ],
         "summary": "Get Dashboard Summary",
-        "description": "Returns aggregate metrics for the admin dashboard.",
+        "description": "Returns aggregate metrics for the admin dashboard.\n\nOptional filters:\n- days: trailing time window (1-365)\n- city: exact city\n- city_tier: tier-based city grouping (ignored when city is provided)",
         "operationId": "get_dashboard_summary_analytics_summary_get",
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 365,
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Days"
+            }
+          },
+          {
+            "name": "city",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "City"
+            }
+          },
+          {
+            "name": "city_tier",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "tier_1",
+                    "tier_2",
+                    "tier_3"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "City Tier"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
               }
             }
           }
@@ -2171,6 +2238,64 @@
         }
       }
     },
+    "/ops/version-governance": {
+      "get": {
+        "tags": [
+          "Operations"
+        ],
+        "summary": "Rule/model governance registry snapshot",
+        "operationId": "get_version_governance_snapshot_ops_version_governance_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ops/version-governance/activate": {
+      "post": {
+        "tags": [
+          "Operations"
+        ],
+        "summary": "Activate or adjust a rule/model rollout",
+        "operationId": "activate_version_governance_rollout_ops_version_governance_activate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionRolloutUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/ops/status": {
       "get": {
         "tags": [
@@ -2178,6 +2303,25 @@
         ],
         "summary": "Operational status overview",
         "operationId": "get_ops_status_ops_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ops/slo": {
+      "get": {
+        "tags": [
+          "Operations"
+        ],
+        "summary": "SLO thresholds and breach view",
+        "operationId": "get_ops_slo_status_ops_slo_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -3159,6 +3303,55 @@
           "code"
         ],
         "title": "VerifyOTPRequest"
+      },
+      "VersionRolloutUpdateRequest": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "description": "rule or model"
+          },
+          "version_id": {
+            "type": "string",
+            "title": "Version Id"
+          },
+          "mode": {
+            "type": "string",
+            "title": "Mode",
+            "description": "full | canary | cohort",
+            "default": "full"
+          },
+          "rollout_percentage": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rollout Percentage"
+          },
+          "cohort_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cohort Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "version_id"
+        ],
+        "title": "VersionRolloutUpdateRequest"
       },
       "WorkerProfileUpdate": {
         "properties": {
