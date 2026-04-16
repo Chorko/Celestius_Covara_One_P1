@@ -95,7 +95,7 @@ TRIGGER_SOURCES = {
     "AQI_CAUTION": "R1",
     "AQI_SEVERE": "R1",
     "AQI_EXTREME": "R1",
-    "TRAFFIC_SEVERE": "internal",
+    "TRAFFIC_SEVERE": "R11",
     "WIND_HIGH": "R2",
     "WIND_SEVERE": "R2",
 }
@@ -177,7 +177,7 @@ def _create_trigger_event(
         "zone_id": zone_id,
         "trigger_family": family,
         "trigger_code": trigger_code,
-        "source_ref_id": TRIGGER_SOURCES.get(trigger_code, "internal"),
+        "source_ref_id": TRIGGER_SOURCES.get(trigger_code, "R11"),
         "observed_value": observed_value,
         "official_threshold_label": description,
         "product_threshold_value": TRIGGER_THRESHOLDS.get(trigger_code, ""),

@@ -6,17 +6,18 @@ behind a consistent interface so the workflow layer is provider-agnostic.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import logging
 import uuid
+from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 import httpx
 
 from backend.app.config import settings
-from backend.app.services.payment_mock import mock_upi_payout
 
 logger = logging.getLogger("covara.payout_provider")
 
@@ -109,6 +110,29 @@ def _verify_hmac_signature(secret: str, payload: bytes, signature_header: str | 
 
     expected = hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected, signature)
+
+
+async def _mock_upi_payout(profile_id: str, amount: float, upi_id: str) -> dict[str, Any]:
+    """Deterministic fallback mock for legacy payout simulation paths."""
+    logger.info(
+        "Initiating fallback mock payout of Rs %.2f to %s for %s",
+        amount,
+        upi_id,
+        profile_id,
+    )
+
+    await asyncio.sleep(0.5)
+
+    status = "failed" if "fail" in upi_id.lower() else "processed"
+    return {
+        "status": status,
+        "transaction_id": f"pay_{uuid.uuid4().hex[:14]}",
+        "amount": amount,
+        "currency": "INR",
+        "beneficiary": upi_id,
+        "processed_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "gateway": "mock_razorpay",
+    }
 
 
 class HttpPayoutProviderAdapter:
@@ -265,7 +289,7 @@ class MockFallbackPayoutProviderAdapter:
 
     async def initiate_payout(self, command: PayoutInitiationCommand) -> PayoutProviderResponse:
         # Keep compatibility with previous mock helper while using the new contract.
-        result = await mock_upi_payout(
+        result = await _mock_upi_payout(
             profile_id=command.worker_profile_id,
             amount=command.amount,
             upi_id=command.beneficiary_ref,

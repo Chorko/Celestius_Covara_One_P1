@@ -124,6 +124,9 @@ class TestOpsRouter:
         assert payload["payouts"]["failed"] == 1
         assert payload["payouts"]["manual_review"] == 1
         assert payload["alert_signals"]["review_unassigned"] == 1
+        assert payload["slo"]["status"] in {"ok", "breach"}
+        assert "thresholds" in payload["slo"]
+        assert "observed" in payload["slo"]
 
     def test_get_ops_metrics(self):
         fake_snapshot = {
@@ -141,3 +144,75 @@ class TestOpsRouter:
         payload = resp.json()
         assert payload["status"] == "ok"
         assert payload["metrics"] == fake_snapshot
+
+    def test_get_version_governance_snapshot(self):
+        fake_snapshot = {
+            "active_selection": {
+                "rule_version": {"key": "ruleset_2026_04_12"},
+                "model_version": {"key": "fraud_model_heuristic_v1"},
+            },
+            "rule_versions": [{"id": "rule-1", "version_key": "ruleset_2026_04_12"}],
+            "model_versions": [{"id": "model-1", "version_key": "fraud_model_heuristic_v1"}],
+        }
+
+        with patch("backend.app.routers.ops.get_supabase_admin", return_value=_FakeSupabase()), patch(
+            "backend.app.routers.ops.get_version_registry_snapshot",
+            return_value=fake_snapshot,
+        ):
+            with _build_client() as client:
+                resp = client.get("/ops/version-governance")
+
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["status"] == "ok"
+        assert payload["active_selection"]["rule_version"]["key"] == "ruleset_2026_04_12"
+
+    def test_activate_version_governance_rollout_bad_request(self):
+        with patch("backend.app.routers.ops.get_supabase_admin", return_value=_FakeSupabase()), patch(
+            "backend.app.routers.ops.apply_version_rollout",
+            side_effect=ValueError("cohort_key is required when mode='cohort'"),
+        ):
+            with _build_client() as client:
+                resp = client.post(
+                    "/ops/version-governance/activate",
+                    json={
+                        "kind": "rule",
+                        "version_id": "rule-123",
+                        "mode": "cohort",
+                    },
+                )
+
+        assert resp.status_code == 400
+        assert "cohort_key is required" in resp.json()["detail"]
+
+    def test_get_ops_slo_status(self):
+        sb = _FakeSupabase()
+        with patch("backend.app.routers.ops.get_supabase_admin", return_value=sb), patch(
+            "backend.app.routers.ops.get_outbox_status_counts",
+            new=AsyncMock(return_value={
+                "pending": 4,
+                "failed": 2,
+                "processed": 10,
+                "dead_letter": 1,
+                "total": 17,
+            }),
+        ), patch(
+            "backend.app.routers.ops.get_consumer_ledger_status_counts",
+            return_value={
+                "processing": 1,
+                "succeeded": 20,
+                "failed": 2,
+                "dead_letter": 3,
+                "total": 26,
+            },
+        ):
+            with _build_client() as client:
+                resp = client.get("/ops/slo")
+
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["status"] == "ok"
+        assert "slo" in payload
+        assert payload["slo"]["status"] in {"ok", "breach"}
+        assert "thresholds" in payload["slo"]
+        assert "observed" in payload["slo"]

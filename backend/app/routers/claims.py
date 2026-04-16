@@ -34,6 +34,10 @@ from backend.app.services.review_workflow import (
     build_review_meta,
     compute_review_due_at,
 )
+from backend.app.services.version_governance import (
+    attach_version_context,
+    resolve_decision_versions,
+)
 from backend.app.rate_limit import limiter
 import httpx
 
@@ -323,6 +327,13 @@ async def submit_claim(
     }
     pipeline_result["device_trust"] = trust_summary
 
+    version_context = resolve_decision_versions(
+        sb=sb,
+        worker_profile_id=str(user.get("id") or ""),
+        cohort_key=str(worker_context.get("city") or ""),
+    )
+    attach_version_context(pipeline_result, version_context)
+
     # Build persistence rows
     initial_status = "submitted"
 
@@ -337,6 +348,8 @@ async def submit_claim(
         "claim_status": initial_status,
         "assignment_state": "unassigned",
         "review_due_at": compute_review_due_at(None, settings.review_sla_hours),
+        "rule_version_id": version_context["rule_version"].get("id"),
+        "model_version_id": version_context["model_version"].get("id"),
     }
 
     # Generate Admin Assistive AI Summary
@@ -375,6 +388,10 @@ async def submit_claim(
         "plan": body.plan,
         "device_context_present": bool(raw_device_context),
         "signature_verified": context_verification.verified,
+        "rule_version_id": version_context["rule_version"].get("id"),
+        "model_version_id": version_context["model_version"].get("id"),
+        "rule_version_key": version_context["rule_version"].get("key"),
+        "model_version_key": version_context["model_version"].get("key"),
         "request_id": request_id,
     }
 
@@ -773,7 +790,7 @@ async def admin_review_claim(
     claim_resp = (
         sb.table("manual_claims")
         .select(
-            "id, claimed_at, claim_status, assigned_reviewer_profile_id, assignment_state, assigned_at, first_reviewed_at, review_due_at"
+            "id, worker_profile_id, claimed_at, claim_status, assigned_reviewer_profile_id, assignment_state, assigned_at, first_reviewed_at, review_due_at, rule_version_id, model_version_id"
         )
         .eq("id", claim_id)
         .maybe_single()
@@ -790,12 +807,17 @@ async def admin_review_claim(
             detail="Claim is assigned to another reviewer.",
         )
 
+    review_rule_version_id = claim_row.get("rule_version_id")
+    review_model_version_id = claim_row.get("model_version_id")
+
     sb.table("claim_reviews").insert(
         {
             "claim_id": claim_id,
             "reviewer_profile_id": user["id"],
             "decision": body.decision,
             "decision_reason": body.decision_reason,
+            "rule_version_id": review_rule_version_id,
+            "model_version_id": review_model_version_id,
         }
     ).execute()
 
@@ -844,6 +866,8 @@ async def admin_review_claim(
                 **body.model_dump(),
                 "assignment_state": claim_update.get("assignment_state"),
                 "review_due_at": claim_update.get("review_due_at"),
+                "rule_version_id": review_rule_version_id,
+                "model_version_id": review_model_version_id,
                 "request_id": request_id,
             },
         }
@@ -862,6 +886,8 @@ async def admin_review_claim(
                 "decision_reason": body.decision_reason,
                 "resulting_status": new_status,
                 "assignment_state": claim_update.get("assignment_state"),
+                "rule_version_id": review_rule_version_id,
+                "model_version_id": review_model_version_id,
                 "request_id": request_id,
             },
         )

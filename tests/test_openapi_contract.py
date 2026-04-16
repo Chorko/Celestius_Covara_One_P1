@@ -25,3 +25,4 @@ def test_openapi_contains_review_workflow_paths():
     assert "/ready" in paths
     assert "/ops/metrics" in paths
     assert "/ops/status" in paths
+    assert "/ops/slo" in paths

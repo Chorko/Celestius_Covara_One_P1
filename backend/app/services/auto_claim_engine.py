@@ -28,6 +28,10 @@ from uuid import uuid4
 
 from backend.app.config import settings
 from backend.app.services.event_bus.outbox import enqueue_domain_event, persist_claim_with_outbox
+from backend.app.services.version_governance import (
+    attach_version_context,
+    resolve_decision_versions,
+)
 
 logger = logging.getLogger("covara.auto_claim_engine")
 
@@ -453,6 +457,12 @@ async def _process_worker_claim(
         )
         fraud_score = pipeline_result.get("fraud_analysis", {}).get("fraud_score", 0)
         cal = pipeline_result.get("internal_calibration", {})
+        version_context = resolve_decision_versions(
+            sb=sb,
+            worker_profile_id=str(worker_id),
+            cohort_key=str(city or ""),
+        )
+        attach_version_context(pipeline_result, version_context)
 
         # ── Persist claim + payout + outbox event transactionally ─────
         now_iso = datetime.now(timezone.utc).isoformat()
@@ -476,6 +486,8 @@ async def _process_worker_claim(
             "claimed_at": now_iso,
             "assignment_state": "unassigned" if needs_manual_review else "resolved",
             "review_due_at": review_due_at if needs_manual_review else None,
+            "rule_version_id": version_context["rule_version"].get("id"),
+            "model_version_id": version_context["model_version"].get("id"),
         }
 
         payout_row = {
@@ -504,6 +516,10 @@ async def _process_worker_claim(
             "claim_status": claim_status,
             "payout_amount": payout_amount,
             "fraud_score": fraud_score,
+            "rule_version_id": version_context["rule_version"].get("id"),
+            "model_version_id": version_context["model_version"].get("id"),
+            "rule_version_key": version_context["rule_version"].get("key"),
+            "model_version_key": version_context["model_version"].get("key"),
         }
 
         persist_result = await persist_claim_with_outbox(

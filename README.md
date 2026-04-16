@@ -472,7 +472,7 @@ flowchart TD
 | **Database** | Supabase Postgres, 14 tables, Row-Level Security | ✅ Live |
 | **ML** | scikit-learn Random Forest (live predict_proba), DBSCAN | ✅ Live |
 | **Infrastructure** | Docker multi-stage, GitHub Actions CI/CD, K8s manifests, Render | ✅ Deployed |
-| **Payments** | Stripe Test Mode (61 webhook events), provider-agnostic adapter | ✅ Live (Test) |
+| **Payments** | Stripe Test Mode (61 webhook events), provider-agnostic adapter | ✅ Test Mode |
 
 </div>
 
@@ -596,7 +596,7 @@ All external data sources used by the platform, consolidated with URLs and integ
 | 9 | **TomTom Snap-to-Roads** | [developer.tomtom.com/snap-to-roads](https://developer.tomtom.com/snap-to-roads-api/documentation/product-information/introduction) | GPS coordinate road-matching | Fraud detection — validates GPS is on real road | ✅ Live API |
 | 10 | **NewsAPI** | [newsapi.org](https://newsapi.org/) | Civic news, closures, strikes, curfews | T10–T11 civic closure triggers | ✅ Live API |
 | 11 | **Gemini API** (Google) | [ai.google.dev](https://ai.google.dev/) | AI narrative generation, SynthID watermark detection | Claim explanation + AI-image fraud detection | ✅ Live API |
-| 12 | **Sandbox.co.in** | [sandbox.co.in](https://sandbox.co.in/) | Aadhaar OTP, PAN, bank verification | Progressive KYC (Levels 2–4) | ✅ Integrated |
+| 12 | **Sandbox.co.in** | [sandbox.co.in](https://sandbox.co.in/) | Aadhaar OTP, PAN, bank verification | Progressive KYC (Levels 2–4) | ⚠️ Sandboxed (Postman Mock) |
 | 13 | **Twilio** | [twilio.com](https://www.twilio.com/) | WhatsApp templates, OTP verification | Claim notifications, worker alerts | ✅ Sandboxed |
 | 14 | **IRDAI Annual Reports** | [irdai.gov.in/annual-reports](https://www.irdai.gov.in/annual-reports) | Claim trends, market structure, micro-insurance caps | Pricing validation, regulatory compliance | 📚 Reference |
 | 15 | **IIB** (Insurance Information Bureau) | [iib.gov.in](https://iib.gov.in/) | Insurance analytics, fraud benchmarks | Risk analytics orientation | 📚 Reference |
@@ -606,7 +606,7 @@ All external data sources used by the platform, consolidated with URLs and integ
 | 19 | **DigiLocker** (MeitY) *(Planned)* | [digilocker.gov.in](https://www.digilocker.gov.in/) | Aadhaar, PAN, DL document verification | KYC Level 4+ upgrade | 📋 Planned |
 | 20 | **Stripe** | [stripe.com](https://stripe.com/) | Payment processing, payouts, webhook events | Payout settlement via provider adapter (61 events configured) | ✅ Test Mode |
 
-> **Legend:** ✅ Live/Integrated — 📚 Reference source — 📋 Planned integration
+> **Legend:** ✅ Live/Test Mode — ⚠️ Sandboxed/Mocked — 📚 Reference source — 📋 Planned integration
 
 ### Data Split
 

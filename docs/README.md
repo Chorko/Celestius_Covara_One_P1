@@ -10,12 +10,14 @@
 - Added signed mobile telemetry contract at `docs/MOBILE_DEVICE_CONTEXT_CONTRACT.md`.
 - Reliability hardening now includes outbox dead-letter + consumer dead-letter operational workflows with admin endpoints.
 - Added release/deployment hardening runbook at `docs/DEPLOYMENT_RELEASE_RUNBOOK.md`.
+- Added payout/event dead-letter recovery runbook at `docs/PAYOUT_EVENT_REQUEUE_RUNBOOK.md`.
 
 ### New Docs Added
 
 - `docs/EVENT_BUS_KAFKA_ROADMAP.md` - event bus evolution, Kafka rollout stages, operational defaults, and safety notes.
 - `docs/MOBILE_DEVICE_CONTEXT_CONTRACT.md` - signed header contract, replay controls, key rotation, and compatibility requirements.
 - `docs/DEPLOYMENT_RELEASE_RUNBOOK.md` - CI release gates, strict env validation, compose/k8s apply order, smoke checks, and rollback steps.
+- `docs/PAYOUT_EVENT_REQUEUE_RUNBOOK.md` - replay-safe dead-letter list/requeue flow, verification checklist, and escalation stop conditions.
 
 ---
 
@@ -37,6 +39,7 @@ docs/
 ├── README.md                     ← You are here
 ├── IMPLEMENTATION_STATUS.md      ← Full technical reference
 ├── DEPLOYMENT_RELEASE_RUNBOOK.md ← Release/deploy/smoke/rollback
+├── PAYOUT_EVENT_REQUEUE_RUNBOOK.md ← Dead-letter recovery for payout/event pipelines
 ├── RENDER_STRIPE_POSTMAN_HANDOFF.md ← Render/Stripe/Postman deployment handoff
 ├── STRIPE_WEBHOOK_EVENTS.md     ← Stripe webhook event catalog
 ├── EVENT_BUS_KAFKA_ROADMAP.md    ← Event bus evolution

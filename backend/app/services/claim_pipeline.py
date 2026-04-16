@@ -141,7 +141,7 @@ def run_claim_pipeline(
     trace = []
 
     def now_iso():
-        return datetime.utcnow().isoformat() + "Z"
+        return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
     def add_trace(stage: int, name: str, result: str):
         trace.append(
