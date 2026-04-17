@@ -1124,6 +1124,7 @@ Fraud detection doesn't stop at the approval gate. Covara One provides controls 
 |---|---|---|
 | **Post-approval flag** | Admin flags a previously approved/paid claim | Claim status → `post_approval_flagged` |
 | **Trust score downgrade** | Graduated penalty applied | Future claims default to `soft_hold_verification` |
+| **Trust history ledger** | Every trust change is persisted with actor/reason metadata | Worker/admin trust timelines are queryable via API |
 | **Legal escalation** | Severe/critical fraud | Routed to compliance/platform risk team |
 | **Account review** | Critical fraud | Worker suspended pending investigation |
 
@@ -1135,6 +1136,8 @@ Fraud detection doesn't stop at the approval gate. Covara One provides controls 
 | Moderate (timing inconsistency) | −0.15 | Future claims reviewed |
 | Severe (coordinated fraud) | −0.30 | Legal escalation flag |
 | Critical (systematic abuse) | −0.50 | Full account review |
+
+Every trust penalty event is now persisted in `trust_score_history` so admins and workers can audit trust-score movement over time.
 
 ---
 
@@ -1319,45 +1322,6 @@ Instead of static screens, Covara One leverages a **Rewards & Coins System** tie
 
 ---
 
-
-## 🎬 Judge's Demo Walkthrough
-
-> Follow this exact sequence to reproduce the demo video in under 2 minutes.
-
-#### Step 1 — Login as Worker
-- Email: **`worker@demo.com`** · Password: **`demo1234`**
-- 👁️ See: 14-day earnings chart, Zone MU-WE-01 (Andheri-W), Active Essential plan
-
-#### Step 2 — Explore the Worker Dashboard
-- Rain alert badge visible for your zone
-- Your claim history shows 1 `auto_approved` + 1 `soft_hold_verification`
-- Click any claim → see the full 8-stage pipeline breakdown + Gemini AI narrative
-
-#### Step 3 — Switch to Admin View
-- Log out → log in as **`admin@demo.com`** / **`demo1234`**
-- 👁️ See: Live KPI cards (Burning Cost Rate, Loss Ratio, Fraud Detected)
-- Head to **Trigger Engine** → Fire `RAIN_HEAVY` for Mumbai
-
-#### Step 4 — ⚡ THE MAGIC MOMENT — Fire a Trigger
-1. Navigate to **Admin → Triggers**
-2. Select `RAIN_HEAVY` · City: `Mumbai` · Zone: `Andheri-W`
-3. Click **Inject Trigger**
-4. Watch the **Review Queue** populate automatically — zero worker action
-5. One claim auto-approves; another routes to `needs_review` (medium fraud score)
-
-#### Step 5 — Review a Claim
-- Click into a `needs_review` claim
-- See: Payout recommendation breakdown (B × S × E × C), Ghost Shift Detector scores
-- Read the **Gemini AI narrative** explaining why the claim is uncertain
-- Hit **Approve** — claim moves to `approved` → payout queued
-
-#### Step 6 — Show the Fraud Detection
-- Open the seeded **fraud claim** (Suresh / Bangalore, GPS in Delhi)
-- Evidence GPS: 28.63°N 77.22°E — **1,742 km** from claimed zone
-- Fraud score: 0.92 · Status: `rejected` · Integrity score: 0.15
-- This is DBSCAN + EXIF mismatch detection working in real data
-
----
 
 ### 🌱 Seeded Demo Data
 

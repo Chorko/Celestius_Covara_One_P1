@@ -122,6 +122,11 @@ supabase/.temp/
 *.canvas
 
 # ==========================
+# Local Postman Workspace State
+# ==========================
+.postman/
+
+# ==========================
 # Keep env template (not secrets)
 # ==========================
 !.env.example

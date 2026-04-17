@@ -118,7 +118,19 @@ Default checks:
 
 1. GET /health
 2. GET /ready
-3. GET /ops/status
+3. GET /ops/status (validated only when admin token is provided)
+
+For strict release-gate validation of `/ops/status`:
+
+PowerShell:
+
+```powershell
+$env:OPS_ADMIN_BEARER_TOKEN="<admin_jwt>"
+python scripts/smoke_release_endpoints.py `
+   --base-url https://your-backend-host `
+   --ops-admin-bearer-token $env:OPS_ADMIN_BEARER_TOKEN `
+   --require-ops-status
+```
 
 Use --allow-degraded only for diagnostics, not for release acceptance.
 

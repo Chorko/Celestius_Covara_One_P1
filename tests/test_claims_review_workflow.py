@@ -152,6 +152,29 @@ def _build_client(current_user: dict) -> TestClient:
     return TestClient(app)
 
 
+def _assert_trust_adjustment(
+    payload: dict,
+    *,
+    history_id: str,
+    event_type: str,
+    delta: float,
+):
+    trust_payload = payload.get("trust_adjustment")
+    assert isinstance(trust_payload, dict)
+    required_fields = {
+        "history_id",
+        "worker_profile_id",
+        "previous_trust_score",
+        "delta",
+        "new_trust_score",
+        "event_type",
+    }
+    assert required_fields.issubset(set(trust_payload))
+    assert trust_payload["history_id"] == history_id
+    assert trust_payload["event_type"] == event_type
+    assert float(trust_payload["delta"]) == delta
+
+
 class TestClaimsReviewWorkflow:
     def test_assign_claim_sets_owner_and_due(self):
         recent = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
@@ -284,11 +307,12 @@ class TestClaimsReviewWorkflow:
         assert claim.get("first_reviewed_at")
         assert claim.get("review_due_at")
 
-    def test_review_approve_triggers_payout_initiation(self):
+    def test_review_approve_triggers_payout_and_persists_trust_adjustment(self):
         sb = _FakeSupabase(
             claim_rows=[
                 {
                     "id": "claim-approve",
+                    "worker_profile_id": "worker-1",
                     "claim_status": "submitted",
                     "claimed_at": "2026-04-09T10:00:00Z",
                     "assignment_state": "assigned",
@@ -306,7 +330,17 @@ class TestClaimsReviewWorkflow:
         ), patch(
             "backend.app.routers.claims.initiate_payout_for_claim",
             new=AsyncMock(return_value={"status": "pending", "payout": {"id": "payout-1"}}),
-        ) as mock_initiate:
+        ) as mock_initiate, patch(
+            "backend.app.routers.claims.apply_trust_score_delta",
+            return_value={
+                "history_id": "trust-review-approve",
+                "worker_profile_id": "worker-1",
+                "previous_trust_score": 0.8,
+                "delta": 0.02,
+                "new_trust_score": 0.82,
+                "event_type": "review_approved",
+            },
+        ) as mock_trust:
             with _build_client({"id": "admin-1", "role": "insurer_admin"}) as client:
                 resp = client.post(
                     "/claims/claim-approve/review",
@@ -317,7 +351,196 @@ class TestClaimsReviewWorkflow:
         payload = resp.json()
         assert payload["decision"] == "approve"
         assert payload["payout"]["status"] == "pending"
+        _assert_trust_adjustment(
+            payload,
+            history_id="trust-review-approve",
+            event_type="review_approved",
+            delta=0.02,
+        )
         assert mock_initiate.await_count == 1
+        assert mock_trust.call_count == 1
+
+        trust_kwargs = mock_trust.call_args.kwargs
+        assert trust_kwargs["worker_profile_id"] == "worker-1"
+        assert trust_kwargs["event_type"] == "review_approved"
+        assert trust_kwargs["delta"] == 0.02
+        assert trust_kwargs["claim_id"] == "claim-approve"
+
+        audit_payload = sb.tables["audit_events"][0]["event_payload"]
+        assert audit_payload["trust_adjustment"]["history_id"] == "trust-review-approve"
+
+    def test_review_hold_persists_trust_adjustment(self):
+        sb = _FakeSupabase(
+            claim_rows=[
+                {
+                    "id": "claim-hold-trust",
+                    "worker_profile_id": "worker-1",
+                    "claim_status": "submitted",
+                    "claimed_at": "2026-04-09T10:00:00Z",
+                    "assignment_state": "assigned",
+                    "assigned_reviewer_profile_id": "admin-1",
+                    "assigned_at": "2026-04-09T10:05:00Z",
+                    "first_reviewed_at": None,
+                    "review_due_at": "2026-04-10T10:00:00Z",
+                }
+            ]
+        )
+
+        with patch("backend.app.routers.claims.get_supabase_admin", return_value=sb), patch(
+            "backend.app.routers.claims.enqueue_domain_event",
+            new=AsyncMock(return_value=None),
+        ), patch(
+            "backend.app.routers.claims.apply_trust_score_delta",
+            return_value={
+                "history_id": "trust-review-1",
+                "worker_profile_id": "worker-1",
+                "previous_trust_score": 0.8,
+                "delta": -0.02,
+                "new_trust_score": 0.78,
+                "event_type": "review_held",
+            },
+        ) as mock_trust:
+            with _build_client({"id": "admin-1", "role": "insurer_admin"}) as client:
+                resp = client.post(
+                    "/claims/claim-hold-trust/review",
+                    json={"decision": "hold", "decision_reason": "Low confidence evidence"},
+                    headers={"X-Request-ID": "req-review-trust"},
+                )
+
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["decision"] == "hold"
+        assert payload["payout"] is None
+        _assert_trust_adjustment(
+            payload,
+            history_id="trust-review-1",
+            event_type="review_held",
+            delta=-0.02,
+        )
+        assert mock_trust.call_count == 1
+
+        trust_kwargs = mock_trust.call_args.kwargs
+        assert trust_kwargs["worker_profile_id"] == "worker-1"
+        assert trust_kwargs["event_type"] == "review_held"
+        assert trust_kwargs["claim_id"] == "claim-hold-trust"
+
+        audit_payload = sb.tables["audit_events"][0]["event_payload"]
+        assert audit_payload["trust_adjustment"]["history_id"] == "trust-review-1"
+
+    def test_review_reject_persists_trust_adjustment(self):
+        sb = _FakeSupabase(
+            claim_rows=[
+                {
+                    "id": "claim-reject-trust",
+                    "worker_profile_id": "worker-1",
+                    "claim_status": "submitted",
+                    "claimed_at": "2026-04-09T10:00:00Z",
+                    "assignment_state": "assigned",
+                    "assigned_reviewer_profile_id": "admin-1",
+                    "assigned_at": "2026-04-09T10:05:00Z",
+                    "first_reviewed_at": None,
+                    "review_due_at": "2026-04-10T10:00:00Z",
+                }
+            ]
+        )
+
+        with patch("backend.app.routers.claims.get_supabase_admin", return_value=sb), patch(
+            "backend.app.routers.claims.enqueue_domain_event",
+            new=AsyncMock(return_value=None),
+        ), patch(
+            "backend.app.routers.claims.apply_trust_score_delta",
+            return_value={
+                "history_id": "trust-review-reject",
+                "worker_profile_id": "worker-1",
+                "previous_trust_score": 0.8,
+                "delta": -0.1,
+                "new_trust_score": 0.7,
+                "event_type": "review_rejected",
+            },
+        ) as mock_trust:
+            with _build_client({"id": "admin-1", "role": "insurer_admin"}) as client:
+                resp = client.post(
+                    "/claims/claim-reject-trust/review",
+                    json={"decision": "reject", "decision_reason": "Fraud indicators detected"},
+                    headers={"X-Request-ID": "req-review-reject"},
+                )
+
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["decision"] == "reject"
+        assert payload["assignment_state"] == "resolved"
+        assert payload["payout"] is None
+        _assert_trust_adjustment(
+            payload,
+            history_id="trust-review-reject",
+            event_type="review_rejected",
+            delta=-0.1,
+        )
+        assert mock_trust.call_count == 1
+
+        trust_kwargs = mock_trust.call_args.kwargs
+        assert trust_kwargs["event_type"] == "review_rejected"
+        assert trust_kwargs["delta"] == -0.10
+
+        audit_payload = sb.tables["audit_events"][0]["event_payload"]
+        assert audit_payload["trust_adjustment"]["history_id"] == "trust-review-reject"
+
+    def test_review_escalate_persists_trust_adjustment(self):
+        sb = _FakeSupabase(
+            claim_rows=[
+                {
+                    "id": "claim-escalate-trust",
+                    "worker_profile_id": "worker-1",
+                    "claim_status": "submitted",
+                    "claimed_at": "2026-04-09T10:00:00Z",
+                    "assignment_state": "assigned",
+                    "assigned_reviewer_profile_id": "admin-1",
+                    "assigned_at": "2026-04-09T10:05:00Z",
+                    "first_reviewed_at": None,
+                    "review_due_at": "2026-04-10T10:00:00Z",
+                }
+            ]
+        )
+
+        with patch("backend.app.routers.claims.get_supabase_admin", return_value=sb), patch(
+            "backend.app.routers.claims.enqueue_domain_event",
+            new=AsyncMock(return_value=None),
+        ), patch(
+            "backend.app.routers.claims.apply_trust_score_delta",
+            return_value={
+                "history_id": "trust-review-escalate",
+                "worker_profile_id": "worker-1",
+                "previous_trust_score": 0.8,
+                "delta": -0.05,
+                "new_trust_score": 0.75,
+                "event_type": "review_escalated",
+            },
+        ) as mock_trust:
+            with _build_client({"id": "admin-1", "role": "insurer_admin"}) as client:
+                resp = client.post(
+                    "/claims/claim-escalate-trust/review",
+                    json={"decision": "escalate", "decision_reason": "Escalating for fraud team"},
+                )
+
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["decision"] == "escalate"
+        assert payload["assignment_state"] == "escalated"
+        assert payload["payout"] is None
+        _assert_trust_adjustment(
+            payload,
+            history_id="trust-review-escalate",
+            event_type="review_escalated",
+            delta=-0.05,
+        )
+        assert mock_trust.call_count == 1
+
+        trust_kwargs = mock_trust.call_args.kwargs
+        assert trust_kwargs["event_type"] == "review_escalated"
+        assert trust_kwargs["delta"] == -0.05
+
+        audit_payload = sb.tables["audit_events"][0]["event_payload"]
+        assert audit_payload["trust_adjustment"]["history_id"] == "trust-review-escalate"
 
     def test_list_claims_overdue_queue_filters_by_sla(self):
         sb = _FakeSupabase(
@@ -351,3 +574,58 @@ class TestClaimsReviewWorkflow:
         assert len(payload["claims"]) == 1
         assert payload["claims"][0]["id"] == "claim-overdue"
         assert payload["claims"][0]["review_meta"]["sla_status"] == "overdue"
+
+    def test_flag_post_approval_persists_trust_history(self):
+        sb = _FakeSupabase(
+            claim_rows=[
+                {
+                    "id": "claim-flag-1",
+                    "claim_status": "paid",
+                    "claimed_at": "2026-04-09T10:00:00Z",
+                    "assignment_state": "assigned",
+                    "assigned_reviewer_profile_id": "admin-1",
+                    "worker_profile_id": "worker-1",
+                    "worker_profiles": {
+                        "profile_id": "worker-1",
+                        "trust_score": 0.82,
+                    },
+                }
+            ]
+        )
+
+        with patch("backend.app.routers.claims.get_supabase_admin", return_value=sb), patch(
+            "backend.app.routers.claims.apply_trust_score_delta",
+            return_value={
+                "history_id": "trust-log-1",
+                "worker_profile_id": "worker-1",
+                "previous_trust_score": 0.82,
+                "delta": -0.15,
+                "new_trust_score": 0.67,
+                "event_type": "post_approval_flag",
+            },
+        ) as mock_trust_apply:
+            with _build_client({"id": "admin-1", "role": "insurer_admin"}) as client:
+                resp = client.post(
+                    "/claims/claim-flag-1/flag",
+                    json={
+                        "fraud_severity": "moderate",
+                        "reason": "Suspicious payout replay pattern",
+                    },
+                    headers={"X-Request-ID": "req-flag-1"},
+                )
+
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["status"] == "flagged"
+        assert payload["trust_history_id"] == "trust-log-1"
+        assert payload["trust_score_penalty"]["new_trust_score"] == 0.67
+        assert mock_trust_apply.call_count == 1
+
+        trust_kwargs = mock_trust_apply.call_args.kwargs
+        assert trust_kwargs["worker_profile_id"] == "worker-1"
+        assert trust_kwargs["event_type"] == "post_approval_flag"
+        assert trust_kwargs["claim_id"] == "claim-flag-1"
+
+        claim = sb.tables["manual_claims"][0]
+        assert claim["claim_status"] == "post_approval_flagged"
+        assert claim["assignment_state"] == "resolved"

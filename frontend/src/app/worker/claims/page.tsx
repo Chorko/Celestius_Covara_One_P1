@@ -22,6 +22,18 @@ interface ClaimsListResponse {
   claims: ClaimItem[]
 }
 
+interface ZoneOption {
+  id: string
+  city: string
+  zone_name: string
+  pincode?: string | null
+}
+
+
+function normalizePincode(value: string): string {
+  return value.replace(/\D/g, '')
+}
+
 function formatSubmitError(error: unknown): string {
   if (error instanceof BackendApiError) {
     if (error.status === 401) {
@@ -49,6 +61,9 @@ export default function WorkerClaims() {
 
   const [claims, setClaims] = useState<ClaimItem[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [zones, setZones] = useState<ZoneOption[]>([])
+  const [selectedZoneId, setSelectedZoneId] = useState('')
+  const [pincode, setPincode] = useState('')
   const [reason, setReason] = useState('')
   const [lat, setLat] = useState<number | null>(null)
   const [lng, setLng] = useState<number | null>(null)
@@ -69,7 +84,58 @@ export default function WorkerClaims() {
     } catch (e) { console.error("Could not load claims", e) }
   }, [supabase, profile])
 
-  useEffect(() => { if (profile) loadClaims() }, [profile, loadClaims])
+  const loadZones = useCallback(async () => {
+    if (!profile) {
+      return
+    }
+
+    try {
+      let zoneRows: ZoneOption[] = []
+      const withPincode = await supabase
+        .from('zones')
+        .select('id, city, zone_name, pincode')
+        .order('city', { ascending: true })
+        .order('zone_name', { ascending: true })
+
+      if (withPincode.error) {
+        const fallback = await supabase
+          .from('zones')
+          .select('id, city, zone_name')
+          .order('city', { ascending: true })
+          .order('zone_name', { ascending: true })
+
+        if (fallback.error) {
+          throw fallback.error
+        }
+
+        zoneRows = (fallback.data || []).map((row) => ({ ...row, pincode: null })) as ZoneOption[]
+      } else {
+        zoneRows = (withPincode.data || []) as ZoneOption[]
+      }
+
+      setZones(zoneRows)
+
+      if (!selectedZoneId && zoneRows.length > 0) {
+        const preferredZoneId = typeof (profile as Record<string, unknown>).preferred_zone_id === 'string'
+          ? String((profile as Record<string, unknown>).preferred_zone_id)
+          : ''
+        const defaultZone = zoneRows.find((z) => z.id === preferredZoneId) || zoneRows[0]
+        setSelectedZoneId(defaultZone.id)
+        if (defaultZone.pincode) {
+          setPincode(defaultZone.pincode)
+        }
+      }
+    } catch (e) {
+      console.error('Could not load zones for claim form', e)
+    }
+  }, [profile, selectedZoneId, supabase])
+
+  useEffect(() => {
+    if (profile) {
+      loadClaims()
+      loadZones()
+    }
+  }, [profile, loadClaims, loadZones])
 
   const handleGetLocation = () => {
     setLocating(true)
@@ -84,6 +150,17 @@ export default function WorkerClaims() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); setIsSubmitting(true); setSubmitError(null)
     try {
+      const selectedZone = zones.find((zone) => zone.id === selectedZoneId)
+      const normalizedPincode = normalizePincode(pincode)
+
+      if (!selectedZone) {
+        throw new Error('Please select a place before submitting your claim.')
+      }
+
+      if (normalizedPincode.length !== 6) {
+        throw new Error('Please enter a valid 6-digit pincode.')
+      }
+
       let evidenceUrl: string | null = null
 
       if (file) {
@@ -112,6 +189,9 @@ export default function WorkerClaims() {
 
       await backendPost<{ status: string; claim: ClaimItem }>(supabase, '/claims/', {
         claim_reason: reason,
+        place: selectedZone.zone_name,
+        city: selectedZone.city,
+        pincode: normalizedPincode,
         stated_lat: lat || undefined,
         stated_lng: lng || undefined,
         evidence_url: evidenceUrl || undefined,
@@ -163,6 +243,43 @@ export default function WorkerClaims() {
                 </div>
               )}
               <form onSubmit={handleSubmit} className="space-y-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs uppercase tracking-wider mb-2 block font-medium" style={{ color: 'var(--text-tertiary)' }}>Place</label>
+                    <select
+                      required
+                      value={selectedZoneId}
+                      onChange={(e) => {
+                        const zoneId = e.target.value
+                        setSelectedZoneId(zoneId)
+                        const picked = zones.find((z) => z.id === zoneId)
+                        if (picked?.pincode) {
+                          setPincode(picked.pincode)
+                        }
+                      }}
+                      className="input-field w-full"
+                    >
+                      <option value="">Select place</option>
+                      {zones.map((zone) => (
+                        <option key={zone.id} value={zone.id}>
+                          {zone.zone_name} ({zone.city})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs uppercase tracking-wider mb-2 block font-medium" style={{ color: 'var(--text-tertiary)' }}>Pincode</label>
+                    <input
+                      required
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={pincode}
+                      onChange={(e) => setPincode(normalizePincode(e.target.value).slice(0, 6))}
+                      className="input-field w-full"
+                      placeholder="e.g. 400051"
+                    />
+                  </div>
+                </div>
                 <div>
                   <label className="text-xs uppercase tracking-wider mb-2 block font-medium" style={{ color: 'var(--text-tertiary)' }}>Disruption Reason</label>
                   <textarea required value={reason} onChange={(e) => setReason(e.target.value)} className="input-field w-full min-h-[120px] resize-y" placeholder="e.g. Severe waterlogging blocked access to the pickup restaurant..." />
@@ -202,10 +319,14 @@ export default function WorkerClaims() {
                     className="w-full py-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-all"
                     style={{ background: lat ? 'var(--success-muted)' : 'var(--bg-tertiary)', border: `1px solid ${lat ? 'var(--success)' : 'var(--border-primary)'}`, color: lat ? 'var(--success)' : 'var(--text-secondary)' }}>
                     <LocateFixed size={16} />
-                    {lat ? `${lat.toFixed(4)}, ${lng?.toFixed(4)}` : locating ? 'Acquiring GPS...' : 'Pin Current Location'}
+                    {lat ? `${lat.toFixed(4)}, ${lng?.toFixed(4)}` : locating ? 'Acquiring GPS...' : 'Pin Current Location (Optional)'}
                   </button>
                 </div>
-                <button type="submit" disabled={isSubmitting || !reason} className="btn-primary w-full py-3 text-sm font-semibold flex items-center justify-center gap-2">
+                <button
+                  type="submit"
+                  disabled={isSubmitting || !reason || !selectedZoneId || normalizePincode(pincode).length !== 6}
+                  className="btn-primary w-full py-3 text-sm font-semibold flex items-center justify-center gap-2"
+                >
                   {isSubmitting ? (<><div className="h-4 w-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />{uploadingFile ? 'Uploading Photo...' : 'Submitting...'}</>) : (<><Zap size={16} />Submit Claim</>)}
                 </button>
               </form>

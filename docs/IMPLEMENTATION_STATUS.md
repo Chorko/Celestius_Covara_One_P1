@@ -43,6 +43,7 @@
 | Payout safety & idempotency | ✅ Implemented | Event-ID uniqueness, worker-event constraint, duplicate prevention |
 | Claim state machine | ✅ Implemented | 8 states: submitted → auto_approved / soft_hold / fraud_escalated → paid |
 | Post-approval fraud controls | ✅ Implemented | Flag endpoint, trust score downgrade, severity-graded penalties |
+| Trust score history ledger | ✅ Implemented | `trust_score_history` table + worker/admin API visibility for lifecycle audit, including normalized review-decision trust events (approve/hold/escalate/reject) |
 | Region validation cache | ✅ Implemented | Validated-incident fast-lane with liquidity protection |
 | Supabase Auth & RLS | ✅ Implemented | Google OAuth, role-based routing, Row-Level Security |
 | Edge SSR Middleware | ✅ Implemented | Next.js `middleware.ts` — server-side auth before hydration |

@@ -34,45 +34,177 @@ returns table (
 )
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, pg_temp
 as $$
 declare
   v_claim_id uuid;
   v_event_id uuid := gen_random_uuid();
   v_constraint_name text;
+  v_rule_version_id uuid;
+  v_model_version_id uuid;
+  v_has_rule_col boolean := false;
+  v_has_model_col boolean := false;
 begin
+  select exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'manual_claims'
+      and column_name = 'rule_version_id'
+  ) into v_has_rule_col;
+
+  select exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'manual_claims'
+      and column_name = 'model_version_id'
+  ) into v_has_model_col;
+
+  if v_has_rule_col then
+    v_rule_version_id := nullif(p_claim ->> 'rule_version_id', '')::uuid;
+    if v_rule_version_id is null
+       and to_regprocedure('public.resolve_active_rule_version_id()') is not null
+    then
+      v_rule_version_id := public.resolve_active_rule_version_id();
+    end if;
+  end if;
+
+  if v_has_model_col then
+    v_model_version_id := nullif(p_claim ->> 'model_version_id', '')::uuid;
+    if v_model_version_id is null
+       and to_regprocedure('public.resolve_active_model_version_id()') is not null
+    then
+      v_model_version_id := public.resolve_active_model_version_id();
+    end if;
+  end if;
+
   begin
-    insert into public.manual_claims (
-      worker_profile_id,
-      trigger_event_id,
-      claim_mode,
-      claim_reason,
-      stated_lat,
-      stated_lng,
-      claimed_at,
-      shift_id,
-      claim_status,
-      assignment_state,
-      review_due_at
-    )
-    values (
-      (p_claim ->> 'worker_profile_id')::uuid,
-      nullif(p_claim ->> 'trigger_event_id', '')::uuid,
-      coalesce(nullif(p_claim ->> 'claim_mode', ''), 'manual'),
-      coalesce(nullif(p_claim ->> 'claim_reason', ''), 'Claim submitted'),
-      nullif(p_claim ->> 'stated_lat', '')::numeric,
-      nullif(p_claim ->> 'stated_lng', '')::numeric,
-      coalesce(nullif(p_claim ->> 'claimed_at', '')::timestamptz, now()),
-      nullif(p_claim ->> 'shift_id', '')::uuid,
-      coalesce(nullif(p_claim ->> 'claim_status', ''), 'submitted'),
-      coalesce(nullif(p_claim ->> 'assignment_state', ''), 'unassigned'),
-      nullif(p_claim ->> 'review_due_at', '')::timestamptz
-    )
-    returning id into v_claim_id;
+    if v_has_rule_col and v_has_model_col then
+      insert into public.manual_claims (
+        worker_profile_id,
+        trigger_event_id,
+        claim_mode,
+        claim_reason,
+        stated_lat,
+        stated_lng,
+        claimed_at,
+        shift_id,
+        claim_status,
+        assignment_state,
+        review_due_at,
+        rule_version_id,
+        model_version_id
+      )
+      values (
+        (p_claim ->> 'worker_profile_id')::uuid,
+        nullif(p_claim ->> 'trigger_event_id', '')::uuid,
+        coalesce(nullif(p_claim ->> 'claim_mode', ''), 'manual'),
+        coalesce(nullif(p_claim ->> 'claim_reason', ''), 'Claim submitted'),
+        nullif(p_claim ->> 'stated_lat', '')::numeric,
+        nullif(p_claim ->> 'stated_lng', '')::numeric,
+        coalesce(nullif(p_claim ->> 'claimed_at', '')::timestamptz, now()),
+        nullif(p_claim ->> 'shift_id', '')::uuid,
+        coalesce(nullif(p_claim ->> 'claim_status', ''), 'submitted'),
+        coalesce(nullif(p_claim ->> 'assignment_state', ''), 'unassigned'),
+        nullif(p_claim ->> 'review_due_at', '')::timestamptz,
+        v_rule_version_id,
+        v_model_version_id
+      )
+      returning id into v_claim_id;
+    elsif v_has_rule_col then
+      insert into public.manual_claims (
+        worker_profile_id,
+        trigger_event_id,
+        claim_mode,
+        claim_reason,
+        stated_lat,
+        stated_lng,
+        claimed_at,
+        shift_id,
+        claim_status,
+        assignment_state,
+        review_due_at,
+        rule_version_id
+      )
+      values (
+        (p_claim ->> 'worker_profile_id')::uuid,
+        nullif(p_claim ->> 'trigger_event_id', '')::uuid,
+        coalesce(nullif(p_claim ->> 'claim_mode', ''), 'manual'),
+        coalesce(nullif(p_claim ->> 'claim_reason', ''), 'Claim submitted'),
+        nullif(p_claim ->> 'stated_lat', '')::numeric,
+        nullif(p_claim ->> 'stated_lng', '')::numeric,
+        coalesce(nullif(p_claim ->> 'claimed_at', '')::timestamptz, now()),
+        nullif(p_claim ->> 'shift_id', '')::uuid,
+        coalesce(nullif(p_claim ->> 'claim_status', ''), 'submitted'),
+        coalesce(nullif(p_claim ->> 'assignment_state', ''), 'unassigned'),
+        nullif(p_claim ->> 'review_due_at', '')::timestamptz,
+        v_rule_version_id
+      )
+      returning id into v_claim_id;
+    elsif v_has_model_col then
+      insert into public.manual_claims (
+        worker_profile_id,
+        trigger_event_id,
+        claim_mode,
+        claim_reason,
+        stated_lat,
+        stated_lng,
+        claimed_at,
+        shift_id,
+        claim_status,
+        assignment_state,
+        review_due_at,
+        model_version_id
+      )
+      values (
+        (p_claim ->> 'worker_profile_id')::uuid,
+        nullif(p_claim ->> 'trigger_event_id', '')::uuid,
+        coalesce(nullif(p_claim ->> 'claim_mode', ''), 'manual'),
+        coalesce(nullif(p_claim ->> 'claim_reason', ''), 'Claim submitted'),
+        nullif(p_claim ->> 'stated_lat', '')::numeric,
+        nullif(p_claim ->> 'stated_lng', '')::numeric,
+        coalesce(nullif(p_claim ->> 'claimed_at', '')::timestamptz, now()),
+        nullif(p_claim ->> 'shift_id', '')::uuid,
+        coalesce(nullif(p_claim ->> 'claim_status', ''), 'submitted'),
+        coalesce(nullif(p_claim ->> 'assignment_state', ''), 'unassigned'),
+        nullif(p_claim ->> 'review_due_at', '')::timestamptz,
+        v_model_version_id
+      )
+      returning id into v_claim_id;
+    else
+      insert into public.manual_claims (
+        worker_profile_id,
+        trigger_event_id,
+        claim_mode,
+        claim_reason,
+        stated_lat,
+        stated_lng,
+        claimed_at,
+        shift_id,
+        claim_status,
+        assignment_state,
+        review_due_at
+      )
+      values (
+        (p_claim ->> 'worker_profile_id')::uuid,
+        nullif(p_claim ->> 'trigger_event_id', '')::uuid,
+        coalesce(nullif(p_claim ->> 'claim_mode', ''), 'manual'),
+        coalesce(nullif(p_claim ->> 'claim_reason', ''), 'Claim submitted'),
+        nullif(p_claim ->> 'stated_lat', '')::numeric,
+        nullif(p_claim ->> 'stated_lng', '')::numeric,
+        coalesce(nullif(p_claim ->> 'claimed_at', '')::timestamptz, now()),
+        nullif(p_claim ->> 'shift_id', '')::uuid,
+        coalesce(nullif(p_claim ->> 'claim_status', ''), 'submitted'),
+        coalesce(nullif(p_claim ->> 'assignment_state', ''), 'unassigned'),
+        nullif(p_claim ->> 'review_due_at', '')::timestamptz
+      )
+      returning id into v_claim_id;
+    end if;
   exception when unique_violation then
     get stacked diagnostics v_constraint_name = constraint_name;
 
-    if coalesce(p_claim ->> 'claim_mode', '') = 'trigger_auto'
+    if lower(coalesce(p_claim ->> 'claim_mode', '')) = 'trigger_auto'
        and (
          coalesce(v_constraint_name, '') ilike '%idx_unique_worker_event%'
          or coalesce(v_constraint_name, '') ilike '%worker_profile_id%trigger_event%'
