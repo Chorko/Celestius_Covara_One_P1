@@ -12,6 +12,7 @@ from typing import Any, Awaitable, Callable
 
 from backend.app.services.event_bus.consumer_idempotency import consume_idempotently
 from backend.app.services.event_bus.contracts import DomainEvent
+from backend.app.services.payout_workflow import initiate_payout_for_claim
 
 logger = logging.getLogger("covara.event_consumers")
 
@@ -117,11 +118,48 @@ async def _handle_auto_claim_rewards(sb, event: DomainEvent) -> dict[str, Any]:
     }
 
 
+async def _handle_auto_claim_payout(sb, event: DomainEvent) -> dict[str, Any]:
+    payload = event.payload or {}
+
+    decision = str(payload.get("decision") or "")
+    claim_status = str(payload.get("claim_status") or "")
+    claim_id = str(payload.get("claim_id") or "")
+    worker_id = str(payload.get("worker_id") or "")
+
+    if not claim_id:
+        return {"initiated": False, "reason": "missing_claim_id"}
+
+    # Auto-initiate payout only for clear auto-approved outcomes.
+    if decision != "auto_approve" and claim_status not in {"auto_approved", "approved"}:
+        return {"initiated": False, "reason": "criteria_not_met"}
+
+    try:
+        payout_result = await initiate_payout_for_claim(
+            sb=sb,
+            claim_id=claim_id,
+            initiated_by_profile_id=worker_id or None,
+            trigger_source="event_consumer.auto_claim_payout",
+            request_id=event.event_id,
+            force_retry=False,
+            initiation_note="auto_initiated_from_claim_auto_processed",
+        )
+    except ValueError as exc:
+        # Not treated as hard consumer failure (e.g., already initiated).
+        return {"initiated": False, "reason": str(exc)}
+
+    return {
+        "initiated": True,
+        "status": payout_result.get("status"),
+        "payout_status": (payout_result.get("payout") or {}).get("status"),
+    }
+
+
 _CONSUMER_HANDLERS: dict[
     str,
     list[tuple[str, Callable[[Any, DomainEvent], Awaitable[dict[str, Any] | None]]]],
 ] = {
     "claim.auto_processed": [
+        ("auto_claim_payout_consumer", _handle_auto_claim_payout),
         ("auto_claim_notification_consumer", _handle_auto_claim_notification),
         ("auto_claim_rewards_consumer", _handle_auto_claim_rewards),
     ],

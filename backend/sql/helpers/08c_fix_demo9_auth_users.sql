@@ -41,26 +41,52 @@ create temporary table if not exists tmp_demo9_emails (
   email text primary key,
   full_name text not null,
   phone text not null,
-  policy_id text not null
+  policy_id text not null,
+  platform_name text not null,
+  city text not null,
+  vehicle_type text not null,
+  avg_hourly_income_inr numeric(10,2) not null,
+  bank_verified boolean not null,
+  trust_score numeric(4,2) not null,
+  gps_consent boolean not null
 ) on commit drop;
 
 truncate tmp_demo9_emails;
 
-insert into tmp_demo9_emails (email, full_name, phone, policy_id)
+insert into tmp_demo9_emails (
+  email,
+  full_name,
+  phone,
+  policy_id,
+  platform_name,
+  city,
+  vehicle_type,
+  avg_hourly_income_inr,
+  bank_verified,
+  trust_score,
+  gps_consent
+)
 values
-  ('demo.auto01@synthetic.covara.dev',   'DEMO9 AUTO01',   '+919900000001', 'POL-DEMO9-AUTO01'),
-  ('demo.auto02@synthetic.covara.dev',   'DEMO9 AUTO02',   '+919900000002', 'POL-DEMO9-AUTO02'),
-  ('demo.auto03@synthetic.covara.dev',   'DEMO9 AUTO03',   '+919900000003', 'POL-DEMO9-AUTO03'),
-  ('demo.review01@synthetic.covara.dev', 'DEMO9 REVIEW01', '+919900000004', 'POL-DEMO9-REVIEW01'),
-  ('demo.review02@synthetic.covara.dev', 'DEMO9 REVIEW02', '+919900000005', 'POL-DEMO9-REVIEW02'),
-  ('demo.review03@synthetic.covara.dev', 'DEMO9 REVIEW03', '+919900000006', 'POL-DEMO9-REVIEW03'),
-  ('demo.fraud01@synthetic.covara.dev',  'DEMO9 FRAUD01',  '+919900000007', 'POL-DEMO9-FRAUD01'),
-  ('demo.fraud02@synthetic.covara.dev',  'DEMO9 FRAUD02',  '+919900000008', 'POL-DEMO9-FRAUD02'),
-  ('demo.fraud03@synthetic.covara.dev',  'DEMO9 FRAUD03',  '+919900000009', 'POL-DEMO9-FRAUD03')
+  ('demo.auto01@synthetic.covara.dev',   'DEMO9 AUTO01',   '+919900000001', 'POL-DEMO9-AUTO01',   'Swiggy',  'Mumbai', 'Bike',    120.00, true, 0.94, true),
+  ('demo.auto02@synthetic.covara.dev',   'DEMO9 AUTO02',   '+919900000002', 'POL-DEMO9-AUTO02',   'Zomato',  'Mumbai', 'Scooter', 112.00, true, 0.91, true),
+  ('demo.auto03@synthetic.covara.dev',   'DEMO9 AUTO03',   '+919900000003', 'POL-DEMO9-AUTO03',   'Zepto',   'Mumbai', 'Bike',    105.00, true, 0.89, true),
+  ('demo.review01@synthetic.covara.dev', 'DEMO9 REVIEW01', '+919900000004', 'POL-DEMO9-REVIEW01', 'Swiggy',  'Mumbai', 'Bike',     98.00, true, 0.72, true),
+  ('demo.review02@synthetic.covara.dev', 'DEMO9 REVIEW02', '+919900000005', 'POL-DEMO9-REVIEW02', 'Blinkit', 'Mumbai', 'Scooter',  92.00, true, 0.68, true),
+  ('demo.review03@synthetic.covara.dev', 'DEMO9 REVIEW03', '+919900000006', 'POL-DEMO9-REVIEW03', 'Porter',  'Mumbai', 'Bike',     88.00, true, 0.64, false),
+  ('demo.fraud01@synthetic.covara.dev',  'DEMO9 FRAUD01',  '+919900000007', 'POL-DEMO9-FRAUD01',  'Swiggy',  'Mumbai', 'Bike',     90.00, false, 0.42, false),
+  ('demo.fraud02@synthetic.covara.dev',  'DEMO9 FRAUD02',  '+919900000008', 'POL-DEMO9-FRAUD02',  'Zomato',  'Mumbai', 'Scooter',  86.00, false, 0.36, false),
+  ('demo.fraud03@synthetic.covara.dev',  'DEMO9 FRAUD03',  '+919900000009', 'POL-DEMO9-FRAUD03',  'Blinkit', 'Mumbai', 'Cycle',    82.00, false, 0.31, false)
 on conflict (email) do update
 set full_name = excluded.full_name,
     phone = excluded.phone,
-    policy_id = excluded.policy_id;
+    policy_id = excluded.policy_id,
+    platform_name = excluded.platform_name,
+    city = excluded.city,
+    vehicle_type = excluded.vehicle_type,
+    avg_hourly_income_inr = excluded.avg_hourly_income_inr,
+    bank_verified = excluded.bank_verified,
+    trust_score = excluded.trust_score,
+    gps_consent = excluded.gps_consent;
 
 create temporary table if not exists tmp_demo9_target_ids (
   id uuid primary key
@@ -212,6 +238,12 @@ do $$
 declare
   rec record;
   v_zone_id uuid;
+  v_daily_orders_base integer;
+  v_daily_hours_base numeric;
+  v_daily_gps_base numeric;
+  v_streak_coins integer;
+  v_claim_coins integer;
+  v_redeem_coins integer;
 begin
   select z.id
   into v_zone_id
@@ -226,7 +258,14 @@ begin
       e.email,
       e.full_name,
       e.phone,
-      e.policy_id
+      e.policy_id,
+      e.platform_name,
+      e.city,
+      e.vehicle_type,
+      e.avg_hourly_income_inr,
+      e.bank_verified,
+      e.trust_score,
+      e.gps_consent
     from tmp_demo9_emails e
     join auth.users u on lower(u.email) = lower(e.email)
   loop
@@ -253,14 +292,14 @@ begin
     )
     values (
       rec.profile_id,
-      'Swiggy',
-      'Mumbai',
+      rec.platform_name,
+      rec.city,
       v_zone_id,
-      'Bike',
-      95.00,
-      true,
-      0.88,
-      true
+      rec.vehicle_type,
+      rec.avg_hourly_income_inr,
+      rec.bank_verified,
+      rec.trust_score,
+      rec.gps_consent
     )
     on conflict (profile_id) do update
     set platform_name = excluded.platform_name,
@@ -306,6 +345,128 @@ begin
         activated_at = excluded.activated_at,
         valid_until = excluded.valid_until,
         updated_at = excluded.updated_at;
+
+    if rec.email like 'demo.auto%' then
+      v_daily_orders_base := 26;
+      v_daily_hours_base := 9.0;
+      v_daily_gps_base := 0.95;
+      v_streak_coins := 120;
+      v_claim_coins := 60;
+      v_redeem_coins := -25;
+    elsif rec.email like 'demo.review%' then
+      v_daily_orders_base := 17;
+      v_daily_hours_base := 7.2;
+      v_daily_gps_base := 0.78;
+      v_streak_coins := 70;
+      v_claim_coins := 35;
+      v_redeem_coins := -30;
+    else
+      v_daily_orders_base := 9;
+      v_daily_hours_base := 5.8;
+      v_daily_gps_base := 0.48;
+      v_streak_coins := 25;
+      v_claim_coins := 12;
+      v_redeem_coins := -20;
+    end if;
+
+    insert into public.worker_shifts (
+      worker_profile_id,
+      shift_date,
+      shift_start,
+      shift_end,
+      zone_id
+    )
+    values
+      (
+        rec.profile_id,
+        current_date,
+        now() - interval '3 hour',
+        now() + interval '4 hour',
+        v_zone_id
+      ),
+      (
+        rec.profile_id,
+        current_date - 1,
+        date_trunc('day', now() - interval '1 day') + interval '10 hour',
+        date_trunc('day', now() - interval '1 day') + interval '19 hour',
+        v_zone_id
+      );
+
+    insert into public.platform_worker_daily_stats (
+      worker_profile_id,
+      stat_date,
+      active_hours,
+      completed_orders,
+      accepted_orders,
+      cancelled_orders,
+      gross_earnings_inr,
+      platform_login_minutes,
+      gps_consistency_score
+    )
+    select
+      rec.profile_id,
+      (current_date - gs.day_offset)::date,
+      greatest(3.5::numeric, v_daily_hours_base - (gs.day_offset * 0.25)),
+      greatest(0, v_daily_orders_base - (gs.day_offset * 2)),
+      greatest(0, (v_daily_orders_base - (gs.day_offset * 2)) + 3),
+      case
+        when rec.email like 'demo.fraud%' then 3 + gs.day_offset
+        else 1 + (gs.day_offset / 2)
+      end,
+      round(
+        greatest(0, v_daily_orders_base - (gs.day_offset * 2))
+        * rec.avg_hourly_income_inr
+        * 0.55,
+        2
+      ),
+      round(
+        greatest(
+          210::numeric,
+          (v_daily_hours_base - (gs.day_offset * 0.25)) * 60
+        )
+      )::integer,
+      greatest(
+        0.18::numeric,
+        least(
+          0.99::numeric,
+          v_daily_gps_base - (gs.day_offset * 0.015)
+        )
+      )
+    from generate_series(0, 6) as gs(day_offset);
+
+    insert into public.coins_ledger (
+      profile_id,
+      activity,
+      coins,
+      description,
+      reference_id,
+      created_at
+    )
+    values
+      (
+        rec.profile_id,
+        'weekly_streak_bonus',
+        v_streak_coins,
+        'DEMO9 seeded weekly streak bonus',
+        rec.policy_id || ':streak',
+        now() - interval '3 days'
+      ),
+      (
+        rec.profile_id,
+        'claim_settlement_bonus',
+        v_claim_coins,
+        'DEMO9 seeded claim settlement reward',
+        rec.policy_id || ':claim',
+        now() - interval '2 days'
+      ),
+      (
+        rec.profile_id,
+        'partner_perk_redemption',
+        v_redeem_coins,
+        'DEMO9 seeded partner perk redemption',
+        rec.policy_id || ':redeem',
+        now() - interval '1 day'
+      );
   end loop;
 end $$;
 

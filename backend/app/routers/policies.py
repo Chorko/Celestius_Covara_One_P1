@@ -142,7 +142,27 @@ async def activate_policy(
     plan_details = PLAN_DEFINITIONS[body.plan]
     weekly_benefit = float(plan_details["weekly_benefit_cap_inr"])
     weekly_premium = float(plan_details["weekly_premium_inr"])
-    policy_id = f"POL-{user['id'][:8]}-{now.strftime('%Y%m%d%H%M%S')}"
+
+    # Prefer updating an existing active policy for this worker to avoid
+    # creating duplicate active rows across re-activations.
+    existing_policy_id = None
+    try:
+        existing_resp = (
+            sb.table("policies")
+            .select("policy_id")
+            .eq("worker_profile_id", user["id"])
+            .eq("status", "active")
+            .order("updated_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        existing_rows = existing_resp.data or []
+        if existing_rows:
+            existing_policy_id = existing_rows[0].get("policy_id")
+    except Exception:
+        existing_policy_id = None
+
+    policy_id = existing_policy_id or f"POL-{user['id'][:8]}-{now.strftime('%Y%m%d%H%M%S')}"
 
     worker_resp = (
         sb.table("worker_profiles")
@@ -169,7 +189,7 @@ async def activate_policy(
 
     try:
         resp = sb.table("policies").upsert(
-            policy_row, on_conflict="worker_profile_id"
+            policy_row, on_conflict="policy_id"
         ).execute()
         persisted = resp.data[0] if resp.data else policy_row
     except Exception as exc:

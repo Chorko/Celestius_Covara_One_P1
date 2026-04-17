@@ -250,7 +250,7 @@ async def initiate_payout_for_claim(
     sb,
     *,
     claim_id: str,
-    initiated_by_profile_id: str,
+    initiated_by_profile_id: str | None,
     trigger_source: str,
     request_id: str | None = None,
     force_retry: bool = False,

@@ -242,7 +242,10 @@ async def _find_eligible_workers(
         try:
             profile_resp = (
                 sb.table("worker_profiles")
-                .select("profile_id, avg_hourly_income_inr, platform_name, city, trust_score")
+                .select(
+                    "profile_id, avg_hourly_income_inr, platform_name, city, trust_score, "
+                    "gps_consent, bank_verified"
+                )
                 .eq("profile_id", worker_id)
                 .maybe_single()
                 .execute()
@@ -250,6 +253,8 @@ async def _find_eligible_workers(
             profile = profile_resp.data or {}
         except Exception:
             profile = {}
+
+        stats_summary = await _get_recent_worker_stats_summary(sb, worker_id)
 
         # Build context for claim pipeline
         eligible.append({
@@ -260,6 +265,11 @@ async def _find_eligible_workers(
             "platform": profile.get("platform_name", ""),
             "city": profile.get("city", ""),
             "trust_score": profile.get("trust_score", 0.75),
+            "gps_consent": bool(profile.get("gps_consent", True)),
+            "bank_verified": bool(profile.get("bank_verified", False)),
+            "active_days": stats_summary["active_days"],
+            "avg_daily_orders": stats_summary["avg_daily_orders"],
+            "gps_consistency_score": stats_summary["gps_consistency_score"],
         })
 
     return eligible
@@ -345,6 +355,60 @@ async def _get_recent_zone_activity_context(
     return zone_delivery_counts, last_zone_activity_timestamp, last_zone_activity_zone_id
 
 
+async def _get_recent_worker_stats_summary(
+    sb,
+    worker_id: str,
+    days_lookback: int = 14,
+) -> dict[str, float | int]:
+    """
+    Build a lightweight behavioral summary from daily stats for fraud/scoring realism.
+    """
+    lookback_date = (datetime.now(timezone.utc) - timedelta(days=days_lookback)).date().isoformat()
+
+    try:
+        stats_resp = (
+            sb.table("platform_worker_daily_stats")
+            .select("stat_date,completed_orders,gps_consistency_score")
+            .eq("worker_profile_id", worker_id)
+            .gte("stat_date", lookback_date)
+            .order("stat_date", desc=True)
+            .limit(days_lookback)
+            .execute()
+        )
+        stats = stats_resp.data or []
+    except Exception:
+        stats = []
+
+    if not stats:
+        return {
+            "active_days": 4,
+            "avg_daily_orders": 3,
+            "gps_consistency_score": 0.78,
+        }
+
+    active_days = sum(1 for row in stats if int(row.get("completed_orders") or 0) > 0)
+    if active_days <= 0:
+        active_days = min(len(stats), 3)
+
+    completed_orders = [int(row.get("completed_orders") or 0) for row in stats]
+    avg_daily_orders = round(sum(completed_orders) / max(1, len(completed_orders)))
+    if avg_daily_orders <= 0:
+        avg_daily_orders = 1
+
+    gps_scores = [
+        float(row.get("gps_consistency_score"))
+        for row in stats
+        if row.get("gps_consistency_score") is not None
+    ]
+    gps_consistency_score = round(sum(gps_scores) / len(gps_scores), 4) if gps_scores else 0.75
+
+    return {
+        "active_days": int(active_days),
+        "avg_daily_orders": int(avg_daily_orders),
+        "gps_consistency_score": float(gps_consistency_score),
+    }
+
+
 async def _process_worker_claim(
     sb,
     worker: dict,
@@ -379,13 +443,21 @@ async def _process_worker_claim(
 
         worker_context = {
             "worker_id": worker_id,
-            "active_days": 6,
+            "active_days": max(1, int(worker.get("active_days", 4))),
             "shift_overlap_ratio": worker.get("shift_overlap_ratio", 0.8),
-            "orders_before_disruption": 3,
+            "orders_before_disruption": max(1, int(worker.get("avg_daily_orders", 3))),
             "prior_claim_rate": 0.0,
-            "gps_consistency_score": 0.85,
+            "gps_consistency_score": float(
+                worker.get(
+                    "gps_consistency_score",
+                    0.88 if worker.get("gps_consent", True) else 0.45,
+                )
+            ),
             "avg_hourly_income_inr": worker.get("avg_hourly_income", 150),
             "trust_score": worker.get("trust_score", 0.75),
+            "bank_verified": bool(worker.get("bank_verified", False)),
+            "accessibility_score": 1.0 if worker.get("gps_consent", True) else 0.78,
+            "zone_id": claim_zone_id,
             "zone_delivery_counts": zone_delivery_counts,
             "last_zone_activity_timestamp": last_zone_activity_timestamp,
             "last_zone_activity_zone_id": last_zone_activity_zone_id,

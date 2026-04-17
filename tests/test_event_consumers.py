@@ -96,8 +96,9 @@ class _StateSB:
 
 class TestEventConsumerDispatch:
     @patch("backend.app.services.event_bus.consumer_dispatch.consume_idempotently")
-    def test_dispatch_claim_auto_processed_invokes_two_consumers(self, mock_consume):
+    def test_dispatch_claim_auto_processed_invokes_three_consumers(self, mock_consume):
         mock_consume.side_effect = [
+            {"processed": True, "reason": "succeeded"},
             {"processed": True, "reason": "succeeded"},
             {"processed": False, "reason": "already_succeeded"},
         ]
@@ -116,10 +117,10 @@ class TestEventConsumerDispatch:
 
         result = asyncio.run(dispatch_event_to_consumers(_DummySB(), event))
 
-        assert result["consumers"] == 2
-        assert result["processed"] == 1
+        assert result["consumers"] == 3
+        assert result["processed"] == 2
         assert result["skipped"] == 1
-        assert len(result["results"]) == 2
+        assert len(result["results"]) == 3
 
     def test_dispatch_unknown_event_type_noop(self):
         event = DomainEvent(
