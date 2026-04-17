@@ -18,6 +18,9 @@ This folder is split into active scripts and archive scripts.
   Run only if
   `public.persist_claim_with_outbox(jsonb,jsonb,text,text,text,jsonb)`
   is missing or mismatched in a post-run environment.
+  Includes governance-aware version-id persistence when RuleOps/ModelOps
+  columns/functions are present, while remaining compatible with older
+  schemas that do not yet include migration 22 columns.
 
 1. `06_synthetic_seed.sql`
   Demo baseline seed set.
@@ -43,6 +46,33 @@ This folder is split into active scripts and archive scripts.
   Provisions 200 login-capable synthetic auth users via Supabase Admin API.
   Run with: `python scripts/provision_login_ready_workers_200.py --apply`
 
+1. `20_security_schema_sync.sql`
+  Idempotent security/schema sync patch for already-provisioned environments
+  (R11 reference source backfill, storage bucket privacy hardening,
+  positive payout amount constraint, worker trust default,
+  `manual_claims.updated_at` trigger/index).
+
+1. `21_3month_history_seed.sql` (optional but recommended for demos)
+  Extends synthetic worker history to 90 days in
+  `platform_worker_daily_stats` and adds historical `coins_ledger`
+  activity so analytics/rewards dashboards have realistic trailing-window
+  depth.
+
+1. `22_rule_model_version_governance.sql`
+  Adds `rule_versions` / `model_versions` registries, rollout metadata
+  (full/canary/cohort), and persists version IDs on claim + review
+  decision paths for replayable governance.
+
+1. `23_current_user_role_rls_hardening.sql`
+  Restores `public.current_user_role()` as `SECURITY DEFINER` with
+  stable `search_path`, preventing RLS policy recursion in environments
+  where the helper function drifted.
+
+1. `24_trust_score_history.sql`
+  Adds durable trust score lifecycle history (`trust_score_history`) with
+  worker/admin read policies and service-role write access for auditable
+  trust changes tied to claim decisions.
+
 1. `backend/sql/helpers/08_fix_demo_auth_users.sql` (repair helper)
   Use only if demo logins return Supabase Auth 500 errors.
   Run cleanup SQL once, then run
@@ -63,6 +93,21 @@ backend/sql/16_synthetic_seed_200.sql
 # Required for 200 login-ready synthetic workers
 python scripts/provision_login_ready_workers_200.py --apply
 backend/sql/19_login_ready_workers_200.sql
+
+# Recommended schema/data hardening
+backend/sql/20_security_schema_sync.sql
+
+# Recommended analytics/rewards depth (90-day trailing history)
+backend/sql/21_3month_history_seed.sql
+
+# Recommended governance hardening (RuleOps / ModelOps)
+backend/sql/22_rule_model_version_governance.sql
+
+# Recommended auth-policy recursion hardening
+backend/sql/23_current_user_role_rls_hardening.sql
+
+# Recommended trust lifecycle auditability
+backend/sql/24_trust_score_history.sql
 
 # Optional RPC repair (only if needed)
 backend/sql/02_rpc_postrun_hotfix_2026_04_12.sql

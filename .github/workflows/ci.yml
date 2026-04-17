@@ -1,18 +1,22 @@
 # ═══════════════════════════════════════════════════════════════════════
 # Covara One — CI/CD Pipeline (GitHub Actions)
 #
-# Triggers: push to main/develop, PRs to main
+# Triggers: push to all branches, PRs to main
 # Jobs:
-#   1. lint-and-test  — Python syntax check + pytest + frontend build
-#   2. docker-build   — Build & validate Docker images (no push)
-#   3. security-scan  — Dependency audit for both Python & Node
+#   1. backend-validation  — Python syntax + full test suite + contract guardrails
+#   2. frontend-validation — Frontend env validation + lint + type-check + build
+#   3. mobile-validation   — Mobile env validation + type-check
+#   4. e2e-api-flow-gate  — API flow simulation + runtime HTTP smoke
+#   5. docker-build        — Build & validate Docker images (no push)
+#   6. security-scan       — Dependency audits for Python + Node
 # ═══════════════════════════════════════════════════════════════════════
 
 name: Covara One CI/CD
 
 on:
   push:
-    branches: [main, develop, ui-overhaul]
+    branches:
+      - "**"
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -29,9 +33,9 @@ env:
   NODE_VERSION: "22"
 
 jobs:
-  # ── Job 1: Lint, Type-Check, Test ─────────────────────────────────
-  lint-and-test:
-    name: Release Safety Gates
+  # ── Job 1: Backend Validation ──────────────────────────────────────
+  backend-validation:
+    name: Backend Validation
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -90,14 +94,27 @@ jobs:
       - name: Deployment manifest guardrail tests
         run: python -m pytest tests/test_deployment_manifests.py -q
 
+      - name: Docker Compose render check
+        run: |
+          touch .env
+          docker compose --env-file .env.example config > /tmp/covara-compose-rendered.yml
+
+  # ── Job 2: Frontend Validation ─────────────────────────────────────
+  frontend-validation:
+    name: Frontend Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Set up Node.js ${{ env.NODE_VERSION }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
-          cache-dependency-path: |
-            frontend/package-lock.json
-            mobile/package-lock.json
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install frontend dependencies
         working-directory: frontend
@@ -127,6 +144,23 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: test-key
           NEXT_PUBLIC_API_URL: /api
 
+  # ── Job 3: Mobile Validation ───────────────────────────────────────
+  mobile-validation:
+    name: Mobile Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
       - name: Install mobile dependencies
         working-directory: mobile
         run: npm ci
@@ -144,16 +178,87 @@ jobs:
         working-directory: mobile
         run: npm run typecheck
 
-      - name: Docker Compose render check
-        run: |
-          touch .env
-          docker compose --env-file .env.example config > /tmp/covara-compose-rendered.yml
+  # ── Job 4: E2E API Flow Gate ───────────────────────────────────────
+  e2e-api-flow-gate:
+    name: E2E API Flow Gate
+    runs-on: ubuntu-latest
+    needs: [backend-validation]
+    timeout-minutes: 20
 
-  # ── Job 2: Docker Build Validation ─────────────────────────────────
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: E2E flow simulation tests
+        run: |
+          python -m pytest \
+            tests/test_claims_review_workflow.py \
+            tests/test_payout_workflow.py \
+            tests/test_events_router.py \
+            tests/test_ops_router.py \
+            tests/test_policies_router.py \
+            tests/test_auto_claim_engine.py \
+            tests/test_version_governance.py \
+            -v --tb=short --no-header
+        env:
+          APP_ENV: test
+          STRICT_ENV_VALIDATION: "false"
+          NEXT_PUBLIC_SUPABASE_URL: https://test.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: test-key
+          SUPABASE_URL: https://test.supabase.co
+          SUPABASE_ANON_KEY: test-key
+          SUPABASE_SERVICE_ROLE_KEY: test-service-key
+          DEVICE_CONTEXT_HMAC_SECRET: test-device-secret
+          PAYOUT_PROVIDER_WEBHOOK_SECRET: test-payout-webhook-secret
+
+      - name: Start backend runtime (local e2e smoke)
+        run: |
+          nohup uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 > /tmp/covara-backend.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8000/health > /tmp/health.json; then
+              echo "Backend is up";
+              exit 0;
+            fi
+            sleep 2
+          done
+          echo "Backend failed to start"
+          cat /tmp/covara-backend.log || true
+          exit 1
+        env:
+          APP_ENV: test
+          STRICT_ENV_VALIDATION: "false"
+          NEXT_PUBLIC_SUPABASE_URL: https://test.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: test-key
+          SUPABASE_URL: https://test.supabase.co
+          SUPABASE_ANON_KEY: test-key
+          SUPABASE_SERVICE_ROLE_KEY: test-service-key
+          DEVICE_CONTEXT_HMAC_SECRET: test-device-secret
+          PAYOUT_PROVIDER_WEBHOOK_SECRET: test-payout-webhook-secret
+          EVENT_BUS_BACKEND: inmemory
+          EVENT_OUTBOX_RELAY_ENABLED: "true"
+          EVENT_CONSUMER_ENABLED: "false"
+
+      - name: Runtime HTTP e2e gate
+        run: python scripts/ci_e2e_gate.py --base-url http://127.0.0.1:8000
+
+      - name: Dump backend logs on failure
+        if: failure()
+        run: cat /tmp/covara-backend.log || true
+
+  # ── Job 5: Docker Build Validation ─────────────────────────────────
   docker-build:
     name: Docker Build
     runs-on: ubuntu-latest
-    needs: lint-and-test
+    needs: [backend-validation, frontend-validation, mobile-validation, e2e-api-flow-gate]
     timeout-minutes: 15
 
     steps:
@@ -186,11 +291,11 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # ── Job 3: Security Audit ──────────────────────────────────────────
+  # ── Job 6: Security Audit ──────────────────────────────────────────
   security-scan:
     name: Security Audit
     runs-on: ubuntu-latest
-    needs: lint-and-test
+    needs: [backend-validation, frontend-validation]
     timeout-minutes: 5
 
     steps:

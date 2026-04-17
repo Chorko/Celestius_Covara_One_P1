@@ -116,7 +116,7 @@ async def simulate_trigger(body: SimulateTriggerRequest):
 
     started_at = body.started_at
     if not started_at:
-        started_at = datetime.utcnow().isoformat() + "Z"
+        started_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
     ins_data = {
         "city": body.city,

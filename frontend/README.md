@@ -133,7 +133,7 @@ const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/endpoint`, {
 | Consumer status | `GET /events/consumers/status` |
 | Consumer dead-letter list/requeue | `GET /events/consumers/dead-letter`, `POST /events/consumers/dead-letter/requeue` |
 | Live trigger feed | `GET /triggers/live` |
-| Mock trigger injection | `POST /triggers/inject` |
+| Mock trigger injection | `POST /triggers/simulate` |
 
 
 ## April 2026 Repo Update Addendum

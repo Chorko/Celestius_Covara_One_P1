@@ -113,12 +113,18 @@ test_venv*/
 # Antigravity / Gemini IDE
 # ==========================
 .gemini/
+supabase/.temp/
 
 # ==========================
 # Obsidian Knowledge Vault
 # ==========================
 .obsidian/
 *.canvas
+
+# ==========================
+# Local Postman Workspace State
+# ==========================
+.postman/
 
 # ==========================
 # Keep env template (not secrets)

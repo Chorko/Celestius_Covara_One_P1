@@ -10,6 +10,7 @@ Handles:
 
 import logging
 from datetime import datetime, timezone
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
@@ -33,6 +34,11 @@ from backend.app.services.review_workflow import (
     TERMINAL_CLAIM_STATUSES,
     build_review_meta,
     compute_review_due_at,
+)
+from backend.app.services.trust_service import apply_trust_score_delta
+from backend.app.services.version_governance import (
+    attach_version_context,
+    resolve_decision_versions,
 )
 from backend.app.rate_limit import limiter
 import httpx
@@ -60,6 +66,24 @@ class AssignClaimRequest(BaseModel):
     reviewer_profile_id: str | None = None
     due_in_hours: int | None = None
     assignment_note: str | None = None
+
+
+class TrustAdjustmentResponse(BaseModel):
+    history_id: str | None = None
+    worker_profile_id: str
+    previous_trust_score: float
+    delta: float
+    new_trust_score: float
+    event_type: str
+
+
+class AdminReviewResponse(BaseModel):
+    status: str
+    claim_id: str
+    decision: str
+    assignment_state: str | None = None
+    trust_adjustment: TrustAdjustmentResponse | None = None
+    payout: dict[str, Any] | None = None
 
 
 def _now_iso() -> str:
@@ -143,6 +167,33 @@ def _extract_device_trust_from_payout_row(payout_row: dict | None) -> dict | Non
         "attestation_verdict": fraud_layers.get("attestation_verdict"),
         "risk_signals": device_flags if isinstance(device_flags, list) else [],
     }
+
+
+def _review_trust_rule(decision: str) -> tuple[float, str] | None:
+    rule_map = {
+        "approve": (0.02, "review_approved"),
+        "hold": (-0.02, "review_held"),
+        "escalate": (-0.05, "review_escalated"),
+        "reject": (-0.10, "review_rejected"),
+    }
+    return rule_map.get((decision or "").strip().lower())
+
+
+def _normalize_trust_adjustment_payload(raw_payload: dict | None) -> dict[str, Any] | None:
+    if not isinstance(raw_payload, dict):
+        return None
+
+    try:
+        return {
+            "history_id": raw_payload.get("history_id"),
+            "worker_profile_id": str(raw_payload["worker_profile_id"]),
+            "previous_trust_score": float(raw_payload["previous_trust_score"]),
+            "delta": float(raw_payload["delta"]),
+            "new_trust_score": float(raw_payload["new_trust_score"]),
+            "event_type": str(raw_payload["event_type"]),
+        }
+    except (KeyError, TypeError, ValueError):
+        return None
 
 
 @router.post("")
@@ -323,6 +374,13 @@ async def submit_claim(
     }
     pipeline_result["device_trust"] = trust_summary
 
+    version_context = resolve_decision_versions(
+        sb=sb,
+        worker_profile_id=str(user.get("id") or ""),
+        cohort_key=str(worker_context.get("city") or ""),
+    )
+    attach_version_context(pipeline_result, version_context)
+
     # Build persistence rows
     initial_status = "submitted"
 
@@ -337,6 +395,8 @@ async def submit_claim(
         "claim_status": initial_status,
         "assignment_state": "unassigned",
         "review_due_at": compute_review_due_at(None, settings.review_sla_hours),
+        "rule_version_id": version_context["rule_version"].get("id"),
+        "model_version_id": version_context["model_version"].get("id"),
     }
 
     # Generate Admin Assistive AI Summary
@@ -375,6 +435,10 @@ async def submit_claim(
         "plan": body.plan,
         "device_context_present": bool(raw_device_context),
         "signature_verified": context_verification.verified,
+        "rule_version_id": version_context["rule_version"].get("id"),
+        "model_version_id": version_context["model_version"].get("id"),
+        "rule_version_key": version_context["rule_version"].get("key"),
+        "model_version_key": version_context["model_version"].get("key"),
         "request_id": request_id,
     }
 
@@ -758,7 +822,9 @@ async def assign_claim(
 
 
 @router.post(
-    "/{claim_id}/review", dependencies=[Depends(require_insurer_admin)]
+    "/{claim_id}/review",
+    dependencies=[Depends(require_insurer_admin)],
+    response_model=AdminReviewResponse,
 )
 async def admin_review_claim(
     claim_id: str,
@@ -773,7 +839,7 @@ async def admin_review_claim(
     claim_resp = (
         sb.table("manual_claims")
         .select(
-            "id, claimed_at, claim_status, assigned_reviewer_profile_id, assignment_state, assigned_at, first_reviewed_at, review_due_at"
+            "id, worker_profile_id, claimed_at, claim_status, assigned_reviewer_profile_id, assignment_state, assigned_at, first_reviewed_at, review_due_at, rule_version_id, model_version_id"
         )
         .eq("id", claim_id)
         .maybe_single()
@@ -790,12 +856,17 @@ async def admin_review_claim(
             detail="Claim is assigned to another reviewer.",
         )
 
+    review_rule_version_id = claim_row.get("rule_version_id")
+    review_model_version_id = claim_row.get("model_version_id")
+
     sb.table("claim_reviews").insert(
         {
             "claim_id": claim_id,
             "reviewer_profile_id": user["id"],
             "decision": body.decision,
             "decision_reason": body.decision_reason,
+            "rule_version_id": review_rule_version_id,
+            "model_version_id": review_model_version_id,
         }
     ).execute()
 
@@ -833,6 +904,49 @@ async def admin_review_claim(
 
     sb.table("manual_claims").update(claim_update).eq("id", claim_id).execute()
 
+    trust_adjustment = None
+    trust_rule = _review_trust_rule(body.decision)
+    worker_profile_id = claim_row.get("worker_profile_id")
+    if trust_rule and worker_profile_id:
+        delta, event_type = trust_rule
+        try:
+            raw_trust_adjustment = apply_trust_score_delta(
+                sb,
+                worker_profile_id=str(worker_profile_id),
+                delta=delta,
+                event_type=event_type,
+                claim_id=claim_id,
+                reason=body.decision_reason,
+                actor_profile_id=user["id"],
+                metadata={
+                    "decision": body.decision,
+                    "resulting_status": new_status,
+                    "assignment_state": claim_update.get("assignment_state"),
+                    "request_id": request_id,
+                },
+            )
+            trust_adjustment = _normalize_trust_adjustment_payload(raw_trust_adjustment)
+        except ValueError as e:
+            structured_log(
+                logger,
+                logging.INFO,
+                "claim.review.trust_adjustment_skipped",
+                request_id=request_id,
+                claim_id=claim_id,
+                decision=body.decision,
+                reason=str(e),
+            )
+        except Exception as e:
+            structured_log(
+                logger,
+                logging.WARNING,
+                "claim.review.trust_adjustment_failed",
+                request_id=request_id,
+                claim_id=claim_id,
+                decision=body.decision,
+                error=str(e),
+            )
+
     # Audit log (using new audit_events table)
     sb.table("audit_events").insert(
         {
@@ -844,6 +958,9 @@ async def admin_review_claim(
                 **body.model_dump(),
                 "assignment_state": claim_update.get("assignment_state"),
                 "review_due_at": claim_update.get("review_due_at"),
+                "rule_version_id": review_rule_version_id,
+                "model_version_id": review_model_version_id,
+                "trust_adjustment": trust_adjustment,
                 "request_id": request_id,
             },
         }
@@ -862,6 +979,8 @@ async def admin_review_claim(
                 "decision_reason": body.decision_reason,
                 "resulting_status": new_status,
                 "assignment_state": claim_update.get("assignment_state"),
+                "rule_version_id": review_rule_version_id,
+                "model_version_id": review_model_version_id,
                 "request_id": request_id,
             },
         )
@@ -922,6 +1041,7 @@ async def admin_review_claim(
         "claim_id": claim_id,
         "decision": body.decision,
         "assignment_state": claim_update.get("assignment_state"),
+        "trust_adjustment": trust_adjustment,
         "payout": payout_result,
     }
 
@@ -988,6 +1108,26 @@ async def flag_post_approval(
         fraud_severity=body.fraud_severity,
     )
 
+    trust_change = None
+    worker_id = claim_data.get("worker_profile_id")
+    if worker_id:
+        trust_change = apply_trust_score_delta(
+            sb,
+            worker_profile_id=str(worker_id),
+            delta=-float(penalty_result["penalty_applied"]),
+            event_type="post_approval_flag",
+            claim_id=claim_id,
+            severity=body.fraud_severity,
+            reason=body.reason,
+            actor_profile_id=user["id"],
+            metadata={
+                "legal_escalation": penalty_result["legal_escalation"],
+                "account_review": penalty_result["account_review"],
+                "request_id": request_id,
+            },
+        )
+        penalty_result["new_trust_score"] = trust_change["new_trust_score"]
+
     now_iso = _now_iso()
     # Update claim status to post_approval_flagged and close assignment loop.
     sb.table("manual_claims").update(
@@ -1000,13 +1140,6 @@ async def flag_post_approval(
             "last_reviewed_at": now_iso,
         }
     ).eq("id", claim_id).execute()
-
-    # Downgrade worker trust score
-    worker_id = claim_data.get("worker_profile_id")
-    if worker_id:
-        sb.table("worker_profiles").update(
-            {"trust_score": penalty_result["new_trust_score"]}
-        ).eq("profile_id", worker_id).execute()
 
     # Record the review
     sb.table("claim_reviews").insert(
@@ -1056,6 +1189,7 @@ async def flag_post_approval(
         "claim_id": claim_id,
         "fraud_severity": body.fraud_severity,
         "trust_score_penalty": penalty_result,
+        "trust_history_id": trust_change.get("history_id") if trust_change else None,
     }
 
 

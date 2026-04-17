@@ -43,6 +43,7 @@
 | Payout safety & idempotency | ✅ Implemented | Event-ID uniqueness, worker-event constraint, duplicate prevention |
 | Claim state machine | ✅ Implemented | 8 states: submitted → auto_approved / soft_hold / fraud_escalated → paid |
 | Post-approval fraud controls | ✅ Implemented | Flag endpoint, trust score downgrade, severity-graded penalties |
+| Trust score history ledger | ✅ Implemented | `trust_score_history` table + worker/admin API visibility for lifecycle audit, including normalized review-decision trust events (approve/hold/escalate/reject) |
 | Region validation cache | ✅ Implemented | Validated-incident fast-lane with liquidity protection |
 | Supabase Auth & RLS | ✅ Implemented | Google OAuth, role-based routing, Row-Level Security |
 | Edge SSR Middleware | ✅ Implemented | Next.js `middleware.ts` — server-side auth before hydration |
@@ -53,6 +54,7 @@
 | Twilio WhatsApp + OTP | ✅ Implemented | 7 notification templates + Verify OTP (sandboxed) |
 | Redis caching layer | ✅ Implemented | fastapi-cache2[redis] with TTL decorators on high-frequency endpoints |
 | Observability baseline | ✅ Implemented | Request/correlation IDs, structured logs, in-memory ops metrics, readiness + ops status endpoints |
+| RuleOps / ModelOps governance | ✅ Implemented | `rule_versions` + `model_versions`, canary/cohort rollout controls, and persisted version IDs on claim/review decisions |
 | ML live inference | ✅ Implemented | RF model trained + saved; live `predict_proba()` wired into claim pipeline |
 | DBSCAN fraud clustering | ✅ Implemented | Batch anomaly detection in `fraud_engine.py` |
 | Actuarial metrics (BCR / Loss Ratio) | ✅ Implemented | Admin dashboard + `/analytics/summary` endpoint |
@@ -100,7 +102,8 @@ The backend now exposes practical observability signals for staging and ops conf
 - Ops/readiness surfaces:
    - `GET /ready`: readiness checks for config, redis cache, outbox worker, and Kafka consumer requirements.
    - `GET /ops/metrics`: in-memory metrics snapshot.
-   - `GET /ops/status`: event bus status, review backlog/aging summary, payout status summary, runtime worker states, alert signals.
+   - `GET /ops/status`: event bus status, review backlog/aging summary, payout status summary, runtime worker states, alert signals, and SLO breach signals with runbook actions.
+   - `GET /ops/slo`: dedicated SLO threshold and breach view for operational triage.
 
 ### Planned Migrations (Post-Approval)
 

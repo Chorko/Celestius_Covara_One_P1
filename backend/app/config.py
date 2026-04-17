@@ -91,6 +91,37 @@ class Settings:
         os.getenv("EVENT_CONSUMER_MAX_ATTEMPTS", "5")
     )
 
+    # Ops SLO thresholds (used by /ops/status and /ops/slo surfaces)
+    ops_slo_outbox_dead_letter_max: int = int(
+        os.getenv("OPS_SLO_OUTBOX_DEAD_LETTER_MAX", "0")
+    )
+    ops_slo_consumer_dead_letter_max: int = int(
+        os.getenv("OPS_SLO_CONSUMER_DEAD_LETTER_MAX", "0")
+    )
+    ops_slo_review_overdue_max: int = int(
+        os.getenv("OPS_SLO_REVIEW_OVERDUE_MAX", "10")
+    )
+    ops_slo_review_unassigned_max: int = int(
+        os.getenv("OPS_SLO_REVIEW_UNASSIGNED_MAX", "20")
+    )
+    ops_slo_payout_failures_max: int = int(
+        os.getenv("OPS_SLO_PAYOUT_FAILURES_MAX", "0")
+    )
+    ops_slo_payout_manual_review_max: int = int(
+        os.getenv("OPS_SLO_PAYOUT_MANUAL_REVIEW_MAX", "25")
+    )
+
+    # Rule/model governance defaults (used when registry tables are unavailable)
+    default_rule_version_key: str = os.getenv(
+        "DEFAULT_RULE_VERSION_KEY", "ruleset_2026_04_12"
+    )
+    default_model_version_key: str = os.getenv(
+        "DEFAULT_MODEL_VERSION_KEY", "fraud_model_heuristic_v1"
+    )
+    version_rollout_subject_salt: str = os.getenv(
+        "VERSION_ROLLOUT_SUBJECT_SALT", "covara-rollout"
+    )
+
     # Review workflow SLA controls
     review_sla_hours: int = int(os.getenv("REVIEW_SLA_HOURS", "24"))
     review_sla_due_soon_hours: int = int(

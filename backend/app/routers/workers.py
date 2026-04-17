@@ -6,10 +6,14 @@ CRUD for worker profiles. Used by:
 - Insurer app (view worker records, read-only)
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from backend.app.dependencies import require_worker, require_insurer_admin
 from backend.app.supabase_client import get_supabase_admin
+from backend.app.services.trust_service import (
+    get_worker_trust_score,
+    list_worker_trust_history,
+)
 
 router = APIRouter(prefix="/workers", tags=["Workers"])
 
@@ -45,6 +49,30 @@ async def get_my_worker_profile(user: dict = Depends(require_worker)):
             status_code=404, detail="Worker profile not found."
         )
     return data
+
+
+@router.get("/me/trust-history")
+async def get_my_trust_history(
+    limit: int = Query(50, ge=1, le=200),
+    user: dict = Depends(require_worker),
+):
+    """Return trust lifecycle history for the authenticated worker."""
+    sb = get_supabase_admin()
+    worker_id = str(user["id"])
+
+    current_score = get_worker_trust_score(sb, worker_id)
+    history = list_worker_trust_history(
+        sb,
+        worker_profile_id=worker_id,
+        limit=limit,
+    )
+
+    return {
+        "worker_profile_id": worker_id,
+        "current_trust_score": current_score,
+        "count": len(history),
+        "history": history,
+    }
 
 
 @router.put("/me")
@@ -153,6 +181,28 @@ async def list_workers(
 
     resp = query.range(offset, offset + limit - 1).execute()
     return {"workers": resp.data, "count": len(resp.data)}
+
+
+@router.get("/{worker_id}/trust-history", dependencies=[Depends(require_insurer_admin)])
+async def get_worker_trust_history(
+    worker_id: str,
+    limit: int = Query(50, ge=1, le=200),
+):
+    """Return trust lifecycle history for a worker (admin view)."""
+    sb = get_supabase_admin()
+    current_score = get_worker_trust_score(sb, worker_id)
+    history = list_worker_trust_history(
+        sb,
+        worker_profile_id=worker_id,
+        limit=limit,
+    )
+
+    return {
+        "worker_profile_id": worker_id,
+        "current_trust_score": current_score,
+        "count": len(history),
+        "history": history,
+    }
 
 
 @router.get("/{worker_id}", dependencies=[Depends(require_insurer_admin)])

@@ -309,6 +309,47 @@ class TestPayoutWorkflow:
             labels={"reason": "webhook_signature_failed"},
         ) == 1
 
+    def test_webhook_rejects_missing_signature(self):
+        sb = _FakeSupabase(claim_status="approved", bank_verified=True)
+        sb.tables["payout_requests"].append(
+            {
+                "id": "payout-1",
+                "claim_id": "claim-1",
+                "worker_profile_id": "worker-1",
+                "provider_key": "simulated_gateway",
+                "provider_reference_id": "provider-ref-1",
+                "correlation_id": "corr-1",
+                "idempotency_key": "idem-1",
+                "status": "pending",
+                "retry_count": 0,
+            }
+        )
+
+        payload = {
+            "event_id": "evt-missing-signature",
+            "reference_id": "provider-ref-1",
+            "status": "settled",
+        }
+        body = json.dumps(payload).encode("utf-8")
+
+        with patch(
+            "backend.app.services.payout_workflow.get_payout_provider",
+            return_value=_StubProvider(signature_valid=False),
+        ):
+            result = asyncio.run(
+                ingest_settlement_webhook(
+                    sb,
+                    provider_key="simulated_gateway",
+                    payload_bytes=body,
+                    signature_header=None,
+                    source_ip="127.0.0.1",
+                )
+            )
+
+        assert result["status"] == "rejected"
+        assert result["signature_valid"] is False
+        assert sb.tables["payout_requests"][0]["status"] == "pending"
+
     def test_duplicate_webhook_event_id_is_idempotent(self):
         sb = _FakeSupabase(claim_status="approved", bank_verified=True)
         sb.tables["payout_requests"].append(

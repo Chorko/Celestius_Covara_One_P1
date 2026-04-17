@@ -472,7 +472,7 @@ flowchart TD
 | **Database** | Supabase Postgres, 14 tables, Row-Level Security | ✅ Live |
 | **ML** | scikit-learn Random Forest (live predict_proba), DBSCAN | ✅ Live |
 | **Infrastructure** | Docker multi-stage, GitHub Actions CI/CD, K8s manifests, Render | ✅ Deployed |
-| **Payments** | Stripe Test Mode (61 webhook events), provider-agnostic adapter | ✅ Live (Test) |
+| **Payments** | Stripe Test Mode (61 webhook events), provider-agnostic adapter | ✅ Test Mode |
 
 </div>
 
@@ -596,7 +596,7 @@ All external data sources used by the platform, consolidated with URLs and integ
 | 9 | **TomTom Snap-to-Roads** | [developer.tomtom.com/snap-to-roads](https://developer.tomtom.com/snap-to-roads-api/documentation/product-information/introduction) | GPS coordinate road-matching | Fraud detection — validates GPS is on real road | ✅ Live API |
 | 10 | **NewsAPI** | [newsapi.org](https://newsapi.org/) | Civic news, closures, strikes, curfews | T10–T11 civic closure triggers | ✅ Live API |
 | 11 | **Gemini API** (Google) | [ai.google.dev](https://ai.google.dev/) | AI narrative generation, SynthID watermark detection | Claim explanation + AI-image fraud detection | ✅ Live API |
-| 12 | **Sandbox.co.in** | [sandbox.co.in](https://sandbox.co.in/) | Aadhaar OTP, PAN, bank verification | Progressive KYC (Levels 2–4) | ✅ Integrated |
+| 12 | **Sandbox.co.in** | [sandbox.co.in](https://sandbox.co.in/) | Aadhaar OTP, PAN, bank verification | Progressive KYC (Levels 2–4) | ⚠️ Sandboxed (Postman Mock) |
 | 13 | **Twilio** | [twilio.com](https://www.twilio.com/) | WhatsApp templates, OTP verification | Claim notifications, worker alerts | ✅ Sandboxed |
 | 14 | **IRDAI Annual Reports** | [irdai.gov.in/annual-reports](https://www.irdai.gov.in/annual-reports) | Claim trends, market structure, micro-insurance caps | Pricing validation, regulatory compliance | 📚 Reference |
 | 15 | **IIB** (Insurance Information Bureau) | [iib.gov.in](https://iib.gov.in/) | Insurance analytics, fraud benchmarks | Risk analytics orientation | 📚 Reference |
@@ -606,7 +606,7 @@ All external data sources used by the platform, consolidated with URLs and integ
 | 19 | **DigiLocker** (MeitY) *(Planned)* | [digilocker.gov.in](https://www.digilocker.gov.in/) | Aadhaar, PAN, DL document verification | KYC Level 4+ upgrade | 📋 Planned |
 | 20 | **Stripe** | [stripe.com](https://stripe.com/) | Payment processing, payouts, webhook events | Payout settlement via provider adapter (61 events configured) | ✅ Test Mode |
 
-> **Legend:** ✅ Live/Integrated — 📚 Reference source — 📋 Planned integration
+> **Legend:** ✅ Live/Test Mode — ⚠️ Sandboxed/Mocked — 📚 Reference source — 📋 Planned integration
 
 ### Data Split
 
@@ -1124,6 +1124,7 @@ Fraud detection doesn't stop at the approval gate. Covara One provides controls 
 |---|---|---|
 | **Post-approval flag** | Admin flags a previously approved/paid claim | Claim status → `post_approval_flagged` |
 | **Trust score downgrade** | Graduated penalty applied | Future claims default to `soft_hold_verification` |
+| **Trust history ledger** | Every trust change is persisted with actor/reason metadata | Worker/admin trust timelines are queryable via API |
 | **Legal escalation** | Severe/critical fraud | Routed to compliance/platform risk team |
 | **Account review** | Critical fraud | Worker suspended pending investigation |
 
@@ -1135,6 +1136,8 @@ Fraud detection doesn't stop at the approval gate. Covara One provides controls 
 | Moderate (timing inconsistency) | −0.15 | Future claims reviewed |
 | Severe (coordinated fraud) | −0.30 | Legal escalation flag |
 | Critical (systematic abuse) | −0.50 | Full account review |
+
+Every trust penalty event is now persisted in `trust_score_history` so admins and workers can audit trust-score movement over time.
 
 ---
 
@@ -1320,45 +1323,6 @@ Instead of static screens, Covara One leverages a **Rewards & Coins System** tie
 ---
 
 
-## 🎬 Judge's Demo Walkthrough
-
-> Follow this exact sequence to reproduce the demo video in under 2 minutes.
-
-#### Step 1 — Login as Worker
-- Email: **`worker@demo.com`** · Password: **`demo1234`**
-- 👁️ See: 14-day earnings chart, Zone MU-WE-01 (Andheri-W), Active Essential plan
-
-#### Step 2 — Explore the Worker Dashboard
-- Rain alert badge visible for your zone
-- Your claim history shows 1 `auto_approved` + 1 `soft_hold_verification`
-- Click any claim → see the full 8-stage pipeline breakdown + Gemini AI narrative
-
-#### Step 3 — Switch to Admin View
-- Log out → log in as **`admin@demo.com`** / **`demo1234`**
-- 👁️ See: Live KPI cards (Burning Cost Rate, Loss Ratio, Fraud Detected)
-- Head to **Trigger Engine** → Fire `RAIN_HEAVY` for Mumbai
-
-#### Step 4 — ⚡ THE MAGIC MOMENT — Fire a Trigger
-1. Navigate to **Admin → Triggers**
-2. Select `RAIN_HEAVY` · City: `Mumbai` · Zone: `Andheri-W`
-3. Click **Inject Trigger**
-4. Watch the **Review Queue** populate automatically — zero worker action
-5. One claim auto-approves; another routes to `needs_review` (medium fraud score)
-
-#### Step 5 — Review a Claim
-- Click into a `needs_review` claim
-- See: Payout recommendation breakdown (B × S × E × C), Ghost Shift Detector scores
-- Read the **Gemini AI narrative** explaining why the claim is uncertain
-- Hit **Approve** — claim moves to `approved` → payout queued
-
-#### Step 6 — Show the Fraud Detection
-- Open the seeded **fraud claim** (Suresh / Bangalore, GPS in Delhi)
-- Evidence GPS: 28.63°N 77.22°E — **1,742 km** from claimed zone
-- Fraud score: 0.92 · Status: `rejected` · Integrity score: 0.15
-- This is DBSCAN + EXIF mismatch detection working in real data
-
----
-
 ### 🌱 Seeded Demo Data
 
 > The platform comes pre-loaded with 7 workers, 12 triggers, and 10 diverse claims — including 1 fraudulent submission with real GPS evidence mismatch.
@@ -1441,6 +1405,28 @@ cd frontend && npm install && npm run dev
 |:----:|:-----:|:--------:|:---------------|
 | 🛵 **Worker** | `worker@demo.com` | `demo1234` | Earnings chart, zone alerts, claim history, policy quotes |
 | 🏢 **Admin** | `admin@demo.com` | `demo1234` | KPI cards, BCR/Loss Ratio, review queue, trigger engine |
+
+### 🎯 Judge Demo Credentials (DEMO9 Synthetic Workers)
+
+For DEMO9 runbook validation, all 9 synthetic worker accounts share one password:
+
+- Password: `Covara#2026!`
+- Emails:
+    - `demo.auto01@synthetic.covara.dev`
+    - `demo.auto02@synthetic.covara.dev`
+    - `demo.auto03@synthetic.covara.dev`
+    - `demo.review01@synthetic.covara.dev`
+    - `demo.review02@synthetic.covara.dev`
+    - `demo.review03@synthetic.covara.dev`
+    - `demo.fraud01@synthetic.covara.dev`
+    - `demo.fraud02@synthetic.covara.dev`
+    - `demo.fraud03@synthetic.covara.dev`
+
+Use with runbook:
+
+- `TEMP_WILL_BE_DELETED/DEMO9_RUNBOOK.md`
+- Recovery helper SQL: `backend/sql/helpers/08c_fix_demo9_auth_users.sql`
+- User creation script: `scripts/create_demo9_auth_users.py --apply`
 
 > **Or use Docker:** `docker compose up` — brings up FastAPI + Next.js + Redis in one command
 
