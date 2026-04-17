@@ -122,7 +122,7 @@ class TestPoliciesRouter:
         assert body["weekly_premium_inr"] == 42
         assert body["zone_id"] == "zone-abc"
 
-        assert policies_table.last_on_conflict == "worker_profile_id"
+        assert policies_table.last_on_conflict == "policy_id"
         assert policies_table.last_row is not None
         assert policies_table.last_row["worker_profile_id"] == "worker-1"
         assert policies_table.last_row["plan_type"] == "plus"
