@@ -20,6 +20,8 @@ import { ClaimSubmissionError, type ClaimPlan } from "./src/types/claims";
 
 export default function App() {
   const [reason, setReason] = useState("");
+  const [place, setPlace] = useState("");
+  const [pincode, setPincode] = useState("");
   const [plan, setPlan] = useState<ClaimPlan>("essential");
   const [lat, setLat] = useState<number | undefined>();
   const [lng, setLng] = useState<number | undefined>();
@@ -58,6 +60,16 @@ export default function App() {
       return;
     }
 
+    if (!place.trim()) {
+      Alert.alert("Place required", "Please enter the place/zone name.");
+      return;
+    }
+
+    if (!/^\d{6}$/.test(pincode.trim())) {
+      Alert.alert("Invalid PIN code", "Please enter a valid 6-digit PIN code.");
+      return;
+    }
+
     setSubmitting(true);
     setResult("Submitting...");
 
@@ -73,6 +85,8 @@ export default function App() {
       const response = await submitSignedClaim({
         accessToken,
         claim_reason: reason.trim(),
+        place: place.trim(),
+        pincode: pincode.trim(),
         plan,
         stated_lat: lat,
         stated_lng: lng,
@@ -110,6 +124,26 @@ export default function App() {
             placeholderTextColor="#8D95A8"
             value={reason}
             onChangeText={setReason}
+          />
+
+          <Text style={styles.label}>Place / Zone</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="e.g. Andheri-W"
+            placeholderTextColor="#8D95A8"
+            value={place}
+            onChangeText={setPlace}
+          />
+
+          <Text style={styles.label}>PIN code</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="6-digit PIN code"
+            placeholderTextColor="#8D95A8"
+            value={pincode}
+            onChangeText={setPincode}
+            keyboardType="number-pad"
+            maxLength={6}
           />
 
           <Text style={styles.label}>Plan</Text>
