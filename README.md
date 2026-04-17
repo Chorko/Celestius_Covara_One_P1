@@ -1406,6 +1406,28 @@ cd frontend && npm install && npm run dev
 | 🛵 **Worker** | `worker@demo.com` | `demo1234` | Earnings chart, zone alerts, claim history, policy quotes |
 | 🏢 **Admin** | `admin@demo.com` | `demo1234` | KPI cards, BCR/Loss Ratio, review queue, trigger engine |
 
+### 🎯 Judge Demo Credentials (DEMO9 Synthetic Workers)
+
+For DEMO9 runbook validation, all 9 synthetic worker accounts share one password:
+
+- Password: `Covara#2026!`
+- Emails:
+    - `demo.auto01@synthetic.covara.dev`
+    - `demo.auto02@synthetic.covara.dev`
+    - `demo.auto03@synthetic.covara.dev`
+    - `demo.review01@synthetic.covara.dev`
+    - `demo.review02@synthetic.covara.dev`
+    - `demo.review03@synthetic.covara.dev`
+    - `demo.fraud01@synthetic.covara.dev`
+    - `demo.fraud02@synthetic.covara.dev`
+    - `demo.fraud03@synthetic.covara.dev`
+
+Use with runbook:
+
+- `TEMP_WILL_BE_DELETED/DEMO9_RUNBOOK.md`
+- Recovery helper SQL: `backend/sql/helpers/08c_fix_demo9_auth_users.sql`
+- User creation script: `scripts/create_demo9_auth_users.py --apply`
+
 > **Or use Docker:** `docker compose up` — brings up FastAPI + Next.js + Redis in one command
 
 ### 🐳 Docker Preflight
