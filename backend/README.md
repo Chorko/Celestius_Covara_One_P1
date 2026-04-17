@@ -162,6 +162,8 @@ flowchart TD
 |--------|----------|---------|--------|
 | `GET` | `/workers/profile` | Get worker profile with zone info | ✅ Implemented |
 | `GET` | `/workers/stats` | Get worker earnings stats (14-day chart) | ✅ Implemented |
+| `GET` | `/workers/me/trust-history` | Get worker trust-score lifecycle history | ✅ Implemented |
+| `GET` | `/workers/{worker_id}/trust-history` | Admin view of worker trust-score lifecycle history | ✅ Implemented |
 
 ### Policy Endpoints
 
@@ -175,12 +177,12 @@ flowchart TD
 | Method | Endpoint | Purpose | Status |
 |--------|----------|---------|--------|
 | `GET` | `/triggers/live` | Current active trigger events | ✅ Implemented |
-| `POST` | `/triggers/inject` | Inject mock trigger event (admin) | ✅ Implemented |
+| `POST` | `/triggers/simulate` | Inject mock trigger event (admin) | ✅ Implemented |
 | `POST` | `/claims` | Submit manual claim with evidence + plan | ✅ Implemented |
 | `GET` | `/claims` | List claims (worker=own, admin=all) | ✅ Implemented |
 | `GET` | `/claims/{id}` | Get claim detail, evidence, payout | ✅ Implemented |
 | `POST` | `/claims/{id}/review` | Admin review action on claim | ✅ Implemented |
-| `POST` | `/claims/{id}/flag` | Post-approval fraud flag + trust downgrade | ✅ Implemented |
+| `POST` | `/claims/{id}/flag` | Post-approval fraud flag + trust downgrade + trust-history ledger write | ✅ Implemented |
 
 ### Rewards & Gamification Endpoints
 
@@ -222,6 +224,7 @@ flowchart TD
 | **Image Forensics** | `image_forensics.py` | Evidence integrity: EXIF completeness, software/editor detection, timestamp chain-of-custody, GPS precision, camera-device consistency, AI detection stub (Gemini SynthID) |
 | **Region Controls** | `region_controls.py` | Behavioral identity: zone affinity, pre-trigger presence, dynamic trust penalties, zone volume monitoring, mass-claim throttling |
 | **Region Validation Cache** | `region_validation_cache.py` | Fast-lane eligibility checks, cluster spike liquidity protection, post-approval trust score penalties |
+| **Trust Lifecycle Service** | `trust_service.py` | Persist trust-score deltas with actor/reason metadata and query worker/admin trust history |
 | **Manual Verifier** | `manual_claim_verifier.py` | Evidence completeness and geo confidence for manual claims |
 | **Evidence Processing** | `evidence.py` | EXIF metadata extraction (forensic-grade: 10+ fields including Software, DateTimeDigitized, ModifyDate, Make, GPS precision) |
 | **Gemini Analysis** | `gemini_analysis.py` | AI-generated claim narrative for admin review |
@@ -234,6 +237,7 @@ flowchart TD
 |------|----------|
 | `00_unified_migration.sql` | **Single-file schema** — all 14+2 tables, RLS, auth triggers, storage policies, grants (idempotent) |
 | `06_synthetic_seed.sql` | 62KB seed: demo users, zones, trigger events, claims |
+| `24_trust_score_history.sql` | Trust-score lifecycle history ledger with RLS and worker/admin query support |
 
 > The schema is fully consolidated. Run `00_unified_migration.sql` in Supabase SQL Editor to bootstrap a fresh project.
 
@@ -268,6 +272,8 @@ flowchart TD
   malformed payload guards, and event_id integrity checks.
 - Claims route now verifies signed device context headers when provided,
   with backward-compatible behavior when headers are absent.
+- Trust-score lifecycle is now persisted in `trust_score_history` with
+    worker/admin history endpoints and post-approval flag integration.
 - OpenAPI generation script and contract tests are in place to detect route drift.
 - Rule/model version registry and rollout controls are now exposed via
     `/ops/version-governance` and `/ops/version-governance/activate`, with

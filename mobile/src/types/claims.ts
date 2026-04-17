@@ -2,6 +2,9 @@ export type ClaimPlan = "essential" | "plus";
 
 export interface SubmitClaimPayload {
   claim_reason: string;
+  place: string;
+  pincode: string;
+  city?: string;
   plan?: ClaimPlan;
   stated_lat?: number;
   stated_lng?: number;

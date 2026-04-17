@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
+import { backendPost, BackendApiError } from '@/lib/backendApi'
 import { Activity, PlayCircle, AlertTriangle, Zap, Radio, MapPin, Clock, Globe, Cpu } from 'lucide-react'
 
 interface Zone {
@@ -63,10 +64,31 @@ export default function AdminTriggers() {
   const handleSimulate = async (e: React.FormEvent) => {
     e.preventDefault(); setIsSimulating(true); setSimResult(null)
     try {
-      const { error } = await supabase.from('trigger_events').insert({ city: simForm.city, zone_id: simForm.zone_id || null, trigger_family: simForm.trigger_family, trigger_code: simForm.trigger_code, observed_value: Number(simForm.observed_value), severity_band: simForm.severity_band, source_type: 'mock', started_at: new Date().toISOString() })
-      setSimResult(error ? { ok: false, msg: error.message } : { ok: true, msg: 'Trigger injected successfully.' })
-    } catch (e: unknown) { setSimResult({ ok: false, msg: e instanceof Error ? e.message : 'Inject failed' }) }
-    setIsSimulating(false); await loadTriggers()
+      await backendPost<{ status: string }>(supabase, '/triggers/simulate', {
+        city: simForm.city,
+        zone_id: simForm.zone_id,
+        trigger_family: simForm.trigger_family,
+        trigger_code: simForm.trigger_code,
+        observed_value: Number(simForm.observed_value),
+        severity_band: simForm.severity_band,
+      })
+      setSimResult({ ok: true, msg: 'Trigger injected successfully.' })
+      await Promise.all([loadTriggers(), loadHistoryTriggers()])
+    } catch (e: unknown) {
+      if (e instanceof BackendApiError) {
+        if (e.status === 401) {
+          setSimResult({ ok: false, msg: 'Session expired. Please sign in again.' })
+        } else if (e.status === 403) {
+          setSimResult({ ok: false, msg: 'Insurer admin role required to inject triggers.' })
+        } else {
+          setSimResult({ ok: false, msg: e.detail })
+        }
+      } else {
+        setSimResult({ ok: false, msg: e instanceof Error ? e.message : 'Inject failed' })
+      }
+    } finally {
+      setIsSimulating(false)
+    }
   }
 
   const severityBadge = (b: string) => b === 'claim' ? 'badge-warning' : b === 'escalation' ? 'badge-danger' : 'badge-info'

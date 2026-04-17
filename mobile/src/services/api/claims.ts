@@ -21,6 +21,13 @@ function mapErrorMessage(status: number, detail: string): string {
     return "Device security validation failed. Please refresh location and retry.";
   }
 
+  if (
+    status === 400 &&
+    (detail.includes("Place is required") || detail.includes("Pincode is required"))
+  ) {
+    return "Select place and enter a valid 6-digit PIN code before submitting.";
+  }
+
   if (status === 401) {
     return "Session expired. Sign in again and retry claim submission.";
   }
@@ -60,6 +67,9 @@ export async function submitSignedClaim(
 
   const payload: SubmitClaimPayload = {
     claim_reason: input.claim_reason,
+    place: input.place,
+    pincode: input.pincode,
+    city: input.city,
     plan: input.plan ?? "essential",
     stated_lat: input.stated_lat,
     stated_lng: input.stated_lng,

@@ -11,6 +11,8 @@
 - Reliability hardening now includes outbox dead-letter + consumer dead-letter operational workflows with admin endpoints.
 - Added release/deployment hardening runbook at `docs/DEPLOYMENT_RELEASE_RUNBOOK.md`.
 - Added payout/event dead-letter recovery runbook at `docs/PAYOUT_EVENT_REQUEUE_RUNBOOK.md`.
+- Added one-pass release verification checklist at `docs/RELEASE_VERIFICATION_CHECKLIST.md`.
+- Trust lifecycle auditability is now live: trust-score history persistence and worker/admin history API visibility.
 
 ### New Docs Added
 
@@ -18,6 +20,7 @@
 - `docs/MOBILE_DEVICE_CONTEXT_CONTRACT.md` - signed header contract, replay controls, key rotation, and compatibility requirements.
 - `docs/DEPLOYMENT_RELEASE_RUNBOOK.md` - CI release gates, strict env validation, compose/k8s apply order, smoke checks, and rollback steps.
 - `docs/PAYOUT_EVENT_REQUEUE_RUNBOOK.md` - replay-safe dead-letter list/requeue flow, verification checklist, and escalation stop conditions.
+- `docs/RELEASE_VERIFICATION_CHECKLIST.md` - single-pass DB + RPC + backend + runtime + CI verification checklist for release approval.
 
 ---
 
@@ -40,6 +43,7 @@ docs/
 ├── IMPLEMENTATION_STATUS.md      ← Full technical reference
 ├── DEPLOYMENT_RELEASE_RUNBOOK.md ← Release/deploy/smoke/rollback
 ├── PAYOUT_EVENT_REQUEUE_RUNBOOK.md ← Dead-letter recovery for payout/event pipelines
+├── RELEASE_VERIFICATION_CHECKLIST.md ← One-pass release verification checklist
 ├── RENDER_STRIPE_POSTMAN_HANDOFF.md ← Render/Stripe/Postman deployment handoff
 ├── STRIPE_WEBHOOK_EVENTS.md     ← Stripe webhook event catalog
 ├── EVENT_BUS_KAFKA_ROADMAP.md    ← Event bus evolution

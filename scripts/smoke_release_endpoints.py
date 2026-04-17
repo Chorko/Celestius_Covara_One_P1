@@ -57,18 +57,27 @@ def main() -> int:
         action="store_true",
         help="Do not fail when health/readiness status is degraded.",
     )
+    parser.add_argument(
+        "--ops-admin-bearer-token",
+        default="",
+        help="Optional bearer token for authenticated /ops/status validation.",
+    )
+    parser.add_argument(
+        "--require-ops-status",
+        action="store_true",
+        help="Fail if /ops/status cannot be validated (requires admin token in most envs).",
+    )
 
     args = parser.parse_args()
     base = args.base_url.rstrip("/")
 
-    endpoints = {
-        "/health": _check_health,
-        "/ready": _check_ready,
-        "/ops/status": lambda payload, _allow: _check_ops_status(payload),
-    }
-
     try:
         with httpx.Client(timeout=args.timeout_seconds) as client:
+            endpoints = {
+                "/health": _check_health,
+                "/ready": _check_ready,
+            }
+
             for endpoint, validator in endpoints.items():
                 url = f"{base}{endpoint}"
                 response = client.get(url)
@@ -78,6 +87,36 @@ def main() -> int:
                 _expect(isinstance(payload, dict), f"{endpoint} did not return a JSON object")
                 validator(payload, args.allow_degraded)
                 print(f"PASS {endpoint}")
+
+            ops_headers = None
+            token = (args.ops_admin_bearer_token or "").strip()
+            if token:
+                ops_headers = {"Authorization": f"Bearer {token}"}
+
+            ops_url = f"{base}/ops/status"
+            ops_response = client.get(ops_url, headers=ops_headers)
+
+            if ops_response.status_code == 200:
+                ops_payload = ops_response.json()
+                _expect(isinstance(ops_payload, dict), "/ops/status did not return a JSON object")
+                _check_ops_status(ops_payload)
+                print("PASS /ops/status")
+            elif ops_response.status_code in (401, 403):
+                if token:
+                    _expect(
+                        False,
+                        f"/ops/status returned HTTP {ops_response.status_code} even with provided admin token",
+                    )
+                if args.require_ops_status:
+                    _expect(
+                        False,
+                        f"/ops/status returned HTTP {ops_response.status_code}; provide --ops-admin-bearer-token",
+                    )
+                print(
+                    f"SKIP /ops/status (HTTP {ops_response.status_code} - admin auth required)"
+                )
+            else:
+                _expect(False, f"/ops/status returned HTTP {ops_response.status_code}")
 
     except Exception as exc:
         print(f"FAIL release smoke checks: {exc}")

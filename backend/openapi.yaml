@@ -164,6 +164,50 @@
         }
       }
     },
+    "/workers/me/trust-history": {
+      "get": {
+        "tags": [
+          "Workers"
+        ],
+        "summary": "Get My Trust History",
+        "description": "Return trust lifecycle history for the authenticated worker.",
+        "operationId": "get_my_trust_history_workers_me_trust_history_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/workers/me/stats": {
       "get": {
         "tags": [
@@ -227,6 +271,59 @@
               "type": "integer",
               "default": 0,
               "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workers/{worker_id}/trust-history": {
+      "get": {
+        "tags": [
+          "Workers"
+        ],
+        "summary": "Get Worker Trust History",
+        "description": "Return trust lifecycle history for a worker (admin view).",
+        "operationId": "get_worker_trust_history_workers__worker_id__trust_history_get",
+        "parameters": [
+          {
+            "name": "worker_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Worker Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
             }
           }
         ],
@@ -746,7 +843,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/AdminReviewResponse"
+                }
               }
             }
           },
@@ -2790,6 +2889,62 @@
         ],
         "title": "AdminReviewRequest"
       },
+      "AdminReviewResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "claim_id": {
+            "type": "string",
+            "title": "Claim Id"
+          },
+          "decision": {
+            "type": "string",
+            "title": "Decision"
+          },
+          "assignment_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignment State"
+          },
+          "trust_adjustment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TrustAdjustmentResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "payout": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payout"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "claim_id",
+          "decision"
+        ],
+        "title": "AdminReviewResponse"
+      },
       "AssignClaimRequest": {
         "properties": {
           "reviewer_profile_id": {
@@ -2867,6 +3022,39 @@
           "claim_reason": {
             "type": "string",
             "title": "Claim Reason"
+          },
+          "place": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Place"
+          },
+          "city": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City"
+          },
+          "pincode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pincode"
           },
           "stated_lat": {
             "anyOf": [
@@ -3243,6 +3431,50 @@
           "severity_band"
         ],
         "title": "SimulateTriggerRequest"
+      },
+      "TrustAdjustmentResponse": {
+        "properties": {
+          "history_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "History Id"
+          },
+          "worker_profile_id": {
+            "type": "string",
+            "title": "Worker Profile Id"
+          },
+          "previous_trust_score": {
+            "type": "number",
+            "title": "Previous Trust Score"
+          },
+          "delta": {
+            "type": "number",
+            "title": "Delta"
+          },
+          "new_trust_score": {
+            "type": "number",
+            "title": "New Trust Score"
+          },
+          "event_type": {
+            "type": "string",
+            "title": "Event Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "worker_profile_id",
+          "previous_trust_score",
+          "delta",
+          "new_trust_score",
+          "event_type"
+        ],
+        "title": "TrustAdjustmentResponse"
       },
       "ValidationError": {
         "properties": {

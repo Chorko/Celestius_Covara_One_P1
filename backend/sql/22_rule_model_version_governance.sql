@@ -31,6 +31,9 @@ create table if not exists public.rule_versions (
   updated_at timestamptz not null default now()
 );
 
+comment on table public.rule_versions is
+  'Registry of rule-engine versions with rollout metadata and activation state.';
+
 create table if not exists public.model_versions (
   id uuid primary key default gen_random_uuid(),
   version_key text not null unique,
@@ -49,11 +52,135 @@ create table if not exists public.model_versions (
   updated_at timestamptz not null default now()
 );
 
+comment on table public.model_versions is
+  'Registry of model versions with rollout metadata and activation state.';
+
+-- Normalize potentially pre-existing rows before enforcing stricter checks.
+update public.rule_versions
+set rollout_percentage = 100
+where rollout_mode = 'full'
+  and rollout_percentage <> 100;
+
+update public.model_versions
+set rollout_percentage = 100
+where rollout_mode = 'full'
+  and rollout_percentage <> 100;
+
+update public.rule_versions
+set cohort_key = null
+where rollout_mode in ('full', 'canary')
+  and cohort_key is not null;
+
+update public.model_versions
+set cohort_key = null
+where rollout_mode in ('full', 'canary')
+  and cohort_key is not null;
+
+update public.rule_versions
+set cohort_key = coalesce(nullif(btrim(cohort_key), ''), 'default')
+where rollout_mode = 'cohort';
+
+update public.model_versions
+set cohort_key = coalesce(nullif(btrim(cohort_key), ''), 'default')
+where rollout_mode = 'cohort';
+
+update public.rule_versions
+set status = 'active'
+where is_active = true
+  and status not in ('active', 'canary');
+
+update public.model_versions
+set status = 'active'
+where is_active = true
+  and status not in ('active', 'canary');
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint c
+    join pg_class t on t.oid = c.conrelid
+    join pg_namespace n on n.oid = t.relnamespace
+    where n.nspname = 'public'
+      and t.relname = 'rule_versions'
+      and c.conname = 'rule_versions_rollout_shape_check'
+  ) then
+    alter table public.rule_versions
+      add constraint rule_versions_rollout_shape_check
+      check (
+        (rollout_mode = 'full' and rollout_percentage = 100 and cohort_key is null)
+        or (rollout_mode = 'canary' and rollout_percentage between 0 and 100 and cohort_key is null)
+        or (rollout_mode = 'cohort' and rollout_percentage between 0 and 100 and nullif(btrim(cohort_key), '') is not null)
+      );
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint c
+    join pg_class t on t.oid = c.conrelid
+    join pg_namespace n on n.oid = t.relnamespace
+    where n.nspname = 'public'
+      and t.relname = 'model_versions'
+      and c.conname = 'model_versions_rollout_shape_check'
+  ) then
+    alter table public.model_versions
+      add constraint model_versions_rollout_shape_check
+      check (
+        (rollout_mode = 'full' and rollout_percentage = 100 and cohort_key is null)
+        or (rollout_mode = 'canary' and rollout_percentage between 0 and 100 and cohort_key is null)
+        or (rollout_mode = 'cohort' and rollout_percentage between 0 and 100 and nullif(btrim(cohort_key), '') is not null)
+      );
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint c
+    join pg_class t on t.oid = c.conrelid
+    join pg_namespace n on n.oid = t.relnamespace
+    where n.nspname = 'public'
+      and t.relname = 'rule_versions'
+      and c.conname = 'rule_versions_active_status_check'
+  ) then
+    alter table public.rule_versions
+      add constraint rule_versions_active_status_check
+      check ((not is_active) or status in ('active', 'canary'));
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint c
+    join pg_class t on t.oid = c.conrelid
+    join pg_namespace n on n.oid = t.relnamespace
+    where n.nspname = 'public'
+      and t.relname = 'model_versions'
+      and c.conname = 'model_versions_active_status_check'
+  ) then
+    alter table public.model_versions
+      add constraint model_versions_active_status_check
+      check ((not is_active) or status in ('active', 'canary'));
+  end if;
+end $$;
+
 create index if not exists idx_rule_versions_active
   on public.rule_versions(is_active, status, priority desc);
 
 create index if not exists idx_model_versions_active
   on public.model_versions(is_active, status, priority desc);
+
+create index if not exists idx_rule_versions_metadata_gin
+  on public.rule_versions using gin (metadata);
+
+create index if not exists idx_model_versions_metadata_gin
+  on public.model_versions using gin (metadata);
 
 create or replace function public.touch_updated_at_column()
 returns trigger
@@ -64,6 +191,40 @@ begin
   return new;
 end;
 $$;
+
+create or replace function public.resolve_active_rule_version_id()
+returns uuid
+language sql
+stable
+set search_path = public
+as $$
+  select id
+  from public.rule_versions
+  where is_active = true
+    and status in ('active', 'canary')
+  order by priority desc, activated_at desc nulls last, created_at desc
+  limit 1
+$$;
+
+create or replace function public.resolve_active_model_version_id()
+returns uuid
+language sql
+stable
+set search_path = public
+as $$
+  select id
+  from public.model_versions
+  where is_active = true
+    and status in ('active', 'canary')
+  order by priority desc, activated_at desc nulls last, created_at desc
+  limit 1
+$$;
+
+comment on function public.resolve_active_rule_version_id() is
+  'Returns the current active/canary rule version id by rollout priority.';
+
+comment on function public.resolve_active_model_version_id() is
+  'Returns the current active/canary model version id by rollout priority.';
 
 drop trigger if exists trg_rule_versions_updated_at on public.rule_versions;
 create trigger trg_rule_versions_updated_at
@@ -123,6 +284,11 @@ on public.model_versions
 for all to service_role
 using (true)
 with check (true);
+
+grant select on table public.rule_versions to authenticated;
+grant select on table public.model_versions to authenticated;
+grant all on table public.rule_versions to service_role;
+grant all on table public.model_versions to service_role;
 
 insert into public.rule_versions (
   version_key,
@@ -215,24 +381,51 @@ and not exists (
     and status in ('active', 'canary')
 );
 
-with active_rule as (
-  select id
+with ranked as (
+  select
+    id,
+    row_number() over (
+      order by priority desc, activated_at desc nulls last, created_at desc, id desc
+    ) as rn
   from public.rule_versions
   where is_active = true
     and status in ('active', 'canary')
-  order by priority desc, activated_at desc nulls last, created_at desc
-  limit 1
-), active_model as (
-  select id
+)
+update public.rule_versions rv
+set is_active = false
+from ranked r
+where rv.id = r.id
+  and r.rn > 1;
+
+with ranked as (
+  select
+    id,
+    row_number() over (
+      order by priority desc, activated_at desc nulls last, created_at desc, id desc
+    ) as rn
   from public.model_versions
   where is_active = true
     and status in ('active', 'canary')
-  order by priority desc, activated_at desc nulls last, created_at desc
-  limit 1
 )
+update public.model_versions mv
+set is_active = false
+from ranked r
+where mv.id = r.id
+  and r.rn > 1;
+
+create unique index if not exists uq_rule_versions_single_active
+  on public.rule_versions ((true))
+  where is_active = true
+    and status in ('active', 'canary');
+
+create unique index if not exists uq_model_versions_single_active
+  on public.model_versions ((true))
+  where is_active = true
+    and status in ('active', 'canary');
+
 update public.manual_claims mc
-set rule_version_id = coalesce(mc.rule_version_id, (select id from active_rule)),
-    model_version_id = coalesce(mc.model_version_id, (select id from active_model))
+set rule_version_id = coalesce(mc.rule_version_id, public.resolve_active_rule_version_id()),
+    model_version_id = coalesce(mc.model_version_id, public.resolve_active_model_version_id())
 where mc.rule_version_id is null
    or mc.model_version_id is null;
 
@@ -259,13 +452,26 @@ returns table (
 )
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, pg_temp
 as $$
 declare
   v_claim_id uuid;
   v_event_id uuid := gen_random_uuid();
   v_constraint_name text;
+  v_rule_version_id uuid;
+  v_model_version_id uuid;
 begin
+  v_rule_version_id := nullif(p_claim ->> 'rule_version_id', '')::uuid;
+  v_model_version_id := nullif(p_claim ->> 'model_version_id', '')::uuid;
+
+  if v_rule_version_id is null then
+    v_rule_version_id := public.resolve_active_rule_version_id();
+  end if;
+
+  if v_model_version_id is null then
+    v_model_version_id := public.resolve_active_model_version_id();
+  end if;
+
   begin
     insert into public.manual_claims (
       worker_profile_id,
@@ -294,14 +500,14 @@ begin
       coalesce(nullif(p_claim ->> 'claim_status', ''), 'submitted'),
       coalesce(nullif(p_claim ->> 'assignment_state', ''), 'unassigned'),
       nullif(p_claim ->> 'review_due_at', '')::timestamptz,
-      nullif(p_claim ->> 'rule_version_id', '')::uuid,
-      nullif(p_claim ->> 'model_version_id', '')::uuid
+      v_rule_version_id,
+      v_model_version_id
     )
     returning id into v_claim_id;
   exception when unique_violation then
     get stacked diagnostics v_constraint_name = constraint_name;
 
-    if coalesce(p_claim ->> 'claim_mode', '') = 'trigger_auto'
+    if lower(coalesce(p_claim ->> 'claim_mode', '')) = 'trigger_auto'
        and (
          coalesce(v_constraint_name, '') ilike '%idx_unique_worker_event%'
          or coalesce(v_constraint_name, '') ilike '%worker_profile_id%trigger_event%'
