@@ -78,13 +78,33 @@ async def award_coins(
     activity: str,
     coins: int,
     description: str = "",
-    reference_id: str = None,
+    reference_id: str | None = None,
 ) -> dict:
     """
     Award coins to a worker. Returns the new balance.
     All coin awards are idempotent per (profile_id, activity, reference_id).
     """
     try:
+        if reference_id:
+            existing = (
+                sb.table("coins_ledger")
+                .select("id")
+                .eq("profile_id", profile_id)
+                .eq("activity", activity)
+                .eq("reference_id", reference_id)
+                .limit(1)
+                .execute()
+            )
+            if existing.data:
+                current_balance = await get_balance(sb, profile_id)
+                return {
+                    "success": True,
+                    "coins_awarded": 0,
+                    "new_balance": current_balance,
+                    "idempotent": True,
+                    "reference_id": reference_id,
+                }
+
         row = {
             "profile_id": profile_id,
             "activity": activity,
@@ -103,6 +123,18 @@ async def award_coins(
         )
         return {"success": True, "coins_awarded": coins, "new_balance": new_balance}
     except Exception as e:
+        # If a concurrent insert already wrote this reference, treat as idempotent success.
+        msg = str(e).lower()
+        if reference_id and ("duplicate" in msg or "unique" in msg):
+            current_balance = await get_balance(sb, profile_id)
+            return {
+                "success": True,
+                "coins_awarded": 0,
+                "new_balance": current_balance,
+                "idempotent": True,
+                "reference_id": reference_id,
+            }
+
         logger.error(f"Failed to award coins to {profile_id}: {e}")
         return {"success": False, "error": str(e)}
 

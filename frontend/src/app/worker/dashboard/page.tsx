@@ -1,9 +1,10 @@
 "use client"
 
 import { useEffect, useState, useCallback } from 'react'
+import Link from 'next/link'
 import { useUserStore } from '@/store'
 import { createClient } from '@/lib/supabase'
-import { backendGet, backendPost, BackendApiError } from '@/lib/backendApi'
+import { backendGet } from '@/lib/backendApi'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import {
   ShieldCheck,
@@ -20,6 +21,7 @@ import {
 } from 'lucide-react'
 import AnimatedCounter from '@/components/AnimatedCounter'
 import Skeleton from '@/components/Skeleton'
+import ZonePulseMap from '@/components/ZonePulseMap'
 
 interface ClaimStatusRow {
   claim_status: string
@@ -38,11 +40,13 @@ interface PolicyQuoteResponse {
   confidence_multiplier: number
 }
 
-interface PolicyActivationResponse {
-  status: string
-  message: string
-  policy_id: string
-  valid_until: string
+interface ZoneDetail {
+  id: string
+  city: string
+  zone_name: string
+  center_lat: number | null
+  center_lng: number | null
+  polygon_geojson?: unknown
 }
 
 function buildFallbackStats14Days(avgHourlyIncomeInr: number) {
@@ -78,12 +82,12 @@ export default function WorkerDashboard() {
   const [workerDetails, setWorkerDetails] = useState<any>(null)
   const [stats, setStats] = useState<any[]>([])
   const [activeTriggers, setActiveTriggers] = useState<any[]>([])
+  const [zoneTriggerHistory, setZoneTriggerHistory] = useState<any[]>([])
   const [policyQuote, setPolicyQuote] = useState<any>(null)
+  const [activePolicy, setActivePolicy] = useState<any>(null)
+  const [zoneDetail, setZoneDetail] = useState<ZoneDetail | null>(null)
   const [claimCounts, setClaimCounts] = useState<{ pending: number; approved: number; rejected: number; total: number }>({ pending: 0, approved: 0, rejected: 0, total: 0 })
   /* eslint-enable @typescript-eslint/no-explicit-any */
-  const [activating, setActivating] = useState(false)
-  const [activationMsg, setActivationMsg] = useState<string | null>(null)
-  const [activationError, setActivationError] = useState<string | null>(null)
   const [dashboardError, setDashboardError] = useState<string | null>(null)
   // Per-section loading flags for progressive rendering
   const [workerLoading, setWorkerLoading] = useState(true)
@@ -156,15 +160,27 @@ export default function WorkerDashboard() {
 
         if (wData?.preferred_zone_id) {
           try {
-            const { data: tData } = await supabase
+            const { data: activeData } = await supabase
               .from('trigger_events')
               .select('*')
               .eq('zone_id', wData.preferred_zone_id)
               .is('ended_at', null)
               .order('started_at', { ascending: false })
               .limit(5)
-            setActiveTriggers(tData || [])
+
+            const { data: historyData } = await supabase
+              .from('trigger_events')
+              .select('*')
+              .eq('zone_id', wData.preferred_zone_id)
+              .order('started_at', { ascending: false })
+              .limit(20)
+
+            setActiveTriggers(activeData || [])
+            setZoneTriggerHistory(historyData || [])
           } catch(e) { console.error('Could not fetch triggers', e) }
+        } else {
+          setActiveTriggers([])
+          setZoneTriggerHistory([])
         }
       })(),
 
@@ -245,6 +261,47 @@ export default function WorkerDashboard() {
         } catch(e) { console.error('Could not compute policy quote', e) }
         finally { setQuoteLoading(false) }
       })(),
+
+      // Active policy + zone detail
+      (async () => {
+        try {
+          const { data: activePolicyRows } = await supabase
+            .from('policies')
+            .select('policy_id, plan_type, premium_amount, coverage_amount, status, valid_until, activated_at, updated_at')
+            .eq('worker_profile_id', wData.profile_id)
+            .eq('status', 'active')
+            .gte('valid_until', new Date().toISOString())
+            .order('updated_at', { ascending: false })
+            .limit(1)
+
+          setActivePolicy((activePolicyRows && activePolicyRows[0]) || null)
+        } catch (e) {
+          console.error('Could not load active policy snapshot', e)
+          setActivePolicy(null)
+        }
+
+        if (!wData?.preferred_zone_id) {
+          setZoneDetail(null)
+          return
+        }
+
+        try {
+          const zone = await backendGet<ZoneDetail>(supabase, `/zones/${wData.preferred_zone_id}`)
+          setZoneDetail(zone)
+        } catch {
+          try {
+            const { data: zoneRow } = await supabase
+              .from('zones')
+              .select('id, city, zone_name, center_lat, center_lng, polygon_geojson')
+              .eq('id', wData.preferred_zone_id)
+              .maybeSingle()
+            setZoneDetail((zoneRow as ZoneDetail | null) || null)
+          } catch (e) {
+            console.error('Could not load zone detail', e)
+            setZoneDetail(null)
+          }
+        }
+      })(),
     ])
   }, [supabase, profile])
 
@@ -252,30 +309,6 @@ export default function WorkerDashboard() {
     if (!profile) return
     loadDashboardData()
   }, [profile, loadDashboardData])
-
-  const activatePolicy = async () => {
-    setActivating(true)
-    setActivationMsg(null)
-    setActivationError(null)
-
-    try {
-      const response = await backendPost<PolicyActivationResponse>(
-        supabase,
-        '/policies/activate',
-        { plan: 'essential' },
-      )
-      setActivationMsg(`Coverage active until ${new Date(response.valid_until).toLocaleDateString('en-IN')}`)
-      await loadDashboardData()
-    } catch (e: unknown) {
-      if (e instanceof BackendApiError) {
-        setActivationError(e.detail)
-      } else {
-        setActivationError(e instanceof Error ? e.message : 'Failed to activate coverage')
-      }
-    } finally {
-      setActivating(false)
-    }
-  }
 
   const totalEarnings = stats.reduce((sum, s) => sum + (s.gross_earnings_inr || 0), 0)
   const avgDailyOrders = stats.length
@@ -294,6 +327,16 @@ export default function WorkerDashboard() {
       : workerDetails?.city === 'Delhi'
         ? 'AQI and heatwave disruption risk'
         : 'Mixed urban disruption risk'
+
+  const progressSteps = [
+    { key: 'account', label: 'Account Ready', complete: Boolean(profile?.id) },
+    { key: 'kyc', label: 'Bank KYC', complete: Boolean(workerDetails?.bank_verified) },
+    { key: 'cover', label: 'Plan Active', complete: Boolean(activePolicy) },
+    { key: 'claim', label: 'Claim Filed', complete: claimCounts.total > 0 },
+    { key: 'payout', label: 'Payout Settled', complete: claimCounts.approved > 0 },
+  ]
+  const completedSteps = progressSteps.filter((s) => s.complete).length
+  const progressPercent = Math.round((completedSteps / progressSteps.length) * 100)
 
   if (dashboardError && !workerDetails) {
     return (
@@ -403,6 +446,40 @@ export default function WorkerDashboard() {
                 <Activity size={14} style={{ color: 'var(--warning)' }} />
                 Trust&nbsp;<strong style={{ color: 'var(--text-primary)' }}>{Number(workerDetails.trust_score || 0).toFixed(2)}</strong>
               </span>
+            </div>
+          </div>
+        </section>
+
+        {/* ===== JOURNEY PROGRESS ===== */}
+        <section className="section-enter">
+          <div className="card p-5" style={{ borderLeft: '3px solid var(--accent)' }}>
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+              <h2 className="text-sm font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                Coverage Journey Progress
+              </h2>
+              <div className="flex items-center gap-2 text-xs">
+                <span className="badge-info">{completedSteps}/{progressSteps.length} milestones</span>
+                <span style={{ color: 'var(--text-tertiary)' }}>{progressPercent}% complete</span>
+              </div>
+            </div>
+
+            <div className="rounded-full h-2" style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-primary)' }}>
+              <div
+                className="h-full rounded-full transition-all"
+                style={{ width: `${progressPercent}%`, background: 'linear-gradient(90deg, var(--accent), var(--success))' }}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-4">
+              {progressSteps.map((step) => (
+                <div key={step.key} className="flex items-center gap-2 text-xs" style={{ color: step.complete ? 'var(--text-primary)' : 'var(--text-tertiary)' }}>
+                  <span
+                    className="w-2.5 h-2.5 rounded-full"
+                    style={{ background: step.complete ? 'var(--success)' : 'var(--border-secondary)' }}
+                  />
+                  <span>{step.label}</span>
+                </div>
+              ))}
             </div>
           </div>
         </section>
@@ -548,20 +625,20 @@ export default function WorkerDashboard() {
                   </div>
                 </div>
                 <div className="md:w-56 flex-shrink-0">
-                  {activationMsg ? (
-                    <div className="w-full py-3 text-center font-semibold rounded-lg flex items-center justify-center gap-2" style={{ background: 'var(--success-muted)', color: 'var(--success)', border: '1px solid var(--success)' }}>
-                      <ShieldCheck size={18} /> {activationMsg}
+                  {activePolicy ? (
+                    <div className="w-full py-3 text-center font-semibold rounded-lg" style={{ background: 'var(--success-muted)', color: 'var(--success)', border: '1px solid var(--success)' }}>
+                      <div className="flex items-center justify-center gap-2">
+                        <ShieldCheck size={18} /> {String(activePolicy.plan_type || 'Essential').toUpperCase()} ACTIVE
+                      </div>
+                      <div className="text-[11px] mt-1" style={{ color: 'var(--text-secondary)' }}>
+                        Until {new Date(activePolicy.valid_until).toLocaleDateString('en-IN')}
+                      </div>
                     </div>
                   ) : (
-                    <button onClick={activatePolicy} disabled={activating} className="btn-primary w-full py-3 text-base flex items-center justify-center gap-2">
+                    <Link href="/worker/pricing" className="btn-primary w-full py-3 text-base flex items-center justify-center gap-2">
                       <Zap size={18} />
-                      {activating ? 'Activating...' : 'Activate Coverage'}
-                    </button>
-                  )}
-                  {activationError && (
-                    <p className="text-xs mt-2 text-center" style={{ color: 'var(--danger)' }}>
-                      {activationError}
-                    </p>
+                      Purchase via Stripe
+                    </Link>
                   )}
                 </div>
               </div>
@@ -646,6 +723,132 @@ export default function WorkerDashboard() {
                     </p>
                   </div>
                 ))
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* ===== MY ZONE INTELLIGENCE ===== */}
+        <section id="my-zone-intelligence" className="section-enter">
+          <div className="card p-6">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+              <div>
+                <h2 className="text-base font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                  <MapPin size={18} style={{ color: 'var(--accent)' }} />
+                  My Zone Intelligence
+                </h2>
+                <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>
+                  Active triggers and recent zone history for {zoneDetail?.zone_name || workerDetails?.zones?.zone_name || 'your zone'}.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={activeTriggers.length > 0 ? 'badge-warning' : 'badge-success'}>
+                  {activeTriggers.length > 0 ? `${activeTriggers.length} active trigger(s)` : 'No active triggers'}
+                </span>
+                <span className="badge-info">
+                  {zoneTriggerHistory.length} recent events
+                </span>
+              </div>
+            </div>
+
+            {zoneDetail && typeof zoneDetail.center_lat === 'number' && typeof zoneDetail.center_lng === 'number' ? (
+              <ZonePulseMap
+                centerLat={zoneDetail.center_lat}
+                centerLng={zoneDetail.center_lng}
+                zoneName={zoneDetail.zone_name}
+                polygonGeoJson={zoneDetail.polygon_geojson}
+                triggers={activeTriggers.map((t) => ({
+                  id: t.id,
+                  trigger_code: t.trigger_code,
+                  severity_band: t.severity_band,
+                  started_at: t.started_at,
+                  official_threshold_label: t.official_threshold_label,
+                }))}
+              />
+            ) : (
+              <div className="p-6 rounded-lg text-sm" style={{ background: 'var(--bg-tertiary)', color: 'var(--text-tertiary)' }}>
+                Zone coordinates are not configured yet for map rendering.
+              </div>
+            )}
+
+            {activeTriggers.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
+                {activeTriggers.map((trigger) => (
+                  <div key={trigger.id} className="p-3 rounded-lg" style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-primary)' }}>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <span className={trigger.severity_band === 'escalation' ? 'badge-danger' : trigger.severity_band === 'claim' ? 'badge-warning' : 'badge-info'}>
+                        {String(trigger.severity_band || 'watch').toUpperCase()}
+                      </span>
+                      <span className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
+                        {new Date(trigger.started_at).toLocaleDateString('en-IN')}
+                      </span>
+                    </div>
+                    <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+                      {String(trigger.trigger_code || 'trigger').replaceAll('_', ' ')}
+                    </p>
+                    <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>
+                      {trigger.official_threshold_label || trigger.product_threshold_value || 'Threshold matched'}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-5">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                  Trigger History (Last 20)
+                </h3>
+                <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                  Zone timeline
+                </span>
+              </div>
+
+              {zoneTriggerHistory.length === 0 ? (
+                <div className="p-4 rounded-lg text-sm" style={{ background: 'var(--bg-tertiary)', color: 'var(--text-tertiary)' }}>
+                  No trigger history available for this zone yet.
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                  {zoneTriggerHistory.map((trigger) => {
+                    const isActive = !trigger.ended_at
+                    return (
+                      <div
+                        key={`history-${trigger.id}`}
+                        className="p-3 rounded-lg"
+                        style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-primary)' }}
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <div className="flex items-center gap-2">
+                            <span className={trigger.severity_band === 'escalation' ? 'badge-danger' : trigger.severity_band === 'claim' ? 'badge-warning' : 'badge-info'}>
+                              {String(trigger.severity_band || 'watch').toUpperCase()}
+                            </span>
+                            <span className={isActive ? 'badge-warning' : 'badge-success'}>
+                              {isActive ? 'ACTIVE' : 'RESOLVED'}
+                            </span>
+                          </div>
+                          <span className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
+                            {new Date(trigger.started_at).toLocaleDateString('en-IN')}
+                          </span>
+                        </div>
+
+                        <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+                          {String(trigger.trigger_code || 'trigger').replaceAll('_', ' ')}
+                        </p>
+
+                        <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>
+                          {trigger.official_threshold_label || trigger.product_threshold_value || 'Threshold matched'}
+                        </p>
+
+                        <p className="text-[11px] mt-1" style={{ color: 'var(--text-tertiary)' }}>
+                          {isActive
+                            ? `Started ${new Date(trigger.started_at).toLocaleString('en-IN')}`
+                            : `Resolved ${new Date(trigger.ended_at).toLocaleString('en-IN')}`}
+                        </p>
+                      </div>
+                    )
+                  })}
+                </div>
               )}
             </div>
           </div>

@@ -542,7 +542,40 @@ export default function AdminReviews() {
               </div>
             )}
           </div>
-        ) : null}
+        ) : (
+          <div className="h-full flex flex-col items-center justify-center p-8 text-center">
+            <div
+              className="w-20 h-20 rounded-xl flex items-center justify-center mb-4"
+              style={{ background: 'var(--danger-muted)', border: '1px solid var(--danger)' }}
+            >
+              <AlertTriangle size={30} style={{ color: 'var(--danger)' }} />
+            </div>
+            <p className="font-medium mb-1" style={{ color: 'var(--text-primary)' }}>
+              Could not load review report
+            </p>
+            <p className="text-sm max-w-lg" style={{ color: 'var(--text-tertiary)' }}>
+              {actionError || 'Claim detail is temporarily unavailable. Try reloading this claim.'}
+            </p>
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+              <button
+                onClick={() => selectedClaim && loadDetail(selectedClaim)}
+                className="btn-secondary px-4 py-2 text-sm"
+              >
+                Retry Loading Report
+              </button>
+              <button
+                onClick={() => {
+                  setSelectedClaim(null)
+                  setActionError(null)
+                }}
+                className="btn-secondary px-4 py-2 text-sm"
+                style={{ background: 'var(--bg-tertiary)' }}
+              >
+                Back To Queue
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

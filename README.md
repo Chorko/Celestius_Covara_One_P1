@@ -4,8 +4,8 @@
 
 **Team Celestius** — Bhrahmesh A · Chorko C · T Dharshini · T Ashwin · Shripriya Sriram
 
-[![Guidewire DEVTrails](https://img.shields.io/badge/🏆_Guidewire-DEVTrails_2026-6D28D9?style=for-the-badge)](https://devtrails.guidewire.com)
-[![Team](https://img.shields.io/badge/Team-Celestius-7C3AED?style=for-the-badge&logo=rocket&logoColor=white)](#-team-celestius)
+[![Guidewire DEVTrails](https://img.shields.io/badge/🏆_Guidewire-DEVTrails_2026-6D28D9?style=for-the-badge)](https://www.guidewire.com)
+[![Team](https://img.shields.io/badge/Team-Celestius-7C3AED?style=for-the-badge&logo=rocket&logoColor=white)](#team-celestius)
 [![Phase](https://img.shields.io/badge/Phase_2-Production_Hardened-4F46E5?style=for-the-badge&logo=shield&logoColor=white)](#)
 [![Tests](https://img.shields.io/badge/Tests-70+_Passing-16A34A?style=for-the-badge&logo=python&logoColor=white)](#)
 
@@ -22,13 +22,13 @@
 
 *When the city drowns or the air turns toxic — your income doesn't stop. No forms. No calls. Zero waiting.*
 
-📹 **[Watch the Demo](https://www.youtube.com/watch?v=6_IH64QjZbE)** · 🌐 **[Live Platform](#-quick-start)**
+📹 **[Watch the Demo](https://youtu.be/4h6MEWHoyPc?si=4Iox--yIqIhw4Pa3)** · 🧾 **[Documentation Deck](https://docs.google.com/presentation/d/1GX8-mwHaDpO9MCyFvRNqrhixL99dmMnbM9KoQcwiBs0/edit?usp=sharing)** · 🌐 **[Live Platform](#quick-start)**
 
 </div>
 
 ---
 
-## Engineering Snapshot (2026-04-14)
+## Engineering Snapshot (2026-04-18)
 
 - Database reliability migrations added and applied in sequence: `backend/sql/10_rewards_schema.sql`, `backend/sql/11_event_outbox.sql`, `backend/sql/12_event_reliability.sql`, `backend/sql/13_consumer_dead_letter.sql`.
 - Event reliability is now production-hardened with transactional outbox writes, relay retry/backoff, dead-letter handling, and consumer idempotency with max-attempt dead-letter escalation.
@@ -37,7 +37,15 @@
 - Security hardening includes signed mobile device-context verification, explicit CORS/header allowlist, `slowapi` rate limits, and OWASP response headers.
 - Post-migration reliability validation is green, including focused consumer/outbox/Kafka tests and API-level tests for the new events consumer endpoints.
 - Worker premium consistency is hardened: dashboard and coverage pages both read backend quote APIs, with fixed IRDAI fallback values preserved.
+- Worker dashboard now includes **My Zone Intelligence** with active triggers plus **last-20 trigger history** timeline for the assigned zone.
+- Weekly policy lifecycle now includes **auto-expiry normalization** during quote/activation flows so stale active rows are marked expired.
 - Admin reviews queue UX now distinguishes fetch failure from true empty queue and shows a retry path for transient API outages.
+- Stripe checkout finalize path remains idempotent and keeps policy activation + reward-crediting replay-safe.
+- Demo reset SQL helpers added for repeatable judge runs:
+    - `backend/sql/helpers/22_reset_main_demo_worker_subscription.sql`
+    - `backend/sql/helpers/23_reset_demo9_runtime_state.sql`
+- OTP onboarding now auto-falls back to mock mode in non-production when Twilio trial blocks unverified numbers (error `21608`), returning demo OTP `123456` so signup flow remains usable.
+- Payout settlement webhook now includes backward-compatible schema handling for mixed Supabase migrations (legacy/new columns across `payout_requests`, `payout_settlement_events`, and `payout_status_transitions`) and maps legacy payout statuses (`submitted`/`paid`) to canonical workflow semantics during processing.
 - Civic-news trigger ingestion is exposed through `GET /triggers/civic-news` and expects `NEWS_API_KEY` in deployment environment configuration.
 - Secret hygiene is tightened in ignore rules for future files (`.env.*`, key material, and Docker build-context exclusions).
 
@@ -50,31 +58,31 @@
 
 | # | Section |
 |:-|---------|
-| 🔥 | [The Crisis](#-the-crisis) |
-| 👤 | [Our Persona](#-our-persona--arjun-the-monsoon-rider) |
-| 🎬 | [Live Scenarios](#-live-scenarios) |
-| ⚡ | [How It Works](#-how-it-works) |
-| 💰 | [Coverage Plans & IRDAI Compliance](#-coverage-plans--irdai-compliance) |
-| 💡 | [Premium Economics](#-premium-economics--why-28week-works) |
-| 🏦 | [Financial Viability](#-financial-viability--unit-economics) |
-| 🏗️ | [Architecture](#️-architecture) |
-| 🚀 | [Scalability](#-scalability--growth-architecture) |
-| ⚡ | [15-Trigger Library](#-the-15-trigger-library) |
-| 📊 | [Threshold References & Data Sources](#-threshold-references-and-why-they-were-chosen) |
-| 📐 | [Parametric Product & Calibration](#-parametric-product-weekly-benefit-plans) |
-| 💼 | [Business Framing](#-business-framing) |
-| 🛡️ | [The Fraud Fortress](#️-the-fraud-fortress) |
-| 🔐 | [Adversarial Defense & SynthID](#-adversarial-defense--anti-spoofing-strategy) |
-| 🔒 | [Payout Safety](#-payout-safety--duplicate-prevention) |
-| 📋 | [Claim State Machine](#-claim-state-machine) |
-| 🚦 | [Region Fast-Lane](#-region-validation-cache--fast-lane-approvals) |
-| 🚨 | [Post-Approval Controls](#-post-approval-fraud-controls) |
-| 🪪 | [Progressive KYC](#-progressive-kyc--trust-ladder) |
-| 🧠 | [ML Role](#-what-ml-does-vs-what-ml-does-not-do) |
-| 📈 | [Data Analytics & Pricing Validation](#-data-analytics--pricing-validation) |
-| 🏆 | [Why Covara One Wins](#-why-covara-one-wins) |
-| 🚀 | [Quick Start](#-quick-start) |
-| 📚 | [Deep Dive Docs](#-deep-dive-docs) |
+| 🔥 | [The Crisis](#the-crisis) |
+| 👤 | [Our Persona](#our-persona-arjun-the-monsoon-rider) |
+| 🎬 | [Live Scenarios](#live-scenarios) |
+| ⚡ | [How It Works](#how-it-works) |
+| 💰 | [Coverage Plans & IRDAI Compliance](#coverage-plans-irdai-compliance) |
+| 💡 | [Premium Economics](#premium-economics-why-28week-works) |
+| 🏦 | [Financial Viability](#financial-viability-unit-economics) |
+| 🏗️ | [Architecture](#architecture) |
+| 🚀 | [Scalability](#scalability-growth-architecture) |
+| ⚡ | [15-Trigger Library](#the-15-trigger-library) |
+| 📊 | [Threshold References & Data Sources](#threshold-references-and-why-they-were-chosen) |
+| 📐 | [Parametric Product & Calibration](#parametric-product-weekly-benefit-plans) |
+| 💼 | [Business Framing](#business-framing) |
+| 🛡️ | [The Fraud Fortress](#the-fraud-fortress) |
+| 🔐 | [Adversarial Defense & SynthID](#adversarial-defense-anti-spoofing-strategy) |
+| 🔒 | [Payout Safety](#payout-safety-duplicate-prevention) |
+| 📋 | [Claim State Machine](#claim-state-machine) |
+| 🚦 | [Region Fast-Lane](#region-validation-cache-fast-lane-approvals) |
+| 🚨 | [Post-Approval Controls](#post-approval-fraud-controls) |
+| 🪪 | [Progressive KYC](#progressive-kyc-trust-ladder) |
+| 🧠 | [ML Role](#what-ml-does-vs-what-ml-does-not-do) |
+| 📈 | [Data Analytics & Pricing Validation](#data-analytics-pricing-validation) |
+| 🏆 | [Why Covara One Wins](#why-covara-one-wins) |
+| 🚀 | [Quick Start](#quick-start) |
+| 📚 | [Deep Dive Docs](#deep-dive-docs) |
 
 </details>
 
@@ -598,7 +606,7 @@ All external data sources used by the platform, consolidated with URLs and integ
 | 11 | **Gemini API** (Google) | [ai.google.dev](https://ai.google.dev/) | AI narrative generation, SynthID watermark detection | Claim explanation + AI-image fraud detection | ✅ Live API |
 | 12 | **Sandbox.co.in** | [sandbox.co.in](https://sandbox.co.in/) | Aadhaar OTP, PAN, bank verification | Progressive KYC (Levels 2–4) | ⚠️ Sandboxed (Postman Mock) |
 | 13 | **Twilio** | [twilio.com](https://www.twilio.com/) | WhatsApp templates, OTP verification | Claim notifications, worker alerts | ✅ Sandboxed |
-| 14 | **IRDAI Annual Reports** | [irdai.gov.in/annual-reports](https://www.irdai.gov.in/annual-reports) | Claim trends, market structure, micro-insurance caps | Pricing validation, regulatory compliance | 📚 Reference |
+| 14 | **IRDAI Annual Reports** | [irdai.gov.in/annual-reports](https://irdai.gov.in/annual-reports) | Claim trends, market structure, micro-insurance caps | Pricing validation, regulatory compliance | 📚 Reference |
 | 15 | **IIB** (Insurance Information Bureau) | [iib.gov.in](https://iib.gov.in/) | Insurance analytics, fraud benchmarks | Risk analytics orientation | 📚 Reference |
 | 16 | **Swiss Re** | [swissre.com](https://www.swissre.com/) | Parametric insurance product frameworks | Product architecture framing | 📚 Reference |
 | 17 | **Google Maps Distance Matrix** *(Planned)* | [developers.google.com/maps](https://developers.google.com/maps/documentation/distance-matrix) | Multi-route corridor travel times | Enhanced T12 traffic analysis | 📋 Planned |
@@ -1238,7 +1246,7 @@ The bootstrap median (₹218.7) reflects the **internal actuarial calculation** 
 
 ### XGBoost Benchmark Comparison
 
-The Random Forest baseline was benchmarked against XGBoost ([Chen & Guestrin, 2016](https://doi.org/10.1145/2939672.2939785)) to validate model choice:
+The Random Forest baseline was benchmarked against XGBoost ([Chen & Guestrin, 2016](https://arxiv.org/abs/1603.02754)) to validate model choice:
 
 | Metric | Random Forest | XGBoost | Decision |
 |---|---|---|---|
@@ -1428,6 +1436,22 @@ Use with runbook:
 - Recovery helper SQL: `backend/sql/helpers/08c_fix_demo9_auth_users.sql`
 - User creation script: `scripts/create_demo9_auth_users.py --apply`
 
+### 🔁 Demo Reset Helpers (Repeatable Payments / Subscriptions)
+
+Use these SQL helpers in Supabase SQL Editor to reset demo state between judge runs:
+
+- Main demo worker (`worker@demo.com`) payment + subscription reset:
+    - `backend/sql/helpers/22_reset_main_demo_worker_subscription.sql`
+- DEMO9 runtime baseline reset (claims/payout/audit cleanup + baseline policy/profile restore):
+    - `backend/sql/helpers/23_reset_demo9_runtime_state.sql`
+
+Recommended order after heavy DEMO9 testing:
+
+1. Run `backend/sql/helpers/23_reset_demo9_runtime_state.sql`
+2. If Auth itself is corrupted (Supabase 500), run `backend/sql/helpers/08c_fix_demo9_auth_users.sql`
+3. Recreate DEMO9 Auth users: `scripts/create_demo9_auth_users.py --apply`
+4. Run `backend/sql/helpers/08c_fix_demo9_auth_users.sql` again (sync pass)
+
 > **Or use Docker:** `docker compose up` — brings up FastAPI + Next.js + Redis in one command
 
 ### 🐳 Docker Preflight
@@ -1486,6 +1510,7 @@ Celestius_DEVTrails_P1/
 
 | Document | What's inside |
 |----------|--------------|
+| [Documentation Deck (Google Slides)](https://docs.google.com/presentation/d/1GX8-mwHaDpO9MCyFvRNqrhixL99dmMnbM9KoQcwiBs0/edit?usp=sharing) | Judge-facing project walkthrough and presentation narrative |
 | [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md) | Full implementation checklist, all 15 triggers, calibration formulas, threshold citations |
 | [fraud/README.md](fraud/README.md) | Complete Ghost Shift Detector — all 5 layers, fraud vectors, signal hierarchy |
 | [backend/README.md](backend/README.md) | API layer, 10-service inventory, endpoint catalog |

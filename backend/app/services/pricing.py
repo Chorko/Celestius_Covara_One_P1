@@ -26,6 +26,9 @@ def clip(val: float, min_val: float, max_val: float) -> float:
 PLAN_DEFINITIONS = {
     "essential": {
         "weekly_premium_inr": 28,
+        "min_weekly_premium_inr": 18,
+        "max_weekly_premium_inr": 72,
+        "premium_scale_factor": 0.08,
         "daily_premium_inr": 4,
         "weekly_benefit_cap_inr": 3000,
         "annual_premium_inr": 1456,       # 28 × 52
@@ -34,6 +37,9 @@ PLAN_DEFINITIONS = {
     },
     "plus": {
         "weekly_premium_inr": 42,
+        "min_weekly_premium_inr": 30,
+        "max_weekly_premium_inr": 96,
+        "premium_scale_factor": 0.12,
         "daily_premium_inr": 6,
         "weekly_benefit_cap_inr": 4500,
         "annual_premium_inr": 2184,       # 42 × 52
@@ -46,6 +52,18 @@ PLAN_DEFINITIONS = {
 IRDAI_MICRO_INSURANCE_ANNUAL_LIMIT = 10000  # ₹10,000/year max premium
 EXPENSE_LOAD = 0.22     # 12% admin + 10% margin (IRDAI allowed)
 CLAIM_PROBABILITY = 0.15  # Actuarial baseline claim probability
+
+
+def _dynamic_weekly_premium(plan_def: dict, actuarial_premium: float) -> float:
+    """Map actuarial premium onto bounded plan ranges for worker-specific pricing."""
+    base_weekly = float(plan_def.get("weekly_premium_inr", 0.0) or 0.0)
+    scaled = float(plan_def.get("premium_scale_factor", 0.0) or 0.0) * max(actuarial_premium, 0.0)
+    # Blend with base weekly premium so prices remain stable but still personalized.
+    blended = (0.65 * scaled) + (0.35 * base_weekly)
+
+    min_weekly = float(plan_def.get("min_weekly_premium_inr", base_weekly) or base_weekly)
+    max_weekly = float(plan_def.get("max_weekly_premium_inr", base_weekly) or base_weekly)
+    return round(clip(blended, min_weekly, max_weekly), 2)
 
 
 def calculate_policy_metrics(worker_context: dict) -> dict:
@@ -130,8 +148,8 @@ def calculate_payout(
     # Gross premium = [Expected Payout / (1 - expense_load)] × U
     actuarial_premium = (expected_payout / (1.0 - EXPENSE_LOAD)) * outlier_uplift_u
 
-    # Final premium = fixed plan rate (actuarial premium is for internal calibration only)
-    gross_premium = plan_def["weekly_premium_inr"]
+    # Final premium is personalized and bounded by plan-level guardrails.
+    gross_premium = _dynamic_weekly_premium(plan_def, actuarial_premium)
 
     # Raw payout = B × S × E × C × (1 - FH)
     raw_payout = (
@@ -152,6 +170,9 @@ def calculate_payout(
         "expected_payout": round(expected_payout, 2),
         "actuarial_premium": round(actuarial_premium, 2),
         "gross_premium": round(gross_premium, 2),
+        "base_plan_premium": round(float(plan_def["weekly_premium_inr"]), 2),
+        "premium_floor": round(float(plan_def.get("min_weekly_premium_inr", plan_def["weekly_premium_inr"])), 2),
+        "premium_ceiling": round(float(plan_def.get("max_weekly_premium_inr", plan_def["weekly_premium_inr"])), 2),
         "raw_payout": round(raw_payout, 2),
         "recommended_payout": round(final_payout, 2),
         "plan": plan,

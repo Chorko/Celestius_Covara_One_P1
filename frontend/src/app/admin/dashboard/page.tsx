@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useUserStore } from '@/store'
 import { createClient } from '@/lib/supabase'
 import dynamic from 'next/dynamic'
@@ -89,6 +89,61 @@ const FALLBACK_TRIGGER_DISTRIBUTION = [
   { name: 'Outage', value: 3 },
 ]
 
+const REVIEW_STATUSES = ['submitted', 'soft_hold_verification', 'fraud_escalated_review']
+const APPROVED_STATUSES = ['approved', 'auto_approved', 'paid']
+const FRAUD_STATUSES = ['fraud_escalated_review', 'post_approval_flagged']
+const REJECTED_STATUSES = ['rejected', 'post_approval_flagged']
+
+const TIER_1_CITIES = new Set([
+  'mumbai',
+  'delhi',
+  'new delhi',
+  'bengaluru',
+  'bangalore',
+  'hyderabad',
+  'chennai',
+  'pune',
+  'kolkata',
+  'ahmedabad',
+])
+
+const TIER_2_CITIES = new Set([
+  'jaipur',
+  'lucknow',
+  'surat',
+  'indore',
+  'nagpur',
+  'bhopal',
+  'patna',
+  'ludhiana',
+  'chandigarh',
+  'coimbatore',
+  'kochi',
+  'visakhapatnam',
+  'vadodara',
+  'noida',
+  'gurugram',
+  'thane',
+])
+
+function normalizeText(value: string | undefined | null): string {
+  return String(value || '').trim().toLowerCase()
+}
+
+function getCityTier(city: string | undefined | null): 'tier1' | 'tier2' | 'tier3' | 'unknown' {
+  const normalized = normalizeText(city)
+  if (!normalized || normalized === 'pending local') {
+    return 'unknown'
+  }
+  if (TIER_1_CITIES.has(normalized)) {
+    return 'tier1'
+  }
+  if (TIER_2_CITIES.has(normalized)) {
+    return 'tier2'
+  }
+  return 'tier3'
+}
+
 function PieTooltipContent({ active, payload }: { active?: boolean; payload?: { name: string; value: number }[] }) {
   if (active && payload?.length) {
     return (
@@ -106,14 +161,15 @@ export default function AdminDashboard() {
   const supabase = createClient()
   const [workerCount, setWorkerCount] = useState(0)
   const [claims, setClaims] = useState<ClaimItem[]>([])
-  const [fraudCount, setFraudCount] = useState(0)
   const [totalPayouts, setTotalPayouts] = useState(0)
   const [lossRatio, setLossRatio] = useState(0)
   const [bcr, setBcr] = useState(0)
-  const [approvedCount, setApprovedCount] = useState(0)
-  const [reviewCount, setReviewCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [chartsLoading, setChartsLoading] = useState(true)
+  const [tierFilter, setTierFilter] = useState<'all' | 'tier1' | 'tier2' | 'tier3'>('all')
+  const [cityFilter, setCityFilter] = useState('all')
+  const [platformFilter, setPlatformFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'review' | 'approved' | 'fraud' | 'rejected'>('all')
 
   /* eslint-disable @typescript-eslint/no-explicit-any */
   const [triggerDistribution, setTriggerDistribution] = useState<any[]>([])
@@ -143,10 +199,6 @@ export default function AdminDashboard() {
       } else {
         shouldUseFallback = true
       }
-      const approved = allClaims.filter(c => ['approved', 'auto_approved', 'paid'].includes(c.claim_status))
-      setApprovedCount(approved.length)
-      const review = allClaims.filter(c => ['submitted', 'soft_hold_verification', 'fraud_escalated_review'].includes(c.claim_status))
-      setReviewCount(review.length)
     } catch (e) {
       console.error('Dashboard KPI error', e)
       shouldUseFallback = true
@@ -158,12 +210,6 @@ export default function AdminDashboard() {
       const fallbackClaims = buildFallbackClaims()
       setClaims(fallbackClaims)
       setWorkerCount((prev) => (prev > 0 ? prev : 24))
-      const approved = fallbackClaims.filter(c => ['approved', 'auto_approved', 'paid'].includes(c.claim_status)).length
-      const review = fallbackClaims.filter(c => ['submitted', 'soft_hold_verification', 'fraud_escalated_review'].includes(c.claim_status)).length
-      const fraud = fallbackClaims.filter(c => c.claim_status === 'fraud_escalated_review' || c.claim_status === 'post_approval_flagged').length
-      setApprovedCount(approved)
-      setReviewCount(review)
-      setFraudCount(fraud)
       setTotalPayouts(38450)
       setLossRatio(0.64)
       setBcr(0.58)
@@ -195,7 +241,6 @@ export default function AdminDashboard() {
         const prData = prResult.value.data
         if (prData.length > 0) {
           payoutDataFound = true
-          setFraudCount(prData.filter(p => (p.fraud_holdback_fh ?? 0) > 0.3).length)
           const payout = prData.reduce((s, p) => s + (p.recommended_payout || 0), 0)
           setTotalPayouts(payout)
 
@@ -243,6 +288,67 @@ export default function AdminDashboard() {
   }, [loadDashboard])
 
   const CHART_COLORS = ['#2563eb', '#22c55e', '#eab308', '#ef4444', '#6366f1', '#f97316']
+  const cityOptions = useMemo(() => {
+    return Array.from(new Set(
+      claims
+        .map((claim) => String(claim.worker_profiles?.city || '').trim())
+        .filter((city) => city.length > 0)
+    )).sort((a, b) => a.localeCompare(b))
+  }, [claims])
+
+  const platformOptions = useMemo(() => {
+    return Array.from(new Set(
+      claims
+        .map((claim) => String(claim.worker_profiles?.platform_name || '').trim())
+        .filter((platform) => platform.length > 0)
+    )).sort((a, b) => a.localeCompare(b))
+  }, [claims])
+
+  const filteredClaims = useMemo(() => {
+    return claims.filter((claim) => {
+      const city = String(claim.worker_profiles?.city || '').trim()
+      const platform = String(claim.worker_profiles?.platform_name || '').trim()
+      const tier = getCityTier(city)
+
+      if (tierFilter !== 'all' && tier !== tierFilter) {
+        return false
+      }
+      if (cityFilter !== 'all' && normalizeText(city) !== normalizeText(cityFilter)) {
+        return false
+      }
+      if (platformFilter !== 'all' && normalizeText(platform) !== normalizeText(platformFilter)) {
+        return false
+      }
+
+      if (statusFilter === 'review' && !REVIEW_STATUSES.includes(claim.claim_status)) {
+        return false
+      }
+      if (statusFilter === 'approved' && !APPROVED_STATUSES.includes(claim.claim_status)) {
+        return false
+      }
+      if (statusFilter === 'fraud' && !FRAUD_STATUSES.includes(claim.claim_status)) {
+        return false
+      }
+      if (statusFilter === 'rejected' && !REJECTED_STATUSES.includes(claim.claim_status)) {
+        return false
+      }
+
+      return true
+    })
+  }, [claims, tierFilter, cityFilter, platformFilter, statusFilter])
+
+  const filteredApprovedCount = filteredClaims.filter((claim) => APPROVED_STATUSES.includes(claim.claim_status)).length
+  const filteredReviewCount = filteredClaims.filter((claim) => REVIEW_STATUSES.includes(claim.claim_status)).length
+  const filteredFraudCount = filteredClaims.filter((claim) => FRAUD_STATUSES.includes(claim.claim_status)).length
+
+  const filtersApplied = tierFilter !== 'all' || cityFilter !== 'all' || platformFilter !== 'all' || statusFilter !== 'all'
+
+  const resetFilters = () => {
+    setTierFilter('all')
+    setCityFilter('all')
+    setPlatformFilter('all')
+    setStatusFilter('all')
+  }
 
   const statusBadge = (status: string) => {
     switch (status) {
@@ -279,10 +385,10 @@ export default function AdminDashboard() {
   }
 
   const kpiCards = [
-    { icon: <Users size={20} style={{ color: 'var(--success)' }} />, value: workerCount, label: 'Active Workers', sub: 'Covered on platform', accent: 'var(--success)' },
-    { icon: <Clock size={20} style={{ color: 'var(--warning)' }} />, value: reviewCount, label: 'Needs Review', sub: 'Manual / escalated / AI-uncertain', accent: 'var(--warning)' },
-    { icon: <AlertTriangle size={20} style={{ color: 'var(--danger)' }} />, value: fraudCount, label: 'Fraud Detected', sub: 'High fraud score — rejected', accent: 'var(--danger)' },
-    { icon: <CheckCircle size={20} style={{ color: 'var(--accent)' }} />, value: approvedCount, label: 'Approved Claims', sub: `Out of ${claims.length} total claims`, accent: 'var(--accent)' },
+    { icon: <Users size={20} style={{ color: 'var(--success)' }} />, value: workerCount, label: 'Active Workers', sub: filtersApplied ? `${filteredClaims.length} filtered claims in scope` : 'Covered on platform', accent: 'var(--success)' },
+    { icon: <Clock size={20} style={{ color: 'var(--warning)' }} />, value: filteredReviewCount, label: 'Needs Review', sub: 'Manual / escalated / AI-uncertain', accent: 'var(--warning)' },
+    { icon: <AlertTriangle size={20} style={{ color: 'var(--danger)' }} />, value: filteredFraudCount, label: 'Fraud Detected', sub: 'High-risk or post-approval flagged', accent: 'var(--danger)' },
+    { icon: <CheckCircle size={20} style={{ color: 'var(--accent)' }} />, value: filteredApprovedCount, label: 'Approved Claims', sub: `Out of ${filteredClaims.length} filtered claims`, accent: 'var(--accent)' },
     { icon: <IndianRupee size={20} style={{ color: 'var(--info)' }} />, value: totalPayouts, prefix: '₹', label: 'Total Payouts', sub: `Expected: ₹${totalPayouts.toLocaleString('en-IN')}`, accent: 'var(--info)' },
   ]
 
@@ -292,11 +398,46 @@ export default function AdminDashboard() {
   ]
 
   const pipelineData = [
-    { label: 'Approved', count: approvedCount, color: 'var(--success)' },
-    { label: 'Review', count: reviewCount, color: 'var(--warning)' },
-    { label: 'Fraud', count: fraudCount, color: 'var(--danger)' },
+    { label: 'Approved', count: filteredApprovedCount, color: 'var(--success)' },
+    { label: 'Review', count: filteredReviewCount, color: 'var(--warning)' },
+    { label: 'Fraud', count: filteredFraudCount, color: 'var(--danger)' },
   ]
   const pipelineTotal = pipelineData.reduce((s, p) => s + p.count, 0) || 1
+
+  const operationsDeck = [
+    {
+      title: 'Review Queue',
+      href: '/admin/reviews',
+      value: filteredReviewCount,
+      helper: filteredReviewCount > 0 ? 'Pending claims need triage' : 'Queue is clear',
+      tone: 'var(--warning)',
+      cta: 'Open Reviews',
+    },
+    {
+      title: 'Fraud Triage',
+      href: '/admin/reviews',
+      value: filteredFraudCount,
+      helper: filteredFraudCount > 0 ? 'High-risk claims flagged' : 'No elevated fraud spikes',
+      tone: 'var(--danger)',
+      cta: 'Inspect Signals',
+    },
+    {
+      title: 'Event Ops',
+      href: '/admin/events',
+      value: filteredClaims.length,
+      helper: 'Relay, requeue, and dead-letter controls',
+      tone: 'var(--accent)',
+      cta: 'Open Event Ops',
+    },
+    {
+      title: 'Trigger Console',
+      href: '/admin/triggers',
+      value: triggerDistribution.reduce((s, t) => s + Number(t.value || 0), 0),
+      helper: 'Validate active trigger families',
+      tone: 'var(--info)',
+      cta: 'Open Triggers',
+    },
+  ]
 
   return (
     <div className="min-h-screen page-mesh">
@@ -314,6 +455,95 @@ export default function AdminDashboard() {
               </p>
             </div>
           </div>
+        </section>
+
+        {/* Analytics Filters */}
+        <section className="card p-5 section-enter">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+            <div>
+              <h2 className="text-sm font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                Analytics Filters
+              </h2>
+              <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>
+                Slice operational metrics by city tier, city, platform, and decision status.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="px-3 py-1.5 rounded-md text-xs font-medium"
+              style={{ border: '1px solid var(--border-primary)', color: 'var(--text-secondary)', background: 'var(--bg-tertiary)' }}
+            >
+              Reset Filters
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+            <label className="space-y-1.5">
+              <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>City Tier</span>
+              <select
+                value={tierFilter}
+                onChange={(e) => setTierFilter(e.target.value as 'all' | 'tier1' | 'tier2' | 'tier3')}
+                className="w-full rounded-md px-3 py-2 text-sm"
+                style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)' }}
+              >
+                <option value="all">All Tiers</option>
+                <option value="tier1">Tier 1</option>
+                <option value="tier2">Tier 2</option>
+                <option value="tier3">Tier 3+</option>
+              </select>
+            </label>
+
+            <label className="space-y-1.5">
+              <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>City</span>
+              <select
+                value={cityFilter}
+                onChange={(e) => setCityFilter(e.target.value)}
+                className="w-full rounded-md px-3 py-2 text-sm"
+                style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)' }}
+              >
+                <option value="all">All Cities</option>
+                {cityOptions.map((city) => (
+                  <option key={city} value={city}>{city}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="space-y-1.5">
+              <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Platform</span>
+              <select
+                value={platformFilter}
+                onChange={(e) => setPlatformFilter(e.target.value)}
+                className="w-full rounded-md px-3 py-2 text-sm"
+                style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)' }}
+              >
+                <option value="all">All Platforms</option>
+                {platformOptions.map((platform) => (
+                  <option key={platform} value={platform}>{platform}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="space-y-1.5">
+              <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Decision Status</span>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as 'all' | 'review' | 'approved' | 'fraud' | 'rejected')}
+                className="w-full rounded-md px-3 py-2 text-sm"
+                style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)' }}
+              >
+                <option value="all">All Statuses</option>
+                <option value="review">Review Required</option>
+                <option value="approved">Approved / Paid</option>
+                <option value="fraud">Fraud Signals</option>
+                <option value="rejected">Rejected / Flagged</option>
+              </select>
+            </label>
+          </div>
+
+          <p className="text-xs mt-3" style={{ color: 'var(--text-tertiary)' }}>
+            Showing {filteredClaims.length} of {claims.length} claims in current analytics scope.
+          </p>
         </section>
 
         {/* KPI Cards */}
@@ -356,7 +586,7 @@ export default function AdminDashboard() {
             <h2 className="text-sm font-semibold uppercase tracking-wider flex items-center gap-2" style={{ color: 'var(--text-tertiary)' }}>
               <Activity size={16} /> Claim Pipeline Status
             </h2>
-            <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{claims.length} total claims</span>
+            <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{filteredClaims.length} filtered claims</span>
           </div>
           <div className="flex rounded-lg overflow-hidden h-3" style={{ background: 'var(--bg-tertiary)' }}>
             {pipelineData.map((p, i) => p.count > 0 && (
@@ -375,6 +605,33 @@ export default function AdminDashboard() {
           </div>
         </section>
 
+        {/* Ops Command Deck */}
+        <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 section-enter">
+          {operationsDeck.map((item, index) => (
+            <Link
+              key={item.title}
+              href={item.href}
+              className={`card p-5 animate-fade-in-up delay-${(index + 2) * 100} transition-all hover:translate-y-[-2px]`}
+              style={{ borderTop: `2px solid ${item.tone}` }}
+            >
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                  {item.title}
+                </h3>
+                <span className="text-base font-bold" style={{ color: item.tone }}>
+                  {item.value.toLocaleString('en-IN')}
+                </span>
+              </div>
+              <p className="text-sm leading-relaxed mb-4" style={{ color: 'var(--text-secondary)' }}>
+                {item.helper}
+              </p>
+              <span className="text-xs font-medium inline-flex items-center gap-1" style={{ color: item.tone }}>
+                {item.cta} <ArrowRight size={12} />
+              </span>
+            </Link>
+          ))}
+        </section>
+
         {/* Zone Risk Map */}
         <ZoneRiskMap />
 
@@ -386,7 +643,7 @@ export default function AdminDashboard() {
               <h2 className="text-base font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
                 <Activity size={18} style={{ color: 'var(--info)' }} /> Trigger Distribution
               </h2>
-              <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>Disruption events by family across all zones</p>
+              <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>Disruption events by family across all zones (network-wide)</p>
             </div>
             {chartsLoading ? (
               <div className="h-64"><Skeleton width="100%" height="256px" /></div>
@@ -428,19 +685,25 @@ export default function AdminDashboard() {
               </div>
             ) : (
               <div className="flex-1 space-y-2 overflow-y-auto max-h-[300px]">
-                {claims.slice(0, 6).map(c => (
-                  <div key={c.id} className="flex items-center justify-between p-3 rounded-lg transition-colors" style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-primary)' }}>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className={`badge ${statusBadge(c.claim_status)}`}>{statusLabel(c.claim_status)}</span>
-                        <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                          {new Date(c.claimed_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                        </span>
-                      </div>
-                      <p className="text-sm truncate" style={{ color: 'var(--text-secondary)' }}>{c.claim_reason}</p>
-                    </div>
+                {filteredClaims.length === 0 ? (
+                  <div className="p-4 rounded-lg text-sm" style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-primary)', color: 'var(--text-tertiary)' }}>
+                    No claims match the selected filters.
                   </div>
-                ))}
+                ) : (
+                  filteredClaims.slice(0, 6).map(c => (
+                    <div key={c.id} className="flex items-center justify-between p-3 rounded-lg transition-colors" style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-primary)' }}>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`badge ${statusBadge(c.claim_status)}`}>{statusLabel(c.claim_status)}</span>
+                          <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                            {new Date(c.claimed_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </span>
+                        </div>
+                        <p className="text-sm truncate" style={{ color: 'var(--text-secondary)' }}>{c.claim_reason}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             )}
           </div>

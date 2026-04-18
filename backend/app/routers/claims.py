@@ -27,6 +27,7 @@ from backend.app.services.evidence import extract_exif_metadata
 from backend.app.services.gemini_analysis import generate_claim_narrative
 from backend.app.services.observability import increment_counter, structured_log
 from backend.app.services.payout_workflow import (
+    build_trust_stamp_for_claim,
     get_payout_trace_for_claim,
     initiate_payout_for_claim,
 )
@@ -642,27 +643,65 @@ async def get_claim_detail(
     ):
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    evidence_resp = (
-        sb.table("claim_evidence")
-        .select("*")
-        .eq("claim_id", claim_id)
-        .execute()
-    )
-    payout_resp = (
-        sb.table("payout_recommendations")
-        .select("*")
-        .eq("claim_id", claim_id)
-        .maybe_single()
-        .execute()
-    )
-    review_resp = (
-        sb.table("claim_reviews")
-        .select("*, insurer_profiles(company_name)")
-        .eq("claim_id", claim_id)
-        .execute()
-    )
+    evidence_rows: list[dict[str, Any]] = []
+    payout_row: dict[str, Any] | None = None
+    review_rows: list[dict[str, Any]] = []
+
+    try:
+        evidence_resp = (
+            sb.table("claim_evidence")
+            .select("*")
+            .eq("claim_id", claim_id)
+            .execute()
+        )
+        evidence_rows = (
+            evidence_resp.data
+            if evidence_resp and isinstance(getattr(evidence_resp, "data", None), list)
+            else []
+        )
+    except Exception:
+        evidence_rows = []
+
+    try:
+        payout_resp = (
+            sb.table("payout_recommendations")
+            .select("*")
+            .eq("claim_id", claim_id)
+            .maybe_single()
+            .execute()
+        )
+        payout_row = (
+            payout_resp.data
+            if payout_resp and isinstance(getattr(payout_resp, "data", None), dict)
+            else None
+        )
+    except Exception:
+        payout_row = None
+
+    try:
+        review_resp = (
+            sb.table("claim_reviews")
+            .select("*, insurer_profiles(company_name)")
+            .eq("claim_id", claim_id)
+            .execute()
+        )
+        review_rows = (
+            review_resp.data
+            if review_resp and isinstance(getattr(review_resp, "data", None), list)
+            else []
+        )
+    except Exception:
+        review_rows = []
     payout_trace = get_payout_trace_for_claim(sb, claim_id)
-    device_trust = _extract_device_trust_from_payout_row(payout_resp.data)  # type: ignore[arg-type]
+    trust_stamp = (
+        payout_trace.get("trust_stamp")
+        if isinstance(payout_trace, dict)
+        else None
+    )
+    if not isinstance(trust_stamp, dict):
+        trust_stamp = build_trust_stamp_for_claim(sb, claim_id)
+
+    device_trust = _extract_device_trust_from_payout_row(payout_row)
 
     reviewer_name_map: dict[str, str] = {}
     assigned_reviewer_id = claim_data.get("assigned_reviewer_profile_id")
@@ -682,11 +721,12 @@ async def get_claim_detail(
 
     return {
         "claim": claim_data,
-        "evidence": evidence_resp.data,
-        "payout_recommendation": payout_resp.data,  # type: ignore
+        "evidence": evidence_rows,
+        "payout_recommendation": payout_row,
         "payout_trace": payout_trace,
+        "trust_stamp": trust_stamp,
         "device_trust": device_trust,
-        "reviews": review_resp.data,
+        "reviews": review_rows,
     }
 
 

@@ -6,7 +6,7 @@ This service evaluates evidence completeness, geo-confidence, and provides
 clear "why held" explanations.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from backend.app.services.geo_verification import verify_zone_match
 
 
@@ -29,7 +29,8 @@ def evaluate_manual_claim(
 
     stated_geo_exists = claim_record.get("stated_lat") is not None
     exif_geo_exists = any(
-        e.get("exif_lat") is not None for e in evidence_records
+        e.get("exif_lat") is not None and e.get("exif_lng") is not None
+        for e in evidence_records
     )
 
     if stated_geo_exists or exif_geo_exists:
@@ -53,20 +54,25 @@ def evaluate_manual_claim(
         )
 
     # Check Zone Distance
-    zone_data = worker_context.get("zones", {})
+    zone_data = worker_context.get("zones")
+    if not isinstance(zone_data, dict):
+        zone_data = {}
+
     zone_lat = zone_data.get("center_lat")
     zone_lng = zone_data.get("center_lng")
 
-    if zone_lat and zone_lng:
+    if zone_lat is not None and zone_lng is not None:
         # Prefer true EXIF geo over manually stated lat/lng if available
         test_lat = claim_record.get("stated_lat")
         test_lng = claim_record.get("stated_lng")
         for e in evidence_records:
-            if e.get("exif_lat"):
-                test_lat, test_lng = e.get("exif_lat"), e.get("exif_lng")
+            exif_lat = e.get("exif_lat")
+            exif_lng = e.get("exif_lng")
+            if exif_lat is not None and exif_lng is not None:
+                test_lat, test_lng = exif_lat, exif_lng
                 break
 
-        if test_lat and test_lng:
+        if test_lat is not None and test_lng is not None:
             zone_res = verify_zone_match(
                 test_lat, test_lng, zone_lat, zone_lng
             )

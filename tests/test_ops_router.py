@@ -127,6 +127,15 @@ class TestOpsRouter:
         assert payload["slo"]["status"] in {"ok", "breach"}
         assert "thresholds" in payload["slo"]
         assert "observed" in payload["slo"]
+        assert "signals" in payload["slo"]
+
+        outbox_signal = payload["slo"]["signals"]["outbox_dead_letter"]
+        assert outbox_signal["owner"] == "platform-reliability"
+        assert outbox_signal["severity"] in {"info", "warning", "critical"}
+        assert isinstance(outbox_signal["is_breaching"], bool)
+        if outbox_signal["is_breaching"]:
+            assert isinstance(outbox_signal["breach_age_seconds"], int)
+            assert outbox_signal["breach_age_seconds"] >= 0
 
     def test_get_ops_metrics(self):
         fake_snapshot = {
@@ -144,6 +153,27 @@ class TestOpsRouter:
         payload = resp.json()
         assert payload["status"] == "ok"
         assert payload["metrics"] == fake_snapshot
+
+    def test_get_ops_metrics_prometheus(self):
+        fake_snapshot = {
+            "generated_at": "2026-04-09T12:00:00Z",
+            "uptime_seconds": 10,
+            "counters": [{"name": "x_total", "labels": {}, "value": 1}],
+            "gauges": [],
+            "timers": [],
+        }
+        fake_export = "# TYPE x_total counter\nx_total 1\n"
+
+        with patch("backend.app.routers.ops.get_metrics_snapshot", return_value=fake_snapshot), patch(
+            "backend.app.routers.ops.export_metrics_prometheus",
+            return_value=fake_export,
+        ):
+            with _build_client() as client:
+                resp = client.get("/ops/metrics/prometheus")
+
+        assert resp.status_code == 200
+        assert resp.text == fake_export
+        assert resp.headers["content-type"].startswith("text/plain")
 
     def test_get_version_governance_snapshot(self):
         fake_snapshot = {
@@ -216,3 +246,7 @@ class TestOpsRouter:
         assert payload["slo"]["status"] in {"ok", "breach"}
         assert "thresholds" in payload["slo"]
         assert "observed" in payload["slo"]
+        assert "signals" in payload["slo"]
+        payout_signal = payload["slo"]["signals"]["payout_failures"]
+        assert payout_signal["owner"] == "payout-ops"
+        assert payout_signal["severity"] in {"info", "warning", "critical"}

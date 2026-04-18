@@ -41,6 +41,7 @@ def normalize_payout_status(raw_status: str | None) -> str:
 
     aliases = {
         "queued": "pending",
+        "submitted": "pending",
         "created": "initiated",
         "accepted": "initiated",
         "in_progress": "processing",

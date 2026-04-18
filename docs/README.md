@@ -2,6 +2,11 @@
 
 > This folder is the **non-code explanation layer** of the project. It contains architecture diagrams, formula references, pitch assets, and supporting documentation that allow judges and reviewers to understand the platform without inspecting source code.
 
+### External Links
+
+- Demo video: [YouTube Demo](https://youtu.be/4h6MEWHoyPc?si=4Iox--yIqIhw4Pa3)
+- Documentation deck: [Google Slides Documentation](https://docs.google.com/presentation/d/1GX8-mwHaDpO9MCyFvRNqrhixL99dmMnbM9KoQcwiBs0/edit?usp=sharing)
+
 ---
 
 ## Engineering Snapshot (2026-04-09)
@@ -76,7 +81,7 @@ Five architecture views are defined for this project (per expert-session require
 | 3 | Insurance Company Operations | Below (this file) | Mermaid (inline) |
 | 4 | Trigger → Claim → Approval Flow | [claim-engine/README.md](../claim-engine/README.md) | Mermaid (inline) |
 | 5 | Fraud Detection Pipeline (5-Layer) | [fraud/README.md](../fraud/README.md) | Mermaid (inline) |
-| 6 | Adversarial Defense & Anti-Spoofing | [Root README](../README.md#adversarial-defense--anti-spoofing-strategy) | Tables + narrative |
+| 6 | Adversarial Defense & Anti-Spoofing | [Root README](../README.md#adversarial-defense-anti-spoofing-strategy) | Tables + narrative |
 
 #### View 3 — Insurer Operations
 
@@ -109,7 +114,7 @@ flowchart LR
 |----------|---------|-----------------| 
 | Premium formula book | Internal calibration: B, S, E, C, expected payout, gross premium | [Root README](../README.md), [ml/README.md](../ml/README.md) |
 | Parametric payout ladder | Public-facing: Essential/Plus plans, Band 1/2/3 payouts | [Root README](../README.md#parametric-product-weekly-benefit-plans) |
-| Adversarial defense & anti-spoofing | Multi-signal verification, decision matrix, circuit-breakers, fraud-ring scenario | [Root README](../README.md#adversarial-defense--anti-spoofing-strategy), [fraud/README.md](../fraud/README.md) |
+| Adversarial defense & anti-spoofing | Multi-signal verification, decision matrix, circuit-breakers, fraud-ring scenario | [Root README](../README.md#adversarial-defense-anti-spoofing-strategy), [fraud/README.md](../fraud/README.md) |
 | What ML Does vs Does Not Do | ML role boundaries, correct architecture split | [Root README](../README.md#what-ml-does-vs-what-ml-does-not-do), [ml/README.md](../ml/README.md) |
 | Trigger threshold reference | IMD rain bands, CPCB AQI categories, IMD/NDMA heat-wave guidance, operational thresholds | [Root README](../README.md), [claim-engine/README.md](../claim-engine/README.md) |
 | Derivation example | Worked scenario: ₹84/hr worker, 72mm rain, AQI 240 → premium and payout outputs | [Root README](../README.md) |
@@ -122,6 +127,7 @@ flowchart LR
 |-------|---------|--------|
 | 5-minute pitch script | Timed judge-facing narrative (0:00–5:00) | 📝 Documented |
 | Demo sequence | Worker quote → trigger event → claim path → insurer dashboard → analytics | 📝 Documented |
+| Documentation deck (Google Slides) | Official judge-facing presentation deck | ✅ Linked |
 | Judge Q&A preparation | 5 likely questions with sharp responses | 📝 Documented |
 | Challenge alignment note | Maps every challenge requirement to our approach | ✅ In root README |
 
@@ -191,7 +197,7 @@ Environmental trigger thresholds and premium/payout formulation are grounded in 
 | 4 | IMD FAQ on Heat Wave | Heat threshold for T7–T9 triggers | Defines heat-wave conditions (≥ 45°C for plains, or departure ≥ 4.5°C from normal). We use 45°C as claim and 47°C as escalation. | [IMD Heat Wave FAQ PDF](https://internal.imd.gov.in/section/nhac/dynamic/FAQ_heat_wave.pdf) |
 | 5 | NDMA Heat Wave Guidance | Heat-wave preparedness criteria | Government guidance on heat-wave classification and impact categories. Supports our heat-wave threshold mapping. | [ndma.gov.in](https://ndma.gov.in/Natural-Hazards/Heat-Wave) |
 | 6 | Breiman (2001), *Random Forests* | Baseline severity classifier (claim probability `p`) | Random Forest was selected for interpretability through feature importance, robustness to small datasets, and resistance to overfitting — critical for an 8-row bootstrap seed. | [doi.org](https://doi.org/10.1023/A:1010933404324) |
-| 7 | Chen & Guestrin (2016), *XGBoost* | Future benchmark model | XGBoost is retained as a planned benchmark if dataset complexity warrants gradient-boosted trees. Not yet used in current pipeline. | [doi.org](https://doi.org/10.1145/2939672.2939785) |
+| 7 | Chen & Guestrin (2016), *XGBoost* | Future benchmark model | XGBoost is retained as a planned benchmark if dataset complexity warrants gradient-boosted trees. Not yet used in current pipeline. | [arxiv.org](https://arxiv.org/abs/1603.02754) |
 | 8 | *Loss Data Analytics*, Ch. 7: Premium Foundations | Expected-loss premium principle | Provides the actuarial grounding for the expected-value premium formula used in our gross premium calculation. | [openacttexts.github.io](https://openacttexts.github.io/Loss-Data-Analytics/ChapPremiumFoundations.html) |
 | 9 | Mikosch, *Non-Life Insurance Mathematics* | Premium loading and risk margin methodology | Supports the expense-loading (α) and risk-margin (β) assumptions in the gross premium formula. | [Springer PDF](https://unina2.on-line.it/sebina/repository/catalogazione/documenti/Mikosch%20-%20Non-life%20insurance%20mathematics.pdf) |
 
@@ -199,7 +205,7 @@ Environmental trigger thresholds and premium/payout formulation are grounded in 
 
 | # | Source | What it supports | Why it is relevant | Link |
 |---|--------|------------------|--------------------|------|
-| 10 | IRDAI Annual Reports & Handbook | Claim trends, market structure, complaint/settlement statistics | Grounds pricing and claims reasoning in actual Indian insurance market data rather than pure synthetic logic | [irdai.gov.in](https://www.irdai.gov.in/annual-reports) |
+| 10 | IRDAI Annual Reports & Handbook | Claim trends, market structure, complaint/settlement statistics | Grounds pricing and claims reasoning in actual Indian insurance market data rather than pure synthetic logic | [irdai.gov.in](https://irdai.gov.in/annual-reports) |
 | 11 | IIB (Insurance Information Bureau) | Analytics-oriented insurance datasets, general-insurance patterns | Provides fraud/risk-analytics orientation and claims/operational trend benchmarking | [iib.gov.in](https://iib.gov.in/) |
 | 12 | Swiss Re Parametric Insurance Guide | Parametric insurance product framing | Provides the conceptual framework for trigger-band-based payouts and basis-risk acknowledgment | [swissre.com](https://www.swissre.com/) |
 | 13 | Financial Protection Forum | Disaster-response parametric insurance | Supports the parametric trigger architecture for weather-linked income protection | [financialprotectionforum.org](https://www.financialprotectionforum.org/) |

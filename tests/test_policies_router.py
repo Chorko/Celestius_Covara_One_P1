@@ -100,7 +100,8 @@ class TestPoliciesRouter:
 
         payload = asyncio.run(_run_quote())
         assert payload["plan"] == "plus"
-        assert payload["weekly_premium_inr"] == 42
+        assert payload["weekly_premium_inr"] >= 30
+        assert payload["weekly_premium_inr"] <= 96
         assert payload["plan_uplift_factor"] == 1.5
 
     def test_activate_policy_persists_schema_aligned_row(self):
@@ -119,7 +120,8 @@ class TestPoliciesRouter:
         body = resp.json()
         assert body["plan"] == "plus"
         assert body["weekly_benefit_w"] == 4500
-        assert body["weekly_premium_inr"] == 42
+        assert body["weekly_premium_inr"] >= 30
+        assert body["weekly_premium_inr"] <= 96
         assert body["zone_id"] == "zone-abc"
 
         assert policies_table.last_on_conflict == "policy_id"
@@ -127,7 +129,7 @@ class TestPoliciesRouter:
         assert policies_table.last_row["worker_profile_id"] == "worker-1"
         assert policies_table.last_row["plan_type"] == "plus"
         assert policies_table.last_row["coverage_amount"] == 4500.0
-        assert policies_table.last_row["premium_amount"] == 42.0
+        assert policies_table.last_row["premium_amount"] == body["weekly_premium_inr"]
         assert policies_table.last_row["status"] == "active"
 
     def test_activate_policy_returns_503_when_storage_unavailable(self):

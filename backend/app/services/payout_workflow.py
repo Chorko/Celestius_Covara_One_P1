@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import uuid4
@@ -36,10 +37,129 @@ ALLOWED_PAYOUT_TRANSITIONS: dict[str, set[str]] = {
     "processing": {"settled", "failed", "reversed", "manual_review"},
     "settled": {"reversed"},
     "failed": {"initiated", "cancelled", "manual_review"},
-    "manual_review": {"initiated", "cancelled", "failed"},
+    "manual_review": {"initiated", "processing", "settled", "cancelled", "failed"},
     "cancelled": {"initiated"},
     "reversed": {"manual_review"},
 }
+
+
+def _extract_device_trust_from_explanation(explanation: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(explanation, dict):
+        return {}
+
+    direct = explanation.get("device_trust")
+    if isinstance(direct, dict):
+        return direct
+
+    fraud_analysis = explanation.get("fraud_analysis")
+    if isinstance(fraud_analysis, dict):
+        nested = fraud_analysis.get("device_trust")
+        if isinstance(nested, dict):
+            return nested
+        anti_spoof = (fraud_analysis.get("layers") or {}).get("anti_spoofing")
+        if isinstance(anti_spoof, dict):
+            return {
+                "device_trust_tier": anti_spoof.get("device_trust_tier"),
+                "signal_confidence": anti_spoof.get("signal_confidence"),
+                "attestation_verdict": anti_spoof.get("attestation_verdict"),
+                "risk_signals": anti_spoof.get("flags_fired")
+                if isinstance(anti_spoof.get("flags_fired"), list)
+                else [],
+            }
+
+    return {}
+
+
+def _resolve_version_snapshot(sb, table_name: str, version_id: Any) -> dict[str, Any] | None:
+    resolved_id = str(version_id or "").strip()
+    if not resolved_id:
+        return None
+
+    try:
+        row = (
+            sb.table(table_name)
+            .select("id, version_key")
+            .eq("id", resolved_id)
+            .maybe_single()
+            .execute()
+            .data
+        )
+    except Exception:
+        row = None
+
+    if isinstance(row, dict):
+        return {
+            "id": row.get("id") or resolved_id,
+            "key": row.get("version_key"),
+        }
+
+    return {
+        "id": resolved_id,
+        "key": None,
+    }
+
+
+def build_trust_stamp_for_claim(sb, claim_id: str) -> dict[str, Any]:
+    claim_row: dict[str, Any] = {}
+    try:
+        claim_row = (
+            sb.table("manual_claims")
+            .select("id, rule_version_id, model_version_id")
+            .eq("id", claim_id)
+            .maybe_single()
+            .execute()
+            .data
+            or {}
+        )
+    except Exception:
+        claim_row = {}
+
+    explanation_json: dict[str, Any] = {}
+    try:
+        payout_rec = (
+            sb.table("payout_recommendations")
+            .select("explanation_json")
+            .eq("claim_id", claim_id)
+            .maybe_single()
+            .execute()
+            .data
+            or {}
+        )
+        if isinstance(payout_rec.get("explanation_json"), dict):
+            explanation_json = payout_rec["explanation_json"]
+    except Exception:
+        explanation_json = {}
+
+    fraud_analysis = explanation_json.get("fraud_analysis")
+    if not isinstance(fraud_analysis, dict):
+        fraud_analysis = {}
+
+    device_trust = _extract_device_trust_from_explanation(explanation_json)
+
+    trust_stamp: dict[str, Any] = {
+        "device_trust_tier": device_trust.get("device_trust_tier"),
+        "signal_confidence": device_trust.get("signal_confidence"),
+        "attestation_verdict": device_trust.get("attestation_verdict"),
+        "fraud_score_band": fraud_analysis.get("fraud_band"),
+        "version_governance": {
+            "rule_version": _resolve_version_snapshot(
+                sb,
+                "rule_versions",
+                claim_row.get("rule_version_id"),
+            ),
+            "model_version": _resolve_version_snapshot(
+                sb,
+                "model_versions",
+                claim_row.get("model_version_id"),
+            ),
+        },
+    }
+
+    risk_signals = device_trust.get("risk_signals")
+    if isinstance(risk_signals, list):
+        trust_stamp["risk_signals"] = risk_signals
+
+    return trust_stamp
 
 
 def _utc_now() -> datetime:
@@ -66,6 +186,118 @@ def _retry_next_at(retry_count: int) -> str:
     return (
         _utc_now() + timedelta(minutes=delay_minutes)
     ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _extract_missing_column_name(exc: Exception) -> str | None:
+    message = str(exc)
+    patterns = [
+        r"could not find the '([^']+)' column",
+        r'column\s+[\w\."]+\.([a-zA-Z_][\w]*)\s+does not exist',
+        r"column\s+\"?([a-zA-Z_][\w]*)\"?\s+does not exist",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, message, flags=re.IGNORECASE)
+        if match:
+            return str(match.group(1))
+    return None
+
+
+def _is_not_null_constraint_on_column(exc: Exception, column: str) -> bool:
+    message = str(exc).lower()
+    needle = f'null value in column "{column.lower()}"'
+    return needle in message and "violates not-null constraint" in message
+
+
+def _legacy_payout_status_fallback(status: str) -> str | None:
+    normalized = normalize_payout_status(status)
+    mapping = {
+        "pending": "submitted",
+        "settled": "paid",
+        "cancelled": "failed",
+        "reversed": "failed",
+    }
+    return mapping.get(normalized)
+
+
+def _insert_settlement_event_row(sb, row: dict[str, Any]) -> list[dict[str, Any]]:
+    """Insert settlement row while tolerating missing columns in older DB schemas."""
+    payload = dict(row)
+    last_exc: Exception | None = None
+
+    for _ in range(8):
+        try:
+            return sb.table("payout_settlement_events").insert(payload).execute().data or []
+        except Exception as exc:
+            last_exc = exc
+            missing_col = _extract_missing_column_name(exc)
+            if not missing_col or missing_col not in payload:
+                raise
+            payload.pop(missing_col, None)
+
+    if last_exc:
+        raise last_exc
+    return []
+
+
+def _update_settlement_event_row(
+    sb,
+    settlement_event_id: str,
+    update_payload: dict[str, Any],
+) -> None:
+    """Update settlement row while tolerating missing columns in older DB schemas."""
+    payload = dict(update_payload)
+    last_exc: Exception | None = None
+
+    for _ in range(8):
+        if not payload:
+            return
+        try:
+            sb.table("payout_settlement_events").update(payload).eq("id", settlement_event_id).execute()
+            return
+        except Exception as exc:
+            last_exc = exc
+            missing_col = _extract_missing_column_name(exc)
+            if not missing_col or missing_col not in payload:
+                raise
+            payload.pop(missing_col, None)
+
+    if last_exc:
+        raise last_exc
+
+
+def _update_payout_request_row(
+    sb,
+    payout_request_id: str,
+    update_payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Update payout request row while tolerating missing columns in older DB schemas."""
+    payload = dict(update_payload)
+    last_exc: Exception | None = None
+
+    for _ in range(8):
+        if not payload:
+            return {}
+        try:
+            sb.table("payout_requests").update(payload).eq("id", payout_request_id).execute()
+            return payload
+        except Exception as exc:
+            last_exc = exc
+
+            message = str(exc).lower()
+            if "payout_requests_status_check" in message and "status" in payload:
+                fallback_status = _legacy_payout_status_fallback(str(payload.get("status") or ""))
+                if fallback_status and fallback_status != payload.get("status"):
+                    payload["status"] = fallback_status
+                    continue
+
+            missing_col = _extract_missing_column_name(exc)
+            if not missing_col or missing_col not in payload:
+                raise
+            payload.pop(missing_col, None)
+
+    if last_exc:
+        raise last_exc
+    return {}
 
 
 def _extract_webhook_fields(payload: dict[str, Any]) -> dict[str, str]:
@@ -119,18 +351,39 @@ def _insert_transition(
     actor_profile_id: str | None,
     metadata: dict[str, Any] | None = None,
 ) -> None:
-    sb.table("payout_status_transitions").insert(
-        {
-            "payout_request_id": payout_request_id,
-            "previous_status": previous_status,
-            "new_status": new_status,
-            "transition_reason": reason,
-            "actor_type": actor_type,
-            "actor_profile_id": actor_profile_id,
-            "transition_metadata": metadata or {},
-            "created_at": _utc_now_iso(),
-        }
-    ).execute()
+    row = {
+        # Modern schema columns.
+        "payout_request_id": payout_request_id,
+        "previous_status": previous_status,
+        "new_status": new_status,
+        "transition_reason": reason,
+        "actor_type": actor_type,
+        "actor_profile_id": actor_profile_id,
+        "transition_metadata": metadata or {},
+        "created_at": _utc_now_iso(),
+        # Legacy schema aliases.
+        "from_status": previous_status,
+        "to_status": new_status,
+        "reason": reason,
+        "metadata": metadata or {},
+    }
+
+    payload = dict(row)
+    last_exc: Exception | None = None
+    for _ in range(10):
+        try:
+            sb.table("payout_status_transitions").insert(payload).execute()
+            return
+        except Exception as exc:
+            last_exc = exc
+            missing_col = _extract_missing_column_name(exc)
+            if missing_col and missing_col in payload:
+                payload.pop(missing_col, None)
+                continue
+            raise
+
+    if last_exc:
+        raise last_exc
 
 
 def _apply_transition(
@@ -143,7 +396,7 @@ def _apply_transition(
     actor_profile_id: str | None,
     metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    current_status = str(payout_row.get("status") or "").strip().lower() or "initiated"
+    current_status = normalize_payout_status(str(payout_row.get("status") or "") or "initiated")
     target = normalize_payout_status(new_status)
 
     allowed = ALLOWED_PAYOUT_TRANSITIONS.get(current_status, set())
@@ -164,8 +417,12 @@ def _apply_transition(
         update_payload["retry_count"] = retries + 1
         update_payload["next_retry_at"] = _retry_next_at(retries + 1)
 
-    sb.table("payout_requests").update(update_payload).eq("id", payout_row["id"]).execute()
-    payout_row.update(update_payload)
+    applied_payload = _update_payout_request_row(
+        sb,
+        str(payout_row["id"]),
+        update_payload,
+    )
+    payout_row.update(applied_payload)
 
     _insert_transition(
         sb,
@@ -189,26 +446,36 @@ def _find_payout_by_references(
     claim_id: str,
 ) -> dict[str, Any] | None:
     if provider_reference_id:
-        row = (
-            sb.table("payout_requests")
-            .select("*")
-            .eq("provider_reference_id", provider_reference_id)
-            .maybe_single()
-            .execute()
-            .data
-        )
+        try:
+            row = (
+                sb.table("payout_requests")
+                .select("*")
+                .eq("provider_reference_id", provider_reference_id)
+                .maybe_single()
+                .execute()
+                .data
+            )
+        except Exception as exc:
+            if _extract_missing_column_name(exc) != "provider_reference_id":
+                raise
+            row = None
         if row:
             return row
 
     if correlation_id:
-        row = (
-            sb.table("payout_requests")
-            .select("*")
-            .eq("correlation_id", correlation_id)
-            .maybe_single()
-            .execute()
-            .data
-        )
+        try:
+            row = (
+                sb.table("payout_requests")
+                .select("*")
+                .eq("correlation_id", correlation_id)
+                .maybe_single()
+                .execute()
+                .data
+            )
+        except Exception as exc:
+            if _extract_missing_column_name(exc) != "correlation_id":
+                raise
+            row = None
         if row:
             return row
 
@@ -300,6 +567,8 @@ async def initiate_payout_for_claim(
         increment_counter("payout_initiation_rejected_total", labels={"reason": "no_payable_amount"})
         raise ValueError("No payable amount found for claim")
 
+    trust_stamp = build_trust_stamp_for_claim(sb, claim_id)
+
     existing = (
         sb.table("payout_requests")
         .select("*")
@@ -315,6 +584,7 @@ async def initiate_payout_for_claim(
             "status": "already_exists",
             "idempotent": True,
             "payout": existing,
+            "trust_stamp": trust_stamp,
         }
 
     if existing and force_retry and str(existing.get("status")) not in PAYOUT_RETRYABLE_STATUSES:
@@ -412,6 +682,7 @@ async def initiate_payout_for_claim(
                 "reason": "bank_not_verified",
                 "retry_count": payload["retry_count"],
                 "request_id": request_id,
+                "trust_stamp": trust_stamp,
             },
         )
         increment_counter("payout_initiation_outcome_total", labels={"status": "manual_review"})
@@ -428,6 +699,7 @@ async def initiate_payout_for_claim(
             "status": "manual_review",
             "idempotent": False,
             "payout": payout_row,
+            "trust_stamp": trust_stamp,
         }
 
     provider = get_payout_provider(preferred_key=requested_provider)
@@ -548,6 +820,7 @@ async def initiate_payout_for_claim(
             "retry": force_retry,
             "failure_code": provider_result.failure_code,
             "request_id": request_id,
+            "trust_stamp": trust_stamp,
         },
     )
 
@@ -565,6 +838,7 @@ async def initiate_payout_for_claim(
                 "provider_reference_id": payout_row.get("provider_reference_id"),
                 "retry_count": payout_row.get("retry_count", 0),
                 "request_id": request_id,
+                "trust_stamp": trust_stamp,
             },
         )
     except Exception:
@@ -596,6 +870,7 @@ async def initiate_payout_for_claim(
         "status": str(payout_row.get("status") or final_status),
         "idempotent": False,
         "payout": payout_row,
+        "trust_stamp": trust_stamp,
     }
 
 
@@ -621,6 +896,7 @@ async def ingest_settlement_webhook(
         payload = {}
         provider_event_id = f"decode_error_{payload_hash[:24]}"
         row = {
+            "provider": provider.provider_key,
             "provider_key": provider.provider_key,
             "provider_event_id": provider_event_id,
             "provider_reference_id": None,
@@ -635,7 +911,7 @@ async def ingest_settlement_webhook(
             "processed_at": _utc_now_iso(),
         }
         try:
-            sb.table("payout_settlement_events").insert(row).execute()
+            _insert_settlement_event_row(sb, row)
         except Exception:
             pass
         increment_counter("payout_webhook_total", labels={"outcome": "invalid_payload"})
@@ -650,7 +926,16 @@ async def ingest_settlement_webhook(
     provider_event_id = fields["provider_event_id"] or f"event_{payload_hash[:24]}"
     status = fields["status"]
 
+    payout_row = _find_payout_by_references(
+        sb,
+        provider_reference_id=fields["provider_reference_id"],
+        correlation_id=fields["correlation_id"],
+        claim_id=str(payload.get("claim_id") or ""),
+    )
+
     event_insert = {
+        "payout_request_id": payout_row.get("id") if payout_row else None,
+        "provider": provider.provider_key,
         "provider_key": provider.provider_key,
         "provider_event_id": provider_event_id,
         "provider_reference_id": fields["provider_reference_id"] or None,
@@ -664,9 +949,7 @@ async def ingest_settlement_webhook(
     }
 
     try:
-        settlement_row = (
-            sb.table("payout_settlement_events").insert(event_insert).execute().data or []
-        )
+        settlement_row = _insert_settlement_event_row(sb, event_insert)
         settlement_event = settlement_row[0] if settlement_row else None
     except Exception as exc:
         if "duplicate" in str(exc).lower() and "provider_event_id" in str(exc).lower():
@@ -677,7 +960,10 @@ async def ingest_settlement_webhook(
                 "processed": False,
                 "provider_event_id": provider_event_id,
             }
-        raise
+        if _is_not_null_constraint_on_column(exc, "payout_request_id"):
+            settlement_event = None
+        else:
+            raise
 
     if not signature_valid:
         increment_counter("payout_webhook_signature_failures_total")
@@ -692,13 +978,15 @@ async def ingest_settlement_webhook(
             provider_event_id=provider_event_id,
         )
         if settlement_event and settlement_event.get("id"):
-            sb.table("payout_settlement_events").update(
+            _update_settlement_event_row(
+                sb,
+                str(settlement_event["id"]),
                 {
                     "processing_status": "rejected",
                     "error_message": "invalid_signature",
                     "processed_at": _utc_now_iso(),
-                }
-            ).eq("id", settlement_event["id"]).execute()
+                },
+            )
         return {
             "status": "rejected",
             "signature_valid": False,
@@ -706,28 +994,26 @@ async def ingest_settlement_webhook(
             "reason": "invalid_signature",
         }
 
-    payout_row = _find_payout_by_references(
-        sb,
-        provider_reference_id=fields["provider_reference_id"],
-        correlation_id=fields["correlation_id"],
-        claim_id=str(payload.get("claim_id") or ""),
-    )
     if not payout_row:
         increment_counter("payout_webhook_total", labels={"outcome": "payout_not_found"})
         if settlement_event and settlement_event.get("id"):
-            sb.table("payout_settlement_events").update(
+            _update_settlement_event_row(
+                sb,
+                str(settlement_event["id"]),
                 {
                     "processing_status": "failed",
                     "error_message": "payout_request_not_found",
                     "processed_at": _utc_now_iso(),
-                }
-            ).eq("id", settlement_event["id"]).execute()
+                },
+            )
         return {
             "status": "failed",
             "signature_valid": True,
             "processed": False,
             "reason": "payout_request_not_found",
         }
+
+    trust_stamp = build_trust_stamp_for_claim(sb, str(payout_row.get("claim_id") or ""))
 
     target_status = normalize_payout_status(status)
     if target_status == "initiated":
@@ -751,13 +1037,15 @@ async def ingest_settlement_webhook(
         increment_counter("payout_webhook_total", labels={"outcome": "transition_failed"})
         increment_counter("payout_failure_total", labels={"reason": "webhook_transition_failed"})
         if settlement_event and settlement_event.get("id"):
-            sb.table("payout_settlement_events").update(
+            _update_settlement_event_row(
+                sb,
+                str(settlement_event["id"]),
                 {
                     "processing_status": "failed",
                     "error_message": f"transition_error: {exc}",
                     "processed_at": _utc_now_iso(),
-                }
-            ).eq("id", settlement_event["id"]).execute()
+                },
+            )
 
         if str(payout_row.get("status") or "") != "manual_review":
             try:
@@ -778,6 +1066,7 @@ async def ingest_settlement_webhook(
             "signature_valid": True,
             "processed": False,
             "reason": str(exc),
+            "trust_stamp": trust_stamp,
         }
 
     if target_status == "settled":
@@ -786,14 +1075,16 @@ async def ingest_settlement_webhook(
         ).execute()
 
     if settlement_event and settlement_event.get("id"):
-        sb.table("payout_settlement_events").update(
+        _update_settlement_event_row(
+            sb,
+            str(settlement_event["id"]),
             {
                 "payout_request_id": payout_row["id"],
                 "processing_status": "processed",
                 "processed_at": _utc_now_iso(),
                 "error_message": None,
-            }
-        ).eq("id", settlement_event["id"]).execute()
+            },
+        )
 
     _upsert_audit_event(
         sb,
@@ -806,6 +1097,7 @@ async def ingest_settlement_webhook(
             "payout_request_id": payout_row["id"],
             "new_status": payout_row.get("status"),
             "request_id": request_id,
+            "trust_stamp": trust_stamp,
         },
     )
 
@@ -822,6 +1114,7 @@ async def ingest_settlement_webhook(
                 "provider_event_id": provider_event_id,
                 "status": payout_row.get("status"),
                 "request_id": request_id,
+                "trust_stamp": trust_stamp,
             },
         )
     except Exception:
@@ -856,42 +1149,74 @@ async def ingest_settlement_webhook(
         "payout_status": payout_row.get("status"),
         "payout_request_id": payout_row.get("id"),
         "provider_event_id": provider_event_id,
+        "trust_stamp": trust_stamp,
     }
 
 
 def get_payout_trace_for_claim(sb, claim_id: str) -> dict[str, Any]:
-    payout = (
-        sb.table("payout_requests")
-        .select("*")
-        .eq("claim_id", claim_id)
-        .maybe_single()
-        .execute()
-        .data
-    )
+    payout: dict[str, Any] | None = None
+    try:
+        payout_resp = (
+            sb.table("payout_requests")
+            .select("*")
+            .eq("claim_id", claim_id)
+            .maybe_single()
+            .execute()
+        )
+        payout = (
+            payout_resp.data
+            if payout_resp and isinstance(getattr(payout_resp, "data", None), dict)
+            else None
+        )
+    except Exception:
+        payout = None
 
     if not payout:
-        return {"claim_id": claim_id, "payout": None, "settlement_events": [], "transitions": []}
+        return {
+            "claim_id": claim_id,
+            "payout": None,
+            "settlement_events": [],
+            "transitions": [],
+            "trust_stamp": build_trust_stamp_for_claim(sb, claim_id),
+        }
 
-    settlement_events = (
-        sb.table("payout_settlement_events")
-        .select("*")
-        .eq("payout_request_id", payout["id"])
-        .execute()
-        .data
-        or []
-    )
-    transitions = (
-        sb.table("payout_status_transitions")
-        .select("*")
-        .eq("payout_request_id", payout["id"])
-        .execute()
-        .data
-        or []
-    )
+    settlement_events: list[dict[str, Any]] = []
+    transitions: list[dict[str, Any]] = []
+
+    try:
+        settlement_resp = (
+            sb.table("payout_settlement_events")
+            .select("*")
+            .eq("payout_request_id", payout["id"])
+            .execute()
+        )
+        settlement_events = (
+            settlement_resp.data
+            if settlement_resp and isinstance(getattr(settlement_resp, "data", None), list)
+            else []
+        )
+    except Exception:
+        settlement_events = []
+
+    try:
+        transition_resp = (
+            sb.table("payout_status_transitions")
+            .select("*")
+            .eq("payout_request_id", payout["id"])
+            .execute()
+        )
+        transitions = (
+            transition_resp.data
+            if transition_resp and isinstance(getattr(transition_resp, "data", None), list)
+            else []
+        )
+    except Exception:
+        transitions = []
 
     return {
         "claim_id": claim_id,
         "payout": payout,
         "settlement_events": settlement_events,
         "transitions": transitions,
+        "trust_stamp": build_trust_stamp_for_claim(sb, claim_id),
     }

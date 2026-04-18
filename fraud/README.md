@@ -142,7 +142,7 @@ flowchart TD
 | **Image forensics (ELA / noise)** | Error Level Analysis for splice detection, noise pattern consistency, JPEG quantization table analysis, perceptual hash cross-matching | Photoshopped scenes, composite images, re-saved evidence, and recycled photos from previous claims |
 
 > [!NOTE]
-> Workers who submit evidence via WhatsApp or Telegram may have EXIF stripped automatically. This is **not treated as fraud** — it reduces the evidence integrity score to Medium and routes the claim to `needs_review`. The system never auto-rejects based on EXIF absence alone. For full details on the evidence integrity scoring model, see the [root README](../README.md#1a-evidence-integrity--ai-image-detection).
+> Workers who submit evidence via WhatsApp or Telegram may have EXIF stripped automatically. This is **not treated as fraud** — it reduces the evidence integrity score to Medium and routes the claim to `needs_review`. The system never auto-rejects based on EXIF absence alone. For full details on the evidence integrity scoring model, see the [root README](../README.md#1a-evidence-integrity-ai-image-detection).
 
 
 ### Layer 4 — Cluster Intelligence
@@ -232,7 +232,7 @@ Beyond individual signal analysis, the fraud engine defends against these tiered
 - Activity continuity anomaly → Order completion gap analysis + shift-activity mismatch
 - Fraud ring cluster → DBSCAN + circuit-breaker controls + cluster screening
 
-> For full details on each vector and defense, see the [Adversarial Defense section](../README.md#1b-advanced-fraud-vectors--threat-model) in the root README.
+> For full details on each vector and defense, see the [Adversarial Defense section](../README.md#1b-advanced-fraud-vectors-threat-model) in the root README.
 
 ---
 

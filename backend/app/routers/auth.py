@@ -51,6 +51,20 @@ class OnboardingInsurerRequest(BaseModel):
     job_title: str | None = None
 
 
+class WorkerOnboardingUpsertRequest(BaseModel):
+    """Upsert worker onboarding/profile fields after signup."""
+
+    full_name: str
+    phone: str | None = None
+    platform_name: str
+    city: str
+    preferred_zone_id: str | None = None
+    vehicle_type: str | None = None
+    avg_hourly_income_inr: float
+    gps_consent: bool = False
+    bank_verified: bool = False
+
+
 # ── Endpoints ──────────────────────────────────────────────────────
 
 
@@ -157,5 +171,64 @@ async def complete_insurer_onboarding(
     return {
         "status": "onboarding_complete",
         "role": "insurer_admin",
+        "id": user_id,
+    }
+
+
+@router.post("/onboarding/worker")
+async def upsert_worker_onboarding(
+    body: WorkerOnboardingUpsertRequest,
+    user: dict = Depends(get_current_user),
+):
+    """Upsert worker-facing onboarding data for the authenticated user."""
+    if user.get("role") == "insurer_admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insurer admin accounts cannot be updated via worker onboarding.",
+        )
+
+    sb = get_supabase_admin()
+    user_id = user["id"]
+
+    sb.table("profiles").upsert(
+        {
+            "id": user_id,
+            "role": "worker",
+            "full_name": body.full_name,
+            "email": user.get("email"),
+            "phone": body.phone,
+        },
+        on_conflict="id",
+    ).execute()
+
+    existing_worker = (
+        sb.table("worker_profiles")
+        .select("profile_id")
+        .eq("profile_id", user_id)
+        .maybe_single()
+        .execute()
+    )
+
+    worker_payload = {
+        "profile_id": user_id,
+        "platform_name": body.platform_name,
+        "city": body.city,
+        "preferred_zone_id": body.preferred_zone_id,
+        "vehicle_type": body.vehicle_type,
+        "avg_hourly_income_inr": body.avg_hourly_income_inr,
+        "gps_consent": body.gps_consent,
+        "bank_verified": body.bank_verified,
+    }
+
+    if existing_worker.data:  # type: ignore
+        sb.table("worker_profiles").update(worker_payload).eq(
+            "profile_id", user_id
+        ).execute()
+    else:
+        sb.table("worker_profiles").insert(worker_payload).execute()
+
+    return {
+        "status": "onboarding_saved",
+        "role": "worker",
         "id": user_id,
     }

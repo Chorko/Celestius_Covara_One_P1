@@ -2,11 +2,13 @@
 
 import os
 import sys
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from backend.app.services.observability import (
     bind_request_id,
+    export_metrics_prometheus,
     get_metrics_snapshot,
     get_request_id,
     increment_counter,
@@ -14,6 +16,7 @@ from backend.app.services.observability import (
     resolve_request_id,
     reset_metrics_for_tests,
     set_gauge,
+    track_slo_breach_age_seconds,
     unbind_request_id,
 )
 
@@ -72,3 +75,39 @@ class TestObservabilityPrimitives:
         assert len(latency_rows) == 1
         assert latency_rows[0].get("count") == 1
         assert latency_rows[0].get("max_ms") == 120.5
+
+    def test_prometheus_export_renders_counter_gauge_and_timer_rows(self):
+        increment_counter("claims_total", labels={"outcome": "created"})
+        set_gauge("outbox_dead_letter", 4)
+        observe_timing_ms("http_request_latency_ms", 50.0, labels={"path": "/ops/status"})
+
+        snapshot = get_metrics_snapshot()
+        prometheus = export_metrics_prometheus(snapshot)
+
+        assert "# TYPE claims_total counter" in prometheus
+        assert 'claims_total{outcome="created"} 1' in prometheus
+        assert "# TYPE outbox_dead_letter gauge" in prometheus
+        assert "outbox_dead_letter 4.0" in prometheus
+        assert "# TYPE http_request_latency_ms_count counter" in prometheus
+        assert 'http_request_latency_ms_count{path="/ops/status"} 1' in prometheus
+
+    def test_track_slo_breach_age_is_monotonic_and_resets_when_cleared(self):
+        with patch(
+            "backend.app.services.observability.time.monotonic",
+            side_effect=[100.0, 108.6, 109.0],
+        ):
+            first_age = track_slo_breach_age_seconds("outbox_dead_letter", True)
+            second_age = track_slo_breach_age_seconds("outbox_dead_letter", True)
+            cleared_age = track_slo_breach_age_seconds("outbox_dead_letter", False)
+
+        assert first_age == 0
+        assert second_age == 8
+        assert cleared_age is None
+
+        with patch(
+            "backend.app.services.observability.time.monotonic",
+            return_value=200.0,
+        ):
+            restarted_age = track_slo_breach_age_seconds("outbox_dead_letter", True)
+
+        assert restarted_age == 0
