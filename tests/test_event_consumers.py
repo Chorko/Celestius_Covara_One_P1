@@ -96,8 +96,9 @@ class _StateSB:
 
 class TestEventConsumerDispatch:
     @patch("backend.app.services.event_bus.consumer_dispatch.consume_idempotently")
-    def test_dispatch_claim_auto_processed_invokes_two_consumers(self, mock_consume):
+    def test_dispatch_claim_auto_processed_invokes_three_consumers(self, mock_consume):
         mock_consume.side_effect = [
+            {"processed": True, "reason": "succeeded"},
             {"processed": True, "reason": "succeeded"},
             {"processed": False, "reason": "already_succeeded"},
         ]
@@ -116,10 +117,10 @@ class TestEventConsumerDispatch:
 
         result = asyncio.run(dispatch_event_to_consumers(_DummySB(), event))
 
-        assert result["consumers"] == 2
-        assert result["processed"] == 1
+        assert result["consumers"] == 3
+        assert result["processed"] == 2
         assert result["skipped"] == 1
-        assert len(result["results"]) == 2
+        assert len(result["results"]) == 3
 
     def test_dispatch_unknown_event_type_noop(self):
         event = DomainEvent(
@@ -158,6 +159,38 @@ class TestEventConsumerHandlers:
 
         assert result["sent"] is True
         assert result["template"] == "claim_auto_approved"
+
+    @patch("backend.app.services.twilio_service.send_whatsapp_template")
+    @patch("backend.app.services.event_bus.consumer_dispatch._get_worker_phone")
+    def test_auto_claim_notification_handler_soft_skips_provider_rate_limit(
+        self,
+        mock_get_phone,
+        mock_send_template,
+    ):
+        mock_get_phone.return_value = "+919999999999"
+        mock_send_template.return_value = {
+            "success": False,
+            "error": "HTTP 429 error: Account exceeded the 50 daily trial messages",
+            "mock": False,
+        }
+
+        event = DomainEvent(
+            event_id="evt-3b",
+            event_type="claim.auto_processed",
+            payload={
+                "worker_id": "worker-1",
+                "claim_id": "abcde12345",
+                "claim_status": "auto_approved",
+                "trigger_code": "HEAVY_RAIN",
+                "payout_amount": 1500,
+            },
+        )
+
+        result = asyncio.run(_handle_auto_claim_notification(_DummySB(), event))
+
+        assert result["sent"] is False
+        assert result["reason"] == "provider_rate_limited"
+        assert result["soft_failed"] is True
 
     @patch("backend.app.services.rewards_engine.award_clean_claim")
     def test_auto_claim_rewards_handler(self, mock_award_clean_claim):

@@ -35,6 +35,7 @@ from backend.app.routers import (
     kyc,
     mock_data,
     ops,
+    payments,
     payouts,
     policies,
     rewards,
@@ -381,6 +382,7 @@ app.include_router(ingest.router)
 app.include_router(kyc.router)
 app.include_router(mock_data.router)
 app.include_router(ops.router)
+app.include_router(payments.router)
 app.include_router(payouts.router)
 app.include_router(rewards.router)
 

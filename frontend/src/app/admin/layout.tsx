@@ -34,9 +34,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [drawerOpen, setDrawerOpen] = useState(false)
 
   const handleSignOut = useCallback(async () => {
-    await supabase.auth.signOut()
-    logout()
-    router.push('/')
+    try {
+      // Use local scope so UI logout still succeeds even if auth service has transient issues.
+      await supabase.auth.signOut({ scope: 'local' })
+    } catch {
+      // Continue with client-side logout regardless of upstream sign-out result.
+    } finally {
+      logout()
+      router.replace('/')
+      router.refresh()
+    }
   }, [supabase, logout, router])
 
   useEffect(() => {

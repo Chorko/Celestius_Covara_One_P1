@@ -106,6 +106,46 @@
         }
       }
     },
+    "/auth/onboarding/worker": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Upsert Worker Onboarding",
+        "description": "Upsert worker-facing onboarding data for the authenticated user.",
+        "operationId": "upsert_worker_onboarding_auth_onboarding_worker_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkerOnboardingUpsertRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/workers/me": {
       "get": {
         "tags": [
@@ -2337,6 +2377,27 @@
         }
       }
     },
+    "/ops/metrics/prometheus": {
+      "get": {
+        "tags": [
+          "Operations"
+        ],
+        "summary": "Prometheus metrics exposition",
+        "operationId": "get_ops_metrics_prometheus_ops_metrics_prometheus_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/ops/version-governance": {
       "get": {
         "tags": [
@@ -2421,6 +2482,153 @@
         ],
         "summary": "SLO thresholds and breach view",
         "operationId": "get_ops_slo_status_ops_slo_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/payments/checkout-session": {
+      "post": {
+        "tags": [
+          "Payments"
+        ],
+        "summary": "Create Stripe Checkout session for weekly plan purchase",
+        "operationId": "create_checkout_session_payments_checkout_session_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckoutSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/payments/checkout-session/{session_id}": {
+      "get": {
+        "tags": [
+          "Payments"
+        ],
+        "summary": "Get Stripe Checkout session status",
+        "operationId": "get_checkout_session_status_payments_checkout_session__session_id__get",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "auto_finalize",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Auto Finalize"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/payments/checkout/finalize": {
+      "post": {
+        "tags": [
+          "Payments"
+        ],
+        "summary": "Finalize paid Stripe checkout and activate policy",
+        "operationId": "finalize_checkout_payments_checkout_finalize_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinalizeCheckoutRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/payments/webhooks/stripe": {
+      "post": {
+        "tags": [
+          "Payments"
+        ],
+        "summary": "Stripe checkout webhook",
+        "operationId": "stripe_checkout_webhook_payments_webhooks_stripe_post",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -3004,6 +3212,30 @@
         ],
         "title": "BankVerifyRequest"
       },
+      "CheckoutSessionRequest": {
+        "properties": {
+          "plan": {
+            "type": "string",
+            "title": "Plan",
+            "default": "essential"
+          }
+        },
+        "type": "object",
+        "title": "CheckoutSessionRequest"
+      },
+      "FinalizeCheckoutRequest": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session_id"
+        ],
+        "title": "FinalizeCheckoutRequest"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -3551,6 +3783,78 @@
           "version_id"
         ],
         "title": "VersionRolloutUpdateRequest"
+      },
+      "WorkerOnboardingUpsertRequest": {
+        "properties": {
+          "full_name": {
+            "type": "string",
+            "title": "Full Name"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "platform_name": {
+            "type": "string",
+            "title": "Platform Name"
+          },
+          "city": {
+            "type": "string",
+            "title": "City"
+          },
+          "preferred_zone_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferred Zone Id"
+          },
+          "vehicle_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vehicle Type"
+          },
+          "avg_hourly_income_inr": {
+            "type": "number",
+            "title": "Avg Hourly Income Inr"
+          },
+          "gps_consent": {
+            "type": "boolean",
+            "title": "Gps Consent",
+            "default": false
+          },
+          "bank_verified": {
+            "type": "boolean",
+            "title": "Bank Verified",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "full_name",
+          "platform_name",
+          "city",
+          "avg_hourly_income_inr"
+        ],
+        "title": "WorkerOnboardingUpsertRequest",
+        "description": "Upsert worker onboarding/profile fields after signup."
       },
       "WorkerProfileUpdate": {
         "properties": {

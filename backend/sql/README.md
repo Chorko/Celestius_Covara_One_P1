@@ -79,6 +79,12 @@ This folder is split into active scripts and archive scripts.
   `python scripts/seed_test_users.py` and
   `python scripts/force_sync_users.py`.
 
+1. `backend/sql/helpers/24_backfill_worker_profile_realism.sql` (data-quality helper)
+  Backfills missing worker `phone`, `preferred_zone_id`, `vehicle_type`,
+  and `trust_score`, normalizes placeholder `Pending Local` /
+  `Pending Assignment` fields, and ensures active policies have `zone_id`
+  so worker/admin dashboards avoid null-looking seeded records.
+
 ## Recommended Run Order (fresh environment)
 
 ```text
@@ -93,6 +99,9 @@ backend/sql/16_synthetic_seed_200.sql
 # Required for 200 login-ready synthetic workers
 python scripts/provision_login_ready_workers_200.py --apply
 backend/sql/19_login_ready_workers_200.sql
+
+# Optional but recommended dashboard data-quality normalization
+backend/sql/helpers/24_backfill_worker_profile_realism.sql
 
 # Recommended schema/data hardening
 backend/sql/20_security_schema_sync.sql

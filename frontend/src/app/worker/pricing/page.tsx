@@ -1,12 +1,13 @@
 "use client"
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useUserStore } from '@/store'
 import { createClient } from '@/lib/supabase'
-import { backendGet } from '@/lib/backendApi'
+import { backendGet, backendPost, BackendApiError } from '@/lib/backendApi'
 import {
   Shield, ShieldCheck,
-  CheckCircle, CreditCard, X, Sparkles, IndianRupee, Lock, Brain,
+  CheckCircle, X, Sparkles, IndianRupee, Brain,
   RefreshCw, TrendingUp, AlertTriangle, Activity
 } from 'lucide-react'
 import Skeleton from '@/components/Skeleton'
@@ -83,12 +84,35 @@ interface PolicyQuoteResponse {
   confidence_multiplier: number
 }
 
+interface CheckoutSessionResponse {
+  session_id: string
+  checkout_url: string
+  plan: PlanId
+  amount_inr: number
+}
+
+interface CheckoutFinalizeResponse {
+  status: 'finalized' | 'already_finalized'
+  session_id: string
+  policy?: {
+    plan?: PlanId
+    valid_until?: string
+    policy_id?: string
+  }
+  reward?: {
+    success?: boolean
+    coins_awarded?: number
+  }
+}
+
 const FIXED_PRICES: Record<PlanId, number> = { essential: 28, plus: 42 }
 const PLAN_WEEKLY_BENEFITS: Record<PlanId, number> = { essential: 3000, plus: 4500 }
 
-export default function WorkerPricing() {
+function WorkerPricingInner() {
   const { profile } = useUserStore()
   const supabase = createClient()
+  const searchParams = useSearchParams()
+  const finalizedSessionRef = useRef<string | null>(null)
   const [quote, setQuote] = useState<QuoteData | null>(null)
   const [planQuotes, setPlanQuotes] = useState<Record<PlanId, PolicyQuoteResponse> | null>(null)
   const [quoteSource, setQuoteSource] = useState<'backend' | 'fallback'>('fallback')
@@ -96,17 +120,25 @@ export default function WorkerPricing() {
   const [selectedPlan, setSelectedPlan] = useState<PlanTier | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [paying, setPaying] = useState(false)
-  const [paymentSuccess, setPaymentSuccess] = useState(false)
   const [autoRenew, setAutoRenew] = useState(true)
+  const [checkoutNotice, setCheckoutNotice] = useState<string | null>(null)
+  const [checkoutError, setCheckoutError] = useState<string | null>(null)
+  const [finalizingCheckout, setFinalizingCheckout] = useState(false)
   const [riskInfo, setRiskInfo] = useState<{ factor: number; label: string; trend: 'up' | 'down' | 'stable' }>({ factor: 1.0, label: 'Normal', trend: 'stable' })
 
   const fetchQuote = useCallback(async () => {
+    if (!profile?.id) {
+      setLoading(false)
+      return
+    }
+
+    const workerProfileId = profile.id
     setLoading(true)
     try {
       const { data: wp } = await supabase
         .from('worker_profiles')
         .select('profile_id, avg_hourly_income_inr, city, trust_score')
-        .eq('profile_id', profile!.id)
+        .eq('profile_id', workerProfileId)
         .single()
       if (wp) {
         let observed_weekly_gross: number | null = null
@@ -174,9 +206,99 @@ export default function WorkerPricing() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.id])
 
-  const handleChoosePlan = (plan: PlanTier) => { setSelectedPlan(plan); setPaymentSuccess(false); setPaying(false); setShowModal(true) }
-  const handlePay = () => { setPaying(true); setTimeout(() => { setPaying(false); setPaymentSuccess(true) }, 2000) }
-  const closeModal = () => { setShowModal(false); setSelectedPlan(null); setPaymentSuccess(false) }
+  useEffect(() => {
+    const checkoutState = searchParams.get('checkout')
+    const sessionId = searchParams.get('session_id')
+
+    if (checkoutState === 'cancelled') {
+      setCheckoutError('Stripe checkout was cancelled. No payment was captured.')
+      return
+    }
+
+    if (checkoutState !== 'success' || !sessionId) {
+      return
+    }
+
+    if (finalizedSessionRef.current === sessionId) {
+      return
+    }
+    finalizedSessionRef.current = sessionId
+
+    const finalize = async () => {
+      setFinalizingCheckout(true)
+      setCheckoutError(null)
+
+      try {
+        const result = await backendPost<CheckoutFinalizeResponse>(
+          supabase,
+          '/payments/checkout/finalize',
+          { session_id: sessionId },
+        )
+
+        const planName = String(result.policy?.plan || 'coverage').toUpperCase()
+        const expiry = result.policy?.valid_until
+          ? new Date(result.policy.valid_until).toLocaleDateString('en-IN')
+          : null
+        const coins = result.reward?.success ? ` +${result.reward?.coins_awarded || 0} reward coins` : ''
+
+        setCheckoutNotice(
+          expiry
+            ? `${planName} activated until ${expiry}.${coins}`
+            : `${planName} payment confirmed.${coins}`,
+        )
+        setShowModal(false)
+        await fetchQuote()
+      } catch (e: unknown) {
+        if (e instanceof BackendApiError) {
+          setCheckoutError(e.detail)
+        } else {
+          setCheckoutError(e instanceof Error ? e.message : 'Payment finalization failed')
+        }
+      } finally {
+        setFinalizingCheckout(false)
+      }
+    }
+
+    void finalize()
+  }, [searchParams, supabase, fetchQuote])
+
+  const handleChoosePlan = (plan: PlanTier) => {
+    setSelectedPlan(plan)
+    setPaying(false)
+    setCheckoutError(null)
+    setShowModal(true)
+  }
+
+  const handlePay = async () => {
+    if (!selectedPlan) {
+      return
+    }
+
+    setPaying(true)
+    setCheckoutError(null)
+
+    try {
+      const session = await backendPost<CheckoutSessionResponse>(
+        supabase,
+        '/payments/checkout-session',
+        { plan: selectedPlan.id },
+      )
+      window.location.href = session.checkout_url
+    } catch (e: unknown) {
+      if (e instanceof BackendApiError) {
+        setCheckoutError(e.detail)
+      } else {
+        setCheckoutError(e instanceof Error ? e.message : 'Unable to start checkout')
+      }
+      setPaying(false)
+    }
+  }
+
+  const closeModal = () => {
+    setShowModal(false)
+    setSelectedPlan(null)
+    setCheckoutError(null)
+  }
 
   const getPremium = (plan: PlanTier) => {
     return planQuotes?.[plan.id]?.weekly_premium_inr ?? FIXED_PRICES[plan.id]
@@ -215,6 +337,24 @@ export default function WorkerPricing() {
             </div>
           )}
         </section>
+
+        {finalizingCheckout && (
+          <section className="card p-4 text-sm" style={{ background: 'var(--info-muted)', border: '1px solid var(--info)', color: 'var(--info)' }}>
+            Confirming Stripe payment and activating your policy...
+          </section>
+        )}
+
+        {checkoutNotice && (
+          <section className="card p-4 text-sm" style={{ background: 'var(--success-muted)', border: '1px solid var(--success)', color: 'var(--success)' }}>
+            {checkoutNotice}
+          </section>
+        )}
+
+        {checkoutError && (
+          <section className="card p-4 text-sm" style={{ background: 'var(--danger-muted)', border: '1px solid var(--danger)', color: 'var(--danger)' }}>
+            {checkoutError}
+          </section>
+        )}
 
         {/* Weekly Risk Factor Bar */}
         {quote && (
@@ -384,76 +524,47 @@ export default function WorkerPricing() {
               <button onClick={closeModal} className="absolute top-4 right-4 transition-colors" style={{ color: 'var(--text-tertiary)' }}>
                 <X size={20} />
               </button>
-              {paymentSuccess ? (
-                <div className="text-center py-6">
-                  <div className="w-20 h-20 mx-auto mb-6 rounded-full flex items-center justify-center" style={{ background: 'var(--success-muted)' }}>
-                    <CheckCircle size={40} style={{ color: 'var(--success)' }} />
-                  </div>
-                  <h3 className="text-2xl font-bold mb-2" style={{ color: 'var(--text-primary)' }}>{selectedPlan.name} Activated!</h3>
-                  <p className="mb-2" style={{ color: 'var(--text-secondary)' }}>Your weekly income protection is now active.</p>
-                  <p className="text-sm mb-4" style={{ color: 'var(--text-tertiary)' }}>
-                    Weekly benefit: ₹{selectedPlan.weeklyBenefit.toLocaleString('en-IN')} · Triggers are monitoring your zone.
-                  </p>
-                  <div className="flex items-center justify-center gap-3 mb-6">
-                    <span className="badge-success"><ShieldCheck size={12} /> Protected</span>
-                    {autoRenew && <span className="badge-info"><RefreshCw size={10} /> Auto-Renew ON</span>}
-                  </div>
-                  <button onClick={closeModal} className="btn-primary w-full">Back to Plans</button>
+              <div className="mb-6">
+                <h3 className="text-xl font-bold mb-1" style={{ color: 'var(--text-primary)' }}>Confirm Weekly Payment</h3>
+                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Proceed to secure Stripe checkout for {selectedPlan.name} coverage</p>
+              </div>
+              <div className="rounded-lg p-4 mb-4 flex justify-between items-center" style={{ background: 'var(--accent-muted)', border: '1px solid var(--accent)' }}>
+                <div>
+                  <p className="font-semibold" style={{ color: 'var(--accent)' }}>{selectedPlan.name}</p>
+                  <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>₹{selectedPlan.weeklyBenefit.toLocaleString('en-IN')}/week benefit</p>
                 </div>
-              ) : (
-                <>
-                  <div className="mb-6">
-                    <h3 className="text-xl font-bold mb-1" style={{ color: 'var(--text-primary)' }}>Confirm Weekly Payment</h3>
-                    <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Activate your {selectedPlan.name} coverage</p>
-                  </div>
-                  <div className="rounded-lg p-4 mb-4 flex justify-between items-center" style={{ background: 'var(--accent-muted)', border: '1px solid var(--accent)' }}>
-                    <div>
-                      <p className="font-semibold" style={{ color: 'var(--accent)' }}>{selectedPlan.name}</p>
-                      <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>₹{selectedPlan.weeklyBenefit.toLocaleString('en-IN')}/week benefit</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>₹{getPremium(selectedPlan)}</p>
-                      <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>/week</p>
-                    </div>
-                  </div>
-                  <div className="space-y-4 mb-6">
-                    <div>
-                      <label className="text-xs uppercase tracking-wider block mb-1.5 font-medium" style={{ color: 'var(--text-tertiary)' }}>Card Number</label>
-                      <div className="relative">
-                        <input type="text" defaultValue="4242 4242 4242 4242" className="input-field pl-10" readOnly />
-                        <CreditCard size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-tertiary)' }} />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-xs uppercase tracking-wider block mb-1.5 font-medium" style={{ color: 'var(--text-tertiary)' }}>Expiry</label>
-                        <input type="text" defaultValue="12/28" className="input-field" readOnly />
-                      </div>
-                      <div>
-                        <label className="text-xs uppercase tracking-wider block mb-1.5 font-medium" style={{ color: 'var(--text-tertiary)' }}>CVV</label>
-                        <div className="relative">
-                          <input type="text" defaultValue="***" className="input-field pl-10" readOnly />
-                          <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-tertiary)' }} />
-                        </div>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-xs uppercase tracking-wider block mb-1.5 font-medium" style={{ color: 'var(--text-tertiary)' }}>Cardholder Name</label>
-                      <input type="text" defaultValue={profile?.full_name || 'Demo User'} className="input-field" readOnly />
-                    </div>
-                  </div>
-                  <p className="text-[10px] text-center mb-4" style={{ color: 'var(--text-tertiary)' }}>
-                    This is a simulated payment for demonstration purposes. No real charges will be made.
-                  </p>
-                  <button onClick={handlePay} disabled={paying} className="btn-primary w-full flex items-center justify-center gap-2">
-                    {paying ? (<><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Processing...</>) : (<><IndianRupee size={16} />Pay ₹{getPremium(selectedPlan)} / week</>)}
-                  </button>
-                </>
+                <div className="text-right">
+                  <p className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>₹{getPremium(selectedPlan)}</p>
+                  <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>/week</p>
+                </div>
+              </div>
+              <div className="rounded-lg p-3 mb-4 text-xs" style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-primary)', color: 'var(--text-tertiary)' }}>
+                Enter test card details on Stripe-hosted checkout. Suggested test card: 4242 4242 4242 4242.
+              </div>
+              {checkoutError && (
+                <div className="rounded-lg p-3 mb-4 text-xs" style={{ background: 'var(--danger-muted)', border: '1px solid var(--danger)', color: 'var(--danger)' }}>
+                  {checkoutError}
+                </div>
               )}
+              <button onClick={handlePay} disabled={paying} className="btn-primary w-full flex items-center justify-center gap-2">
+                {paying ? (<><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Redirecting to Stripe...</>) : (<><IndianRupee size={16} />Continue to Stripe (₹{getPremium(selectedPlan)} / week)</>)}
+              </button>
             </div>
           </div>
         )}
       </div>
     </div>
+  )
+}
+
+export default function WorkerPricing() {
+  return (
+    <Suspense fallback={
+      <div className="p-8 max-w-5xl mx-auto text-center" style={{ color: 'var(--text-tertiary)' }}>
+        Loading pricing…
+      </div>
+    }>
+      <WorkerPricingInner />
+    </Suspense>
   )
 }

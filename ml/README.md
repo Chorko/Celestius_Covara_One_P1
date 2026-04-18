@@ -243,7 +243,7 @@ Beyond standard severity and pricing features, the ML pipeline engineers these f
 
 These features are designed for a review-routing classifier with four output labels: `auto_approve`, `needs_review`, `hold_for_fraud`, `reject_spoof_risk`.
 
-> For full anti-spoofing architecture details, see [fraud/README.md](../fraud/README.md) and the [Adversarial Defense section](../README.md#adversarial-defense--anti-spoofing-strategy) in the root README.
+> For full anti-spoofing architecture details, see [fraud/README.md](../fraud/README.md) and the [Adversarial Defense section](../README.md#adversarial-defense-anti-spoofing-strategy) in the root README.
 
 ---
 
@@ -296,7 +296,7 @@ These features are designed for a review-routing classifier with four output lab
 
 **Why Random Forest?** Random Forest ([Breiman, 2001](https://doi.org/10.1023/A:1010933404324)) was selected as the baseline severity classifier because it provides interpretable feature-importance rankings, handles mixed feature types without extensive preprocessing, and is robust against overfitting on small datasets — critical for an 8-row bootstrap seed.
 
-**Why XGBoost as future benchmark?** XGBoost ([Chen & Guestrin, 2016](https://doi.org/10.1145/2939672.2939785)) is retained as a planned benchmark if dataset scale and feature complexity warrant gradient-boosted tree performance. It is not yet used in the current pipeline.
+**Why XGBoost as future benchmark?** XGBoost ([Chen & Guestrin, 2016](https://arxiv.org/abs/1603.02754)) is retained as a planned benchmark if dataset scale and feature complexity warrant gradient-boosted tree performance. It is not yet used in the current pipeline.
 
 **Role of ML in the pricing pipeline:** The Random Forest model estimates claim probability `p` on the joined worker-trigger row. Premium and payout are **not predicted directly by ML alone** — they are derived from documented formulas (`B × S × E × C × (1 − FH)`) where ML contributes only the `p` factor. The public-facing product uses a [parametric payout ladder](../README.md#parametric-payout-ladder) with pre-agreed benefit bands, not flexible formula outputs. ML supports classification, anomaly ranking, and review routing, but does not independently authorize payout.
 

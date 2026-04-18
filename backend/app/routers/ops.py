@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
 from backend.app.config import settings
@@ -19,8 +20,10 @@ from backend.app.services.event_bus.consumer_idempotency import (
 )
 from backend.app.services.event_bus.outbox import get_outbox_status_counts
 from backend.app.services.observability import (
+    export_metrics_prometheus,
     get_metrics_snapshot,
     set_gauge,
+    track_slo_breach_age_seconds,
 )
 from backend.app.services.review_workflow import (
     TERMINAL_CLAIM_STATUSES,
@@ -41,6 +44,39 @@ class VersionRolloutUpdateRequest(BaseModel):
     mode: str = Field(default="full", description="full | canary | cohort")
     rollout_percentage: int | None = Field(default=None, ge=0, le=100)
     cohort_key: str | None = None
+
+
+_SLO_OWNER_BY_METRIC = {
+    "outbox_dead_letter": "platform-reliability",
+    "consumer_dead_letter": "platform-reliability",
+    "review_overdue": "claims-operations",
+    "review_unassigned": "claims-operations",
+    "payout_failures": "payout-ops",
+    "payout_manual_review": "payout-ops",
+}
+
+
+def _slo_owner(metric: str) -> str:
+    return _SLO_OWNER_BY_METRIC.get(metric, "platform-reliability")
+
+
+def _slo_severity(metric: str, observed: int, threshold: int) -> str:
+    if observed <= threshold:
+        return "info"
+
+    # Zero-threshold metrics represent "should never happen" classes.
+    if threshold <= 0:
+        if metric in {"outbox_dead_letter", "consumer_dead_letter", "payout_failures"}:
+            return "critical"
+        return "warning"
+
+    overflow = observed - threshold
+    ratio = observed / float(max(1, threshold))
+    if ratio >= 2.0 or overflow >= 25:
+        return "critical"
+    if ratio >= 1.25 or overflow >= 5:
+        return "warning"
+    return "info"
 
 
 def _review_queue_summary(claim_rows: list[dict[str, Any]]) -> dict[str, int]:
@@ -136,23 +172,36 @@ def _evaluate_slo_breaches(
     }
 
     breaches: list[dict[str, Any]] = []
+    signals: dict[str, dict[str, Any]] = {}
     for metric, threshold in thresholds.items():
         value = observed[metric]
-        if value > threshold:
+        is_breaching = value > threshold
+        severity = _slo_severity(metric, value, threshold)
+        breach_age_seconds = track_slo_breach_age_seconds(metric, is_breaching)
+
+        signal_payload = {
+            "metric": metric,
+            "observed": value,
+            "threshold": threshold,
+            "owner": _slo_owner(metric),
+            "severity": severity,
+            "is_breaching": is_breaching,
+            "breach_age_seconds": breach_age_seconds,
+            "runbook": runbook_links.get(metric),
+            "recommended_action": actions.get(metric),
+        }
+        signals[metric] = signal_payload
+
+        if is_breaching:
             breaches.append(
-                {
-                    "metric": metric,
-                    "observed": value,
-                    "threshold": threshold,
-                    "runbook": runbook_links.get(metric),
-                    "recommended_action": actions.get(metric),
-                }
+                signal_payload
             )
 
     return {
         "status": "breach" if breaches else "ok",
         "thresholds": thresholds,
         "observed": observed,
+        "signals": signals,
         "breaches": breaches,
     }
 
@@ -167,6 +216,21 @@ def get_ops_metrics():
         "status": "ok",
         "metrics": get_metrics_snapshot(),
     }
+
+
+@router.get(
+    "/metrics/prometheus",
+    dependencies=[Depends(require_insurer_admin)],
+    summary="Prometheus metrics exposition",
+    response_class=PlainTextResponse,
+)
+def get_ops_metrics_prometheus():
+    snapshot = get_metrics_snapshot()
+    payload = export_metrics_prometheus(snapshot)
+    return PlainTextResponse(
+        content=payload,
+        media_type="text/plain; version=0.0.4; charset=utf-8",
+    )
 
 
 @router.get(

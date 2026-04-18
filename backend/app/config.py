@@ -139,6 +139,26 @@ class Settings:
         os.getenv("PAYOUT_PROVIDER_TIMEOUT_SECONDS", "10")
     )
 
+    # Stripe Checkout (worker premium purchase)
+    stripe_secret_key: str = os.getenv(
+        "STRIPE_SECRET_KEY",
+        os.getenv("PAYOUT_PROVIDER_API_KEY", ""),
+    )
+    stripe_publishable_key: str = os.getenv(
+        "STRIPE_PUBLISHABLE_KEY",
+        os.getenv("NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY", ""),
+    )
+    stripe_webhook_secret: str = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+    stripe_checkout_success_url: str = os.getenv(
+        "STRIPE_CHECKOUT_SUCCESS_URL",
+        "http://localhost:3000/worker/pricing?checkout=success",
+    )
+    stripe_checkout_cancel_url: str = os.getenv(
+        "STRIPE_CHECKOUT_CANCEL_URL",
+        "http://localhost:3000/worker/pricing?checkout=cancelled",
+    )
+    stripe_currency: str = os.getenv("STRIPE_CURRENCY", "inr")
+
     # -- Dynamic API Key Discovery --
     # Instead of hardcoding N key fields, we scan env vars at runtime.
     # Just add WEATHER_API_KEY_1, WEATHER_API_KEY_2, ... to .env
@@ -215,6 +235,13 @@ class Settings:
             if not webhook_secret or webhook_secret == "dev-payout-webhook-secret":
                 missing.append(
                     "PAYOUT_PROVIDER_WEBHOOK_SECRET (must be non-default in strict mode)"
+                )
+
+            if (self.stripe_secret_key or "").strip() and not (
+                self.stripe_webhook_secret or ""
+            ).strip():
+                missing.append(
+                    "STRIPE_WEBHOOK_SECRET (required when STRIPE_SECRET_KEY is configured in strict mode)"
                 )
 
             if (self.event_bus_backend or "").strip().lower() == "kafka" and is_blank(
