@@ -5,6 +5,8 @@ Handles dynamic premium quotes and policy activation.
 Supports exactly two plans: Essential and Plus.
 """
 
+from functools import wraps
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from backend.app.dependencies import require_worker
@@ -22,15 +24,10 @@ class ActivatePolicyRequest(BaseModel):
     plan: str = "essential"  # "essential" or "plus"
 
 
-@router.get("/quote")
-async def get_premium_quote(
-    plan: str = Query("essential", description="Plan: 'essential' or 'plus'"),
-    user: dict = Depends(require_worker),
+async def _get_premium_quote_impl(
+    plan: str,
+    user: dict,
 ):
-    """
-    Computes and returns the weekly premium quote with parametric
-    payout bands for the selected plan.
-    """
     if plan not in VALID_PLANS:
         raise HTTPException(
             status_code=400,
@@ -42,6 +39,19 @@ async def get_premium_quote(
         return quote_policy_for_worker(sb, user["id"], plan)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/quote")
+@wraps(_get_premium_quote_impl)
+async def get_premium_quote(
+    plan: str = Query("essential", description="Plan: 'essential' or 'plus'"),
+    user: dict = Depends(require_worker),
+):
+    """
+    Computes and returns the weekly premium quote with parametric
+    payout bands for the selected plan.
+    """
+    return await _get_premium_quote_impl(plan=plan, user=user)
 
 
 @router.post("/activate")
