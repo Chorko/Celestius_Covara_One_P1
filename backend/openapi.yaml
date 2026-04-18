@@ -336,6 +336,59 @@
         }
       }
     },
+    "/workers/{worker_id}/claims": {
+      "get": {
+        "tags": [
+          "Workers"
+        ],
+        "summary": "List Worker Recent Claims",
+        "description": "List recent claims for a worker (admin view).",
+        "operationId": "list_worker_recent_claims_workers__worker_id__claims_get",
+        "parameters": [
+          {
+            "name": "worker_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Worker Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 5,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/workers/{worker_id}/trust-history": {
       "get": {
         "tags": [

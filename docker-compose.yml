@@ -76,7 +76,7 @@ services:
       args:
         - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:?NEXT_PUBLIC_SUPABASE_URL is required}
         - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY:?NEXT_PUBLIC_SUPABASE_ANON_KEY is required}
-        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://backend:8000}
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL_LOCAL:-http://localhost:8000}
     container_name: covara-frontend
     ports:
       - "3000:3000"
@@ -85,7 +85,7 @@ services:
     environment:
       - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:?NEXT_PUBLIC_SUPABASE_URL is required}
       - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY:?NEXT_PUBLIC_SUPABASE_ANON_KEY is required}
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://backend:8000}
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL_LOCAL:-http://localhost:8000}
     depends_on:
       backend:
         condition: service_healthy

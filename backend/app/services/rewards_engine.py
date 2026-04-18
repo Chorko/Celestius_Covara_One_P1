@@ -40,6 +40,7 @@ FREE_WEEK_COINS_REQUIRED = 500
 
 async def get_balance(sb, profile_id: str) -> int:
     """Get current coin balance for a worker."""
+    # Primary path: use the balance view for fast aggregation.
     try:
         resp = (
             sb.table("driver_coin_balance")
@@ -48,11 +49,28 @@ async def get_balance(sb, profile_id: str) -> int:
             .maybe_single()
             .execute()
         )
-        if resp.data:
+        if resp.data and resp.data.get("balance") is not None:
             return int(resp.data.get("balance", 0))
     except Exception as e:
         logger.warning(f"Could not fetch coin balance for {profile_id}: {e}")
-    return 0
+
+    # Fallback path: compute directly from the ledger for environments where
+    # the balance view is missing/outdated.
+    try:
+        ledger_resp = (
+            sb.table("coins_ledger")
+            .select("coins")
+            .eq("profile_id", profile_id)
+            .execute()
+        )
+        rows = ledger_resp.data or []
+        total = 0
+        for row in rows:
+            total += int(float((row or {}).get("coins") or 0))
+        return total
+    except Exception as e:
+        logger.warning(f"Could not compute ledger fallback balance for {profile_id}: {e}")
+        return 0
 
 
 async def get_history(sb, profile_id: str, limit: int = 20) -> list:

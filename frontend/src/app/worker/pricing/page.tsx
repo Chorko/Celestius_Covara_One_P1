@@ -108,6 +108,21 @@ interface CheckoutFinalizeResponse {
 const FIXED_PRICES: Record<PlanId, number> = { essential: 28, plus: 42 }
 const PLAN_WEEKLY_BENEFITS: Record<PlanId, number> = { essential: 3000, plus: 4500 }
 
+function profileFallbackPremium(profileId: string, plan: PlanId): number {
+  const normalized = profileId || 'worker'
+  let hash = 0
+  for (let index = 0; index < normalized.length; index += 1) {
+    hash = ((hash << 5) - hash + normalized.charCodeAt(index) + (plan === 'plus' ? 17 : 9)) | 0
+  }
+
+  const essentialRange = { min: 18, max: 72 }
+  const plusRange = { min: 30, max: 96 }
+  const range = plan === 'plus' ? plusRange : essentialRange
+  const spread = range.max - range.min
+  const ratio = Math.abs(hash % 1000) / 999
+  return Number((range.min + (spread * ratio)).toFixed(2))
+}
+
 function WorkerPricingInner() {
   const { profile } = useUserStore()
   const supabase = createClient()
@@ -157,7 +172,7 @@ function WorkerPricingInner() {
         const defaultCoveredIncome = Math.round(weekly_gross * 0.70)
         const fallbackEssential: PolicyQuoteResponse = {
           plan: 'essential',
-          weekly_premium_inr: FIXED_PRICES.essential,
+          weekly_premium_inr: profileFallbackPremium(String(wp.profile_id || workerProfileId), 'essential'),
           max_payout_cap_inr: PLAN_WEEKLY_BENEFITS.essential,
           covered_weekly_income: defaultCoveredIncome,
           exposure_multiplier: Number((wp.trust_score ?? 0.8).toFixed(2)),
@@ -165,7 +180,7 @@ function WorkerPricingInner() {
         }
         const fallbackPlus: PolicyQuoteResponse = {
           plan: 'plus',
-          weekly_premium_inr: FIXED_PRICES.plus,
+          weekly_premium_inr: profileFallbackPremium(String(wp.profile_id || workerProfileId), 'plus'),
           max_payout_cap_inr: PLAN_WEEKLY_BENEFITS.plus,
           covered_weekly_income: defaultCoveredIncome,
           exposure_multiplier: Number((wp.trust_score ?? 0.8).toFixed(2)),
@@ -301,7 +316,10 @@ function WorkerPricingInner() {
   }
 
   const getPremium = (plan: PlanTier) => {
-    return planQuotes?.[plan.id]?.weekly_premium_inr ?? FIXED_PRICES[plan.id]
+    if (planQuotes?.[plan.id]?.weekly_premium_inr != null) {
+      return planQuotes[plan.id].weekly_premium_inr
+    }
+    return profileFallbackPremium(String(profile?.id || 'worker'), plan.id)
   }
 
   const essentialQuote = planQuotes?.essential

@@ -38,6 +38,8 @@ interface PolicyQuoteResponse {
   covered_weekly_income: number
   exposure_multiplier: number
   confidence_multiplier: number
+  base_weekly_premium_inr?: number
+  plan_uplift_factor?: number
 }
 
 interface ZoneDetail {
@@ -240,12 +242,14 @@ export default function WorkerDashboard() {
             const quote = await backendGet<PolicyQuoteResponse>(supabase, '/policies/quote?plan=essential')
             const coveredIncome = Math.round(quote.covered_weekly_income || (weekly_gross * 0.70))
             setPolicyQuote({
-              weekly_premium_inr: quote.weekly_premium_inr || 28,
+              weekly_premium_inr: quote.weekly_premium_inr,
               max_payout_cap_inr: quote.max_payout_cap_inr || 3000,
               observed_weekly_gross: weekly_gross,
               B: coveredIncome,
               E: Number((quote.exposure_multiplier ?? 1).toFixed(2)),
               C: Number((quote.confidence_multiplier ?? 1).toFixed(2)),
+              base_weekly_premium_inr: quote.base_weekly_premium_inr,
+              plan_uplift_factor: quote.plan_uplift_factor,
             })
           } catch {
             const B = Math.round(weekly_gross * 0.70)
@@ -328,12 +332,19 @@ export default function WorkerDashboard() {
         ? 'AQI and heatwave disruption risk'
         : 'Mixed urban disruption risk'
 
+  const hasAnyClaim = claimCounts.total > 0
+  const hasPaidClaim = stats.length > 0 && claimCounts.approved > 0
+  const hasCompletedWeek = stats.filter((s) => Number(s.active_hours || 0) > 0).length >= 7
+  const hasZoneSignals = zoneTriggerHistory.length > 0
+
   const progressSteps = [
     { key: 'account', label: 'Account Ready', complete: Boolean(profile?.id) },
     { key: 'kyc', label: 'Bank KYC', complete: Boolean(workerDetails?.bank_verified) },
-    { key: 'cover', label: 'Plan Active', complete: Boolean(activePolicy) },
-    { key: 'claim', label: 'Claim Filed', complete: claimCounts.total > 0 },
-    { key: 'payout', label: 'Payout Settled', complete: claimCounts.approved > 0 },
+    { key: 'cover', label: 'Coverage Active', complete: Boolean(activePolicy) },
+    { key: 'consistency', label: 'Consistent Week', complete: hasCompletedWeek },
+    { key: 'zone', label: 'Zone Intelligence Live', complete: hasZoneSignals },
+    { key: 'claim', label: hasAnyClaim ? 'Claim Experience' : 'First Claim Pending', complete: hasAnyClaim },
+    { key: 'payout', label: 'Payout Evidence', complete: hasPaidClaim },
   ]
   const completedSteps = progressSteps.filter((s) => s.complete).length
   const progressPercent = Math.round((completedSteps / progressSteps.length) * 100)
@@ -617,6 +628,12 @@ export default function WorkerDashboard() {
                   <div className="flex flex-wrap gap-2 text-xs">
                     {policyQuote.observed_weekly_gross != null && (
                       <span className="badge-info">Weekly Gross ≈ ₹{policyQuote.observed_weekly_gross?.toLocaleString('en-IN')}</span>
+                    )}
+                    {policyQuote.base_weekly_premium_inr != null && (
+                      <span className="badge-info">Base Premium ₹{Number(policyQuote.base_weekly_premium_inr).toFixed(2)}</span>
+                    )}
+                    {policyQuote.plan_uplift_factor != null && (
+                      <span className="badge-info">Plan Uplift {Number(policyQuote.plan_uplift_factor).toFixed(2)}x</span>
                     )}
                     {policyQuote.max_payout_cap_inr != null && (
                       <span className="badge-success">Max Payout ₹{policyQuote.max_payout_cap_inr?.toLocaleString('en-IN')}</span>

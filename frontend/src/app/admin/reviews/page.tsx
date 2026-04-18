@@ -25,7 +25,7 @@ interface ReviewMeta {
 }
 
 interface ClaimRecord {
-  id: string; claim_status: string; claim_reason: string; claim_mode?: string; claimed_at: string
+  id?: string; claim_id?: string; claim_status: string; claim_reason: string; claim_mode?: string; claimed_at: string
   worker_profiles?: { platform_name?: string; city?: string; trust_score?: number; profiles?: { full_name?: string; email?: string } }
   trigger_events?: { trigger_family?: string; trigger_code?: string; zone_id?: string }
   assigned_reviewer?: { id?: string; full_name?: string }
@@ -83,6 +83,11 @@ function formatApiError(error: unknown): string {
   return error instanceof Error ? error.message : 'Request failed'
 }
 
+function resolveClaimId(claim: Partial<ClaimRecord> | null | undefined): string | null {
+  const id = String(claim?.id || claim?.claim_id || '').trim()
+  return id.length > 0 ? id : null
+}
+
 export default function AdminReviews() {
   const supabase = createClient()
   const [claims, setClaims] = useState<ClaimRecord[]>([])
@@ -113,25 +118,72 @@ export default function AdminReviews() {
     }
   }, [supabase, queueFilter])
 
+  const loadDetailFallback = useCallback(async (claimId: string): Promise<DetailData | null> => {
+    try {
+      const [claimResp, payoutResp, evidenceResp] = await Promise.all([
+        supabase
+          .from('manual_claims')
+          .select('*, worker_profiles(*, profiles(*)), trigger_events(*)')
+          .eq('id', claimId)
+          .maybeSingle(),
+        supabase
+          .from('payout_recommendations')
+          .select('*')
+          .eq('claim_id', claimId)
+          .maybeSingle(),
+        supabase
+          .from('claim_evidence')
+          .select('*')
+          .eq('claim_id', claimId),
+      ])
+
+      if (!claimResp.data) {
+        return null
+      }
+
+      return {
+        claim: claimResp.data as ClaimRecord,
+        payout_recommendation: (payoutResp.data as PayoutRecommendation | null) || null,
+        evidence: (evidenceResp.data as EvidenceItem[]) || [],
+      }
+    } catch {
+      return null
+    }
+  }, [supabase])
+
   useEffect(() => { loadClaims() }, [loadClaims])
 
   const loadDetail = async (claimId: string) => {
-    setSelectedClaim(claimId)
+    const normalizedClaimId = String(claimId || '').trim()
+    if (!normalizedClaimId) {
+      setActionError('Claim identifier missing in queue payload. Refresh queue and retry.')
+      setDetailData(null)
+      setSelectedClaim(null)
+      return
+    }
+
+    setSelectedClaim(normalizedClaimId)
     setLoading(true)
     setActionError(null)
     setActionSuccess(null)
     setPipelineExpanded(false)
 
     try {
-      const detail = await backendGet<ClaimDetailResponse>(supabase, `/claims/${claimId}`)
+      const detail = await backendGet<ClaimDetailResponse>(supabase, `/claims/${normalizedClaimId}`)
       setDetailData({
         claim: detail.claim,
         payout_recommendation: detail.payout_recommendation,
         evidence: detail.evidence || [],
       })
     } catch (e: unknown) {
-      setActionError(formatApiError(e))
-      setDetailData(null)
+      const fallback = await loadDetailFallback(normalizedClaimId)
+      if (fallback) {
+        setDetailData(fallback)
+        setActionError('Primary claim detail endpoint failed; loaded fallback detail snapshot.')
+      } else {
+        setActionError(formatApiError(e))
+        setDetailData(null)
+      }
     } finally {
       setLoading(false)
     }
@@ -139,7 +191,11 @@ export default function AdminReviews() {
 
   const handleReviewAction = async (decision: string) => {
     if (!detailData) return
-    const claimId = detailData.claim.id
+    const claimId = resolveClaimId(detailData.claim)
+    if (!claimId) {
+      setActionError('Claim identifier missing in selected report.')
+      return
+    }
     setActionLoading(decision)
     setActionError(null)
     setActionSuccess(null)
@@ -191,14 +247,19 @@ export default function AdminReviews() {
 
   const handleAssignToMe = async () => {
     if (!detailData) return
+    const claimId = resolveClaimId(detailData.claim)
+    if (!claimId) {
+      setActionError('Claim identifier missing in selected report.')
+      return
+    }
     setAssignLoading(true)
     setActionError(null)
 
     try {
-      await backendPost(supabase, `/claims/${detailData.claim.id}/assign`, {
+      await backendPost(supabase, `/claims/${claimId}/assign`, {
         due_in_hours: 24,
       })
-      await loadDetail(detailData.claim.id)
+      await loadDetail(claimId)
       await loadClaims()
     } catch (e: unknown) {
       setActionError(formatApiError(e))
@@ -241,6 +302,7 @@ export default function AdminReviews() {
 
   const pr = detailData?.payout_recommendation
   const claim = detailData?.claim
+  const claimId = resolveClaimId(claim)
   const evidence = detailData?.evidence || []
   const explJson = pr?.explanation_json
   const isFraud = (pr?.fraud_holdback_fh ?? 0) > 0.30
@@ -309,12 +371,17 @@ export default function AdminReviews() {
                 </button>
               )}
             </div>
-          ) : ( claims.map(c => (
-            <div key={c.id} onClick={() => loadDetail(c.id)}
+          ) : ( claims.map((c, index) => {
+            const queueClaimId = resolveClaimId(c)
+            const isSelectable = Boolean(queueClaimId)
+            return (
+            <div key={queueClaimId || `claim-row-${index}`} onClick={() => isSelectable && loadDetail(queueClaimId as string)}
               className="p-4 rounded-lg cursor-pointer transition-all"
               style={{
-                background: selectedClaim === c.id ? 'var(--accent-muted)' : 'var(--bg-tertiary)',
-                border: `1px solid ${selectedClaim === c.id ? 'var(--accent)' : 'var(--border-primary)'}`,
+                background: selectedClaim === queueClaimId ? 'var(--accent-muted)' : 'var(--bg-tertiary)',
+                border: `1px solid ${selectedClaim === queueClaimId ? 'var(--accent)' : 'var(--border-primary)'}`,
+                cursor: isSelectable ? 'pointer' : 'not-allowed',
+                opacity: isSelectable ? 1 : 0.7,
               }}>
               <div className="flex justify-between items-start mb-2">
                 <span className="text-sm font-medium truncate pr-2" style={{ color: 'var(--text-primary)' }}>{c.worker_profiles?.platform_name || 'Worker'} - {c.worker_profiles?.city || 'Unknown'}</span>
@@ -335,12 +402,17 @@ export default function AdminReviews() {
                   Due: {new Date(c.review_meta.review_due_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
                 </p>
               )}
+              {!isSelectable && (
+                <p className="text-[10px] mt-1" style={{ color: 'var(--warning)' }}>
+                  Claim ID missing. Refresh queue.
+                </p>
+              )}
               <p className="text-[10px] mt-2" style={{ color: 'var(--text-tertiary)' }}>
                 {new Date(c.claimed_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                 {c.trigger_events?.trigger_family && <span className="ml-2" style={{ color: 'var(--accent)' }}>{c.trigger_events.trigger_family}</span>}
               </p>
             </div>
-          )))}
+          )})) }
         </div>
       </div>
 
@@ -364,7 +436,7 @@ export default function AdminReviews() {
             <div className="flex justify-between items-start pb-5" style={{ borderBottom: '1px solid var(--border-primary)' }}>
               <div>
                 <h2 className="text-xl font-bold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-                  <Scale size={22} style={{ color: 'var(--accent)' }} /> Claim {claim?.id?.split('-')[0] ?? '???'}
+                  <Scale size={22} style={{ color: 'var(--accent)' }} /> Claim {claimId?.split('-')[0] ?? '???'}
                 </h2>
                 <p className="text-sm mt-1" style={{ color: 'var(--text-tertiary)' }}>
                   Submitted {claim?.claimed_at ? new Date(claim.claimed_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : 'N/A'}

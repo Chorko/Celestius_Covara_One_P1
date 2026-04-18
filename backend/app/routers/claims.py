@@ -692,31 +692,77 @@ async def get_claim_detail(
         )
     except Exception:
         review_rows = []
-    payout_trace = get_payout_trace_for_claim(sb, claim_id)
-    trust_stamp = (
-        payout_trace.get("trust_stamp")
-        if isinstance(payout_trace, dict)
-        else None
-    )
-    if not isinstance(trust_stamp, dict):
-        trust_stamp = build_trust_stamp_for_claim(sb, claim_id)
+    try:
+        payout_trace = get_payout_trace_for_claim(sb, claim_id)
+    except Exception as exc:
+        logger.warning(
+            "Failed to build payout trace for claim_id=%s: %s",
+            claim_id,
+            exc,
+        )
+        payout_trace = {
+            "claim_id": claim_id,
+            "payout": None,
+            "settlement_events": [],
+            "transitions": [],
+        }
 
-    device_trust = _extract_device_trust_from_payout_row(payout_row)
+    try:
+        trust_stamp = (
+            payout_trace.get("trust_stamp")
+            if isinstance(payout_trace, dict)
+            else None
+        )
+        if not isinstance(trust_stamp, dict):
+            trust_stamp = build_trust_stamp_for_claim(sb, claim_id)
+    except Exception as exc:
+        logger.warning(
+            "Failed to build trust stamp for claim_id=%s: %s",
+            claim_id,
+            exc,
+        )
+        trust_stamp = None
+
+    try:
+        device_trust = _extract_device_trust_from_payout_row(payout_row)
+    except Exception:
+        device_trust = None
 
     reviewer_name_map: dict[str, str] = {}
     assigned_reviewer_id = claim_data.get("assigned_reviewer_profile_id")
-    if assigned_reviewer_id:
-        reviewer_name_map = _load_reviewer_name_map(sb, [assigned_reviewer_id])
+    try:
+        if assigned_reviewer_id:
+            reviewer_name_map = _load_reviewer_name_map(sb, [assigned_reviewer_id])
 
-    claim_data["review_meta"] = _prepare_review_meta(
-        claim_data,
-        reviewer_name_map,
-        user,
-    )
-    if assigned_reviewer_id:
-        claim_data["assigned_reviewer"] = {
-            "id": assigned_reviewer_id,
-            "full_name": reviewer_name_map.get(assigned_reviewer_id),
+        claim_data["review_meta"] = _prepare_review_meta(
+            claim_data,
+            reviewer_name_map,
+            user,
+        )
+        if assigned_reviewer_id:
+            claim_data["assigned_reviewer"] = {
+                "id": assigned_reviewer_id,
+                "full_name": reviewer_name_map.get(assigned_reviewer_id),
+            }
+    except Exception as exc:
+        logger.warning(
+            "Failed to build review metadata for claim_id=%s: %s",
+            claim_id,
+            exc,
+        )
+        claim_data["review_meta"] = {
+            "assignment_state": claim_data.get("assignment_state") or "unassigned",
+            "assigned_reviewer_profile_id": assigned_reviewer_id,
+            "assigned_reviewer_name": reviewer_name_map.get(assigned_reviewer_id)
+            if assigned_reviewer_id
+            else "",
+            "assigned_at": claim_data.get("assigned_at"),
+            "review_due_at": claim_data.get("review_due_at"),
+            "sla_status": "not_set",
+            "claim_age_hours": None,
+            "hours_to_due": None,
+            "is_overdue": False,
+            "can_current_user_review": True,
         }
 
     return {
