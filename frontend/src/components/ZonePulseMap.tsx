@@ -94,7 +94,7 @@ export default function ZonePulseMap({
       let polygonLayer: import('leaflet').GeoJSON | null = null
       if (polygonGeoJson && typeof polygonGeoJson === 'object') {
         try {
-          polygonLayer = L.geoJSON(polygonGeoJson as any, {
+          polygonLayer = L.geoJSON(polygonGeoJson as GeoJSON.GeoJsonObject, {
             style: {
               color: '#38bdf8',
               weight: 2,

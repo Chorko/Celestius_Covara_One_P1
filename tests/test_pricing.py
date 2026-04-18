@@ -94,7 +94,10 @@ class TestPayoutCalculation:
             fraud_penalty=0.0,
             plan="essential",
         )
-        assert result["gross_premium"] == PLAN_DEFINITIONS["essential"]["weekly_premium_inr"]
+        plan = PLAN_DEFINITIONS["essential"]
+        # Dynamic premium must fall within the plan's bounded range
+        assert plan["min_weekly_premium_inr"] <= result["gross_premium"] <= plan["max_weekly_premium_inr"], \
+            f"Gross premium {result['gross_premium']} outside [{plan['min_weekly_premium_inr']}, {plan['max_weekly_premium_inr']}]"
 
     def test_fraud_penalty_reduces_payout(self):
         clean = calculate_payout(
