@@ -38,6 +38,20 @@ def _safe_float(value: Any, default: float = 0.0) -> float:
         return default
 
 
+def _is_notification_rate_limited(error_text: str) -> bool:
+    lowered = (error_text or "").lower()
+    return any(
+        pattern in lowered
+        for pattern in [
+            "http 429",
+            "status code: 429",
+            "too many requests",
+            "exceeded the 50",
+            "rate limit",
+        ]
+    )
+
+
 async def _handle_auto_claim_notification(sb, event: DomainEvent) -> dict[str, Any]:
     payload = event.payload or {}
     worker_id = str(payload.get("worker_id") or "")
@@ -73,8 +87,21 @@ async def _handle_auto_claim_notification(sb, event: DomainEvent) -> dict[str, A
     )
 
     if not result.get("success"):
+        error_text = str(result.get("error") or "")
+        if _is_notification_rate_limited(error_text):
+            logger.warning(
+                "Notification consumer soft-skipped due to provider rate limit: claim_id=%s error=%s",
+                claim_id,
+                error_text,
+            )
+            return {
+                "sent": False,
+                "reason": "provider_rate_limited",
+                "soft_failed": True,
+            }
+
         raise RuntimeError(
-            f"Notification consumer failed for claim_id={claim_id}: {result.get('error')}"
+            f"Notification consumer failed for claim_id={claim_id}: {error_text}"
         )
 
     return {

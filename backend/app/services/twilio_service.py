@@ -15,6 +15,27 @@ from ..config import settings
 
 logger = logging.getLogger("covara.twilio")
 
+_mock_verify_overrides: set[str] = set()
+
+
+def _normalize_phone(phone_number: str) -> str:
+    return (phone_number or "").strip()
+
+
+def _is_non_production_env() -> bool:
+    return (settings.app_env or "development").strip().lower() not in {"production", "staging"}
+
+
+def _is_twilio_trial_restriction_error(exc: Exception) -> bool:
+    code = getattr(exc, "code", None)
+    if code == 21608:
+        return True
+
+    message = str(exc).lower()
+    if "21608" in message:
+        return True
+    return "trial" in message and "unverified" in message
+
 
 def _get_client():
     """Create a Twilio REST client. Returns None if credentials missing."""
@@ -65,12 +86,29 @@ def send_otp(phone_number: str) -> dict:
             .verifications
             .create(to=phone_number, channel="sms")
         )
+        _mock_verify_overrides.discard(_normalize_phone(phone_number))
         return {
             "success": True,
             "status": verification.status,  # "pending"
             "mock": False,
         }
     except Exception as e:
+        if _is_non_production_env() and _is_twilio_trial_restriction_error(e):
+            normalized_phone = _normalize_phone(phone_number)
+            _mock_verify_overrides.add(normalized_phone)
+            logger.warning(
+                "Twilio trial restriction for %s; using mock OTP fallback in %s",
+                phone_number,
+                settings.app_env,
+            )
+            return {
+                "success": True,
+                "status": "pending",
+                "mock": True,
+                "otp": "123456",
+                "note": "Twilio trial restriction detected — using mock OTP 123456",
+            }
+
         logger.error(f"Twilio Verify send_otp failed for {phone_number}: {e}")
         return {"success": False, "error": str(e), "mock": False}
 
@@ -87,8 +125,10 @@ def verify_otp(phone_number: str, code: str) -> dict:
     client = _get_client()
     service_sid = settings.twilio_verify_service_sid
 
+    normalized_phone = _normalize_phone(phone_number)
+
     # ── MOCK MODE ──
-    if not client or not service_sid:
+    if not client or not service_sid or normalized_phone in _mock_verify_overrides:
         is_valid = code == "123456"
         return {
             "success": True,

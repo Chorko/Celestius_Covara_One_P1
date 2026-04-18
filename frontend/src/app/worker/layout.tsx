@@ -11,6 +11,7 @@ import {
   FileText,
   CreditCard,
   Coins,
+  MapPin,
   Shield,
   LogOut,
   Menu,
@@ -19,6 +20,7 @@ import {
 
 const NAV_ITEMS = [
   { href: '/worker/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/worker/dashboard#my-zone-intelligence', label: 'My Zone', icon: MapPin },
   { href: '/worker/claims', label: 'My Claims', icon: FileText },
   { href: '/worker/rewards', label: 'Rewards', icon: Coins },
   { href: '/worker/pricing', label: 'Coverage', icon: CreditCard },
@@ -32,9 +34,16 @@ export default function WorkerLayout({ children }: { children: React.ReactNode }
   const [drawerOpen, setDrawerOpen] = useState(false)
 
   const handleSignOut = useCallback(async () => {
-    await supabase.auth.signOut()
-    logout()
-    router.push('/')
+    try {
+      // Use local scope so UI logout still succeeds even if auth service has transient issues.
+      await supabase.auth.signOut({ scope: 'local' })
+    } catch {
+      // Continue with client-side logout regardless of upstream sign-out result.
+    } finally {
+      logout()
+      router.replace('/')
+      router.refresh()
+    }
   }, [supabase, logout, router])
 
   // Hydrate store state and enforce worker role.
@@ -112,7 +121,7 @@ export default function WorkerLayout({ children }: { children: React.ReactNode }
         {/* Navigation */}
         <nav className="flex-1 px-3 py-4 space-y-1">
           {NAV_ITEMS.map((item) => {
-            const isActive = pathname === item.href
+            const isActive = pathname === item.href.split('#')[0] && !item.href.includes('#')
             return (
               <Link
                 key={item.href}
@@ -182,7 +191,7 @@ export default function WorkerLayout({ children }: { children: React.ReactNode }
         )}
         <nav className="space-y-1 mb-6">
           {NAV_ITEMS.map((item) => {
-            const isActive = pathname === item.href
+            const isActive = pathname === item.href.split('#')[0] && !item.href.includes('#')
             return (
               <Link
                 key={item.href}
@@ -205,7 +214,7 @@ export default function WorkerLayout({ children }: { children: React.ReactNode }
       {/* ═══ MOBILE BOTTOM NAV ═══ */}
       <nav className="bottom-nav mobile-bottom-nav hidden">
         {NAV_ITEMS.map((item) => {
-          const isActive = pathname === item.href
+          const isActive = pathname === item.href.split('#')[0] && !item.href.includes('#')
           return (
             <Link
               key={item.href}

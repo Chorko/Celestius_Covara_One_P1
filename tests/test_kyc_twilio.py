@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 import asyncio
 import httpx
+from types import SimpleNamespace
 from unittest.mock import patch
 from backend.app.services.kyc_service import (
     aadhaar_generate_otp,
@@ -161,6 +162,51 @@ class TestTwilioMock:
         ]
         for key in expected:
             assert key in MESSAGE_TEMPLATES, f"Missing template: {key}"
+
+    @patch("backend.app.services.twilio_service._is_non_production_env", return_value=True)
+    def test_send_otp_trial_restriction_falls_back_to_mock(self, _mock_non_prod):
+        phone = "+919999000001"
+
+        class _FailingVerifications:
+            def create(self, **kwargs):
+                raise Exception(
+                    "TwilioRestException 21608: The 'To' phone number is unverified. "
+                    "Trial accounts cannot send messages to unverified numbers."
+                )
+
+        class _UnexpectedVerificationChecks:
+            def create(self, **kwargs):
+                raise AssertionError("verify_otp should use mock fallback and skip Twilio check")
+
+        class _Service:
+            def __init__(self):
+                self.verifications = _FailingVerifications()
+                self.verification_checks = _UnexpectedVerificationChecks()
+
+        class _VerifyV2:
+            def services(self, _sid):
+                return _Service()
+
+        class _Client:
+            def __init__(self):
+                self.verify = SimpleNamespace(v2=_VerifyV2())
+
+        with (
+            patch("backend.app.services.twilio_service._get_client", return_value=_Client()),
+            patch(
+                "backend.app.services.twilio_service.settings",
+                SimpleNamespace(twilio_verify_service_sid="VA123", app_env="development"),
+            ),
+        ):
+            send_result = send_otp(phone)
+            assert send_result["success"] is True
+            assert send_result["mock"] is True
+            assert send_result["otp"] == "123456"
+
+            verify_result = verify_otp(phone, "123456")
+            assert verify_result["success"] is True
+            assert verify_result["verified"] is True
+            assert verify_result["mock"] is True
 
 
 # ── KYC Mock Mode (use asyncio.run for compat) ───────────────────────

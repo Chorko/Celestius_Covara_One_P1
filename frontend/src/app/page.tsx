@@ -2,11 +2,14 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { useUserStore } from '@/store'
 import ThemeToggle from '@/components/ThemeToggle'
 import { Shield, ArrowRight, AlertCircle } from 'lucide-react'
 import Image from 'next/image'
+
+const DEMO9_EMAIL_PATTERN = /^demo\.(auto|review|fraud)\d{2}@synthetic\.covara\.dev$/i
 
 export default function Home() {
   const router = useRouter()
@@ -82,16 +85,27 @@ export default function Home() {
     e.preventDefault()
     setLoading(true)
     setError(null)
+
+    // Clear any stale local session before a fresh password sign-in.
+    try {
+      await supabase.auth.signOut({ scope: 'local' })
+    } catch {
+      // Ignore local sign-out errors and continue.
+    }
+
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
     if (error) {
       console.error('signInWithPassword error:', JSON.stringify(error))
       const msg = error.message ?? ''
       const name = (error as unknown as Record<string, unknown>).name ?? ''
+      const isDemo9Email = DEMO9_EMAIL_PATTERN.test(email)
       if (error.status === 0 || name === 'AuthRetryableFetchError' || msg.toLowerCase().includes('failed to fetch') || msg.toLowerCase().includes('network')) {
         setError('Cannot reach Supabase — your free-tier project may be paused. Visit the Supabase dashboard and click "Restore project", then try again.')
+      } else if (isDemo9Email && (msg.toLowerCase().includes('schema') || error.status === 500)) {
+        setError('DEMO9 auth is corrupted for this Supabase project. Run backend/sql/helpers/08c_fix_demo9_auth_users.sql (cleanup pass), recreate the 9 DEMO9 users (scripts/create_demo9_auth_users.py --apply), then run 08c again (sync pass).')
       } else if (msg.toLowerCase().includes('schema') || error.status === 500) {
-        setError('Auth service error (500) — demo accounts may be broken. Run backend/sql/helpers/08_fix_demo_auth_users.sql and recreate accounts via Supabase Dashboard -> Authentication -> Users.')
+        setError('Auth service error (500) — this project needs auth schema recovery. Use backend/sql/helpers/08c_fix_demo9_auth_users.sql for DEMO9 users, or run the standard auth recovery helper SQL for default demo users.')
       } else {
         setError(msg || 'Sign in failed')
       }
@@ -286,6 +300,13 @@ export default function Home() {
             </svg>
             Sign in with Google
           </button>
+
+          <div className="mt-5 text-center text-sm" style={{ color: 'var(--text-tertiary)' }}>
+            New worker?{' '}
+            <Link href="/signup" style={{ color: 'var(--accent)' }} className="font-medium">
+              Create an account
+            </Link>
+          </div>
         </div>
 
         {/* Footer */}
