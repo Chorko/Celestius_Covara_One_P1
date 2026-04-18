@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useUserStore } from '@/store'
 import { createClient } from '@/lib/supabase'
@@ -108,7 +108,7 @@ interface CheckoutFinalizeResponse {
 const FIXED_PRICES: Record<PlanId, number> = { essential: 28, plus: 42 }
 const PLAN_WEEKLY_BENEFITS: Record<PlanId, number> = { essential: 3000, plus: 4500 }
 
-export default function WorkerPricing() {
+function WorkerPricingInner() {
   const { profile } = useUserStore()
   const supabase = createClient()
   const searchParams = useSearchParams()
@@ -554,5 +554,17 @@ export default function WorkerPricing() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function WorkerPricing() {
+  return (
+    <Suspense fallback={
+      <div className="p-8 max-w-5xl mx-auto text-center" style={{ color: 'var(--text-tertiary)' }}>
+        Loading pricing…
+      </div>
+    }>
+      <WorkerPricingInner />
+    </Suspense>
   )
 }
