@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
+import { backendGet, BackendApiError } from '@/lib/backendApi'
 import { Users, Search, MapPin, ChevronDown, ChevronUp, Mail, Shield, Navigation2, Bike, CheckCircle, XCircle, Fingerprint, BarChart3, FileText, Clock } from 'lucide-react'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -10,7 +11,23 @@ interface WorkerProfile {
   profiles?: { id?: string; full_name?: string; email?: string; phone?: string }; zones?: { zone_name?: string }; [key: string]: any
 }
 interface WorkerClaim { id: string; claim_status: string; claim_reason: string; claimed_at: string; trigger_events?: { trigger_code?: string; trigger_family?: string }; [key: string]: any }
+interface WorkersListResponse { workers: WorkerProfile[]; count: number }
+interface WorkerClaimsResponse { claims: WorkerClaim[]; count: number }
 /* eslint-enable @typescript-eslint/no-explicit-any */
+
+function formatLoadError(error: unknown): string {
+  if (error instanceof BackendApiError) {
+    if (error.status === 401) {
+      return 'Session expired. Please sign in again.'
+    }
+    if (error.status === 403) {
+      return 'Admin role required for worker directory access.'
+    }
+    return error.detail
+  }
+
+  return error instanceof Error ? error.message : 'Failed to load worker directory'
+}
 
 export default function AdminUsers() {
   const supabase = createClient()
@@ -21,14 +38,23 @@ export default function AdminUsers() {
   const [expandedWorker, setExpandedWorker] = useState<string | null>(null)
   const [workerClaims, setWorkerClaims] = useState<Record<string, WorkerClaim[]>>({})
   const [claimLoading, setClaimLoading] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   const loadWorkers = useCallback(async (city?: string) => {
     setLoading(true)
     try {
-      let query = supabase.from('worker_profiles').select('*, profiles(id, full_name, email, phone), zones(zone_name)').order('trust_score', { ascending: false })
-      if (city) query = query.eq('city', city)
-      const { data } = await query; setWorkers(data || [])
-    } catch (e) { console.error('Could not load workers', e) }
+      const params = new URLSearchParams({ limit: '200' })
+      if (city) {
+        params.set('city', city)
+      }
+      const response = await backendGet<WorkersListResponse>(supabase, `/workers?${params.toString()}`)
+      setWorkers(response.workers || [])
+      setLoadError(null)
+    } catch (e) {
+      console.error('Could not load workers', e)
+      setWorkers([])
+      setLoadError(formatLoadError(e))
+    }
     setLoading(false)
   }, [supabase])
 
@@ -53,9 +79,12 @@ export default function AdminUsers() {
     if (!workerClaims[workerId]) {
       setClaimLoading(workerId)
       try {
-        const { data } = await supabase.from('manual_claims').select('id, claim_status, claim_reason, claimed_at, trigger_events(trigger_code, trigger_family)').eq('worker_profile_id', workerId).order('claimed_at', { ascending: false }).limit(5)
-        setWorkerClaims(prev => ({ ...prev, [workerId]: (data || []) as WorkerClaim[] }))
-      } catch (e) { console.error('Could not load claims', e) }
+        const response = await backendGet<WorkerClaimsResponse>(supabase, `/workers/${workerId}/claims?limit=5`)
+        setWorkerClaims(prev => ({ ...prev, [workerId]: response.claims || [] }))
+      } catch (e) {
+        console.error('Could not load claims', e)
+        setWorkerClaims(prev => ({ ...prev, [workerId]: [] }))
+      }
       setClaimLoading(null)
     }
   }
@@ -106,6 +135,12 @@ export default function AdminUsers() {
             <button type="submit" className="btn-primary flex items-center justify-center gap-2 sm:w-32"><Search size={16} /> Search</button>
           </form>
         </section>
+
+        {loadError && (
+          <section className="card p-4 text-sm" style={{ background: 'var(--warning-muted)', border: '1px solid var(--warning)', color: 'var(--warning)' }}>
+            {loadError}
+          </section>
+        )}
 
         {/* Results */}
         <section className="space-y-3 animate-fade-in-up delay-200">

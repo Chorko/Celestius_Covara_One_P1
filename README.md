@@ -1392,7 +1392,10 @@ cp .env.example .env
 
 **2. Seed the database:**
 ```sql
--- Run in Supabase SQL Editor (in order):
+-- First provision deterministic auth users safely via Admin API:
+python scripts/create_seed06_auth_users.py --apply
+
+-- Then run in Supabase SQL Editor (in order):
 backend/sql/00_unified_migration.sql
 backend/sql/06_synthetic_seed.sql
 ```
@@ -1434,6 +1437,7 @@ Use with runbook:
 
 - `TEMP_WILL_BE_DELETED/DEMO9_RUNBOOK.md`
 - Recovery helper SQL: `backend/sql/helpers/08c_fix_demo9_auth_users.sql`
+- Default demo recovery script (worker/admin): `scripts/recover_demo_auth_without_sql.py --mode full --apply`
 - User creation script: `scripts/create_demo9_auth_users.py --apply`
 
 ### 🔁 Demo Reset Helpers (Repeatable Payments / Subscriptions)
@@ -1448,9 +1452,10 @@ Use these SQL helpers in Supabase SQL Editor to reset demo state between judge r
 Recommended order after heavy DEMO9 testing:
 
 1. Run `backend/sql/helpers/23_reset_demo9_runtime_state.sql`
-2. If Auth itself is corrupted (Supabase 500), run `backend/sql/helpers/08c_fix_demo9_auth_users.sql`
-3. Recreate DEMO9 Auth users: `scripts/create_demo9_auth_users.py --apply`
-4. Run `backend/sql/helpers/08c_fix_demo9_auth_users.sql` again (sync pass)
+2. If default demo auth is corrupted (Supabase 500), run `scripts/recover_demo_auth_without_sql.py --mode full --apply`
+3. If DEMO9 auth is corrupted, run `backend/sql/helpers/08c_fix_demo9_auth_users.sql`
+4. Recreate DEMO9 Auth users: `scripts/create_demo9_auth_users.py --apply`
+5. Run `backend/sql/helpers/08c_fix_demo9_auth_users.sql` again (sync pass)
 
 > **Or use Docker:** `docker compose up` — brings up FastAPI + Next.js + Redis in one command
 

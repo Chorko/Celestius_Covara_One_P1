@@ -22,10 +22,7 @@ class ActivatePolicyRequest(BaseModel):
     plan: str = "essential"  # "essential" or "plus"
 
 
-from fastapi_cache.decorator import cache
-
 @router.get("/quote")
-@cache(expire=600)
 async def get_premium_quote(
     plan: str = Query("essential", description="Plan: 'essential' or 'plus'"),
     user: dict = Depends(require_worker),

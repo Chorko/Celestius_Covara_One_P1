@@ -233,6 +233,20 @@ def send_whatsapp(phone_number: str, message: str) -> dict:
         )
         return {"success": True, "sid": msg.sid, "status": msg.status, "mock": False}
     except Exception as e:
+        if _is_non_production_env():
+            logger.warning(
+                "Twilio WhatsApp send failed in %s; using mock fallback for %s: %s",
+                settings.app_env,
+                phone_number,
+                e,
+            )
+            return {
+                "success": True,
+                "mock": True,
+                "logged_message": message,
+                "fallback_reason": str(e),
+            }
+
         logger.error(f"Twilio WhatsApp send failed to {phone_number}: {e}")
         return {"success": False, "error": str(e), "mock": False}
 

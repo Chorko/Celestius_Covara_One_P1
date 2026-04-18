@@ -196,7 +196,7 @@ export default function AdminEventsPage() {
           <div className="card p-6">Loading event operations...</div>
         ) : (
           <>
-            <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <section className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
               <div className="card p-5" style={{ borderLeft: '3px solid var(--accent)' }}>
                 <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Outbox Pending</p>
                 <p className="text-2xl font-bold mt-2" style={{ color: 'var(--text-primary)' }}>{countValue(outboxCounts, 'pending')}</p>
@@ -208,6 +208,14 @@ export default function AdminEventsPage() {
               <div className="card p-5" style={{ borderLeft: '3px solid var(--danger)' }}>
                 <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Outbox Dead Letter</p>
                 <p className="text-2xl font-bold mt-2" style={{ color: 'var(--text-primary)' }}>{countValue(outboxCounts, 'dead_letter')}</p>
+              </div>
+              <div className="card p-5" style={{ borderLeft: '3px solid var(--success)' }}>
+                <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Outbox Processed</p>
+                <p className="text-2xl font-bold mt-2" style={{ color: 'var(--success)' }}>{countValue(outboxCounts, 'processed')}</p>
+              </div>
+              <div className="card p-5" style={{ borderLeft: '3px solid var(--accent)' }}>
+                <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Consumer Succeeded</p>
+                <p className="text-2xl font-bold mt-2" style={{ color: 'var(--success)' }}>{countValue(consumerCounts, 'succeeded')}</p>
               </div>
               <div className="card p-5" style={{ borderLeft: '3px solid var(--info)' }}>
                 <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Consumer Dead Letter</p>

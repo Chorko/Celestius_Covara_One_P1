@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase'
+import { backendGet } from '@/lib/backendApi'
 import type { LayerGroup, Map as LeafletMap } from 'leaflet'
 import { AlertTriangle, Layers3, MapPin, Radar, RefreshCw } from 'lucide-react'
 
@@ -26,12 +27,13 @@ type ZoneRow = {
 type TriggerRow = {
   id: string
   zone_id: string | null
-  city: string
-  trigger_family: string
-  trigger_code: string
+  city?: string
+  trigger_family?: string
+  trigger_code?: string
   observed_value: number | string | null
   severity_band: SeverityBand
   started_at: string
+  ended_at?: string | null
 }
 
 type ClaimRow = {
@@ -40,6 +42,22 @@ type ClaimRow = {
   stated_lat: number | string | null
   stated_lng: number | string | null
   claimed_at: string
+}
+
+type ZonesListResponse = {
+  zones: ZoneRow[]
+  count: number
+}
+
+type LiveTriggersResponse = {
+  active_triggers: TriggerRow[]
+}
+
+type ClaimsListResponse = {
+  claims: ClaimRow[]
+  pagination?: {
+    total?: number
+  }
 }
 
 type GeoPoint = {
@@ -169,8 +187,9 @@ function severityStyle(band: SeverityBand): {
 function renderTriggerLabel(trigger: TriggerRow): string {
   const observed = toNumber(trigger.observed_value)
   const observedText = observed === null ? 'n/a' : observed.toString()
+  const code = (trigger.trigger_code || 'trigger').replaceAll('_', ' ')
 
-  return `${trigger.trigger_code.replaceAll('_', ' ')} (${observedText})`
+  return `${code} (${observedText})`
 }
 
 export default function ZoneRiskMap() {
@@ -217,47 +236,52 @@ export default function ZoneRiskMap() {
     setError(null)
 
     try {
-      const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-
-      const [zonesResult, triggersResult, claimsResult] = await Promise.all([
-        supabase
-          .from('zones')
-          .select('id, city, zone_name, center_lat, center_lng')
-          .order('city')
-          .order('zone_name'),
-        supabase
-          .from('trigger_events')
-          .select('id, zone_id, city, trigger_family, trigger_code, observed_value, severity_band, started_at')
-          .is('ended_at', null)
-          .order('started_at', { ascending: false })
-          .limit(100),
-        supabase
-          .from('manual_claims')
-          .select('id, claim_status, stated_lat, stated_lng, claimed_at')
-          .in('claim_status', Array.from(SUSPICIOUS_STATES))
-          .gte('claimed_at', since)
-          .not('stated_lat', 'is', null)
-          .not('stated_lng', 'is', null)
-          .order('claimed_at', { ascending: false })
-          .limit(400),
+      const [zonesResult, triggersResult, claimsResult] = await Promise.allSettled([
+        backendGet<ZonesListResponse>(supabase, '/zones/'),
+        backendGet<LiveTriggersResponse>(supabase, '/triggers/live'),
+        backendGet<ClaimsListResponse>(supabase, '/claims/?queue=all&page=1&page_size=100'),
       ])
 
-      if (zonesResult.error) {
-        throw zonesResult.error
-      }
-      if (triggersResult.error) {
-        throw triggersResult.error
-      }
-      if (claimsResult.error) {
-        throw claimsResult.error
+      const failedBlocks: string[] = []
+
+      const zoneRows = zonesResult.status === 'fulfilled'
+        ? (zonesResult.value.zones || [])
+        : []
+      if (zonesResult.status !== 'fulfilled') {
+        failedBlocks.push('zones')
       }
 
-      setZones(zonesResult.data || [])
-      setActiveTriggers((triggersResult.data || []) as TriggerRow[])
-      setSuspiciousClaims((claimsResult.data || []) as ClaimRow[])
+      const triggerRows = triggersResult.status === 'fulfilled'
+        ? ((triggersResult.value.active_triggers || []).filter((row) => !row.ended_at) as TriggerRow[])
+        : []
+      if (triggersResult.status !== 'fulfilled') {
+        failedBlocks.push('active triggers')
+      }
+
+      const claimsRows = claimsResult.status === 'fulfilled'
+        ? (claimsResult.value.claims || [])
+        : []
+      if (claimsResult.status !== 'fulfilled') {
+        failedBlocks.push('claims')
+      }
+
+      const suspicious = claimsRows
+        .filter((claim) => SUSPICIOUS_STATES.has(String(claim.claim_status || '').trim().toLowerCase()))
+        .filter((claim) => toNumber(claim.stated_lat) !== null && toNumber(claim.stated_lng) !== null)
+
+      setZones(zoneRows)
+      setActiveTriggers(triggerRows)
+      setSuspiciousClaims(suspicious)
+
+      if (failedBlocks.length > 0) {
+        setError(`Partial map data loaded (missing: ${failedBlocks.join(', ')}).`)
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load map data'
       setError(message)
+      setZones([])
+      setActiveTriggers([])
+      setSuspiciousClaims([])
     }
 
     setLoading(false)
