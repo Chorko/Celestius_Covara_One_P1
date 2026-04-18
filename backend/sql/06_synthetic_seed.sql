@@ -43,99 +43,89 @@ ON CONFLICT (id) DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- 2. Auth Users + Profiles
--- Insert into auth.users first (satisfies FK on profiles.id).
--- The handle_new_user trigger will auto-create profiles (role=worker)
--- and worker_profiles (placeholder data). We then UPDATE the rows
--- to set correct roles, names, and delete stale worker_profiles
--- for admin users.
+-- IMPORTANT:
+--   Do NOT insert/delete auth.users or auth.identities via SQL in this seed.
+--   On newer Supabase projects, direct SQL writes to auth tables can corrupt
+--   GoTrue and cause Auth service 500 errors.
+--
+--   Provision the deterministic auth users expected by this seed first:
+--     python scripts/create_seed06_auth_users.py --apply
+--
+--   This block verifies the expected auth users exist with exact IDs and then
+--   normalizes public.profiles for safe reruns.
 -- ────────────────────────────────────────────────────────────
 
--- Step 2-pre: Clean up existing demo accounts for safe re-run.
--- All FK constraints are ON DELETE CASCADE, so deleting from auth.users
--- cascades through profiles → worker_profiles/insurer_profiles → claims → evidence/payouts/reviews.
--- Audit events use ON DELETE SET NULL, so those rows are preserved but actor_profile_id becomes null.
-DELETE FROM auth.identities WHERE user_id IN (SELECT id FROM auth.users WHERE email IN ('worker@demo.com', 'admin@demo.com'));
-DELETE FROM auth.users WHERE email IN ('worker@demo.com', 'admin@demo.com');
+-- Expected deterministic auth IDs/emails used throughout this seed.
+create temporary table if not exists tmp_seed06_auth_expected (
+  id uuid primary key,
+  email text unique not null,
+  full_name text not null,
+  phone text not null,
+  role text not null
+) on commit drop;
 
--- Step 2a: Insert auth users. The trigger fires and auto-creates
--- profiles (role='worker') + worker_profiles (placeholder) for each.
-INSERT INTO auth.users (
-  id, instance_id, aud, role, email,
-  encrypted_password, email_confirmed_at,
-  created_at, updated_at,
-  raw_app_meta_data, raw_user_meta_data
-) VALUES
-  ('aaaa0000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-   'ravi.kumar@demo.devtrails.in',
-   crypt('demopassword', gen_salt('bf')), now(), now(), now(),
-   '{"provider": "email", "providers": ["email"]}'::jsonb,
-   '{"full_name": "Ravi Kumar"}'::jsonb),
-  ('aaaa0000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-   'priya.sharma@demo.devtrails.in',
-   crypt('demopassword', gen_salt('bf')), now(), now(), now(),
-   '{"provider": "email", "providers": ["email"]}'::jsonb,
-   '{"full_name": "Priya Sharma"}'::jsonb),
-  ('aaaa0000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-   'arun.patel@demo.devtrails.in',
-   crypt('demopassword', gen_salt('bf')), now(), now(), now(),
-   '{"provider": "email", "providers": ["email"]}'::jsonb,
-   '{"full_name": "Arun Patel"}'::jsonb),
-  ('aaaa0000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-   'meena.devi@demo.devtrails.in',
-   crypt('demopassword', gen_salt('bf')), now(), now(), now(),
-   '{"provider": "email", "providers": ["email"]}'::jsonb,
-   '{"full_name": "Meena Devi"}'::jsonb),
-  ('aaaa0000-0000-0000-0000-000000000005', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-   'suresh.yadav@demo.devtrails.in',
-   crypt('demopassword', gen_salt('bf')), now(), now(), now(),
-   '{"provider": "email", "providers": ["email"]}'::jsonb,
-   '{"full_name": "Suresh Yadav"}'::jsonb),
-  ('aaaa0000-0000-0000-0000-000000000006', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-   'fatima.khan@demo.devtrails.in',
-   crypt('demopassword', gen_salt('bf')), now(), now(), now(),
-   '{"provider": "email", "providers": ["email"]}'::jsonb,
-   '{"full_name": "Fatima Khan"}'::jsonb),
-  -- Demo quick-access accounts
-  ('aaaa0000-0000-0000-0000-000000000201', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-   'worker@demo.com',
-   crypt('demo1234', gen_salt('bf')), now(), now(), now(),
-   '{"provider": "email", "providers": ["email"]}'::jsonb,
-   '{"full_name": "Demo Worker"}'::jsonb),
-  ('aaaa0000-0000-0000-0000-000000000202', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-   'admin@demo.com',
-   crypt('demo1234', gen_salt('bf')), now(), now(), now(),
-   '{"provider": "email", "providers": ["email"]}'::jsonb,
-   '{"full_name": "Demo Admin"}'::jsonb),
-  ('aaaa0000-0000-0000-0000-000000000101', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-   'neha.sharma@devtrails.insurance',
-   crypt('demopassword', gen_salt('bf')), now(), now(), now(),
-   '{"provider": "email", "providers": ["email"]}'::jsonb,
-   '{"full_name": "Neha Sharma"}'::jsonb),
-  ('aaaa0000-0000-0000-0000-000000000102', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-   'vijay.mehta@devtrails.insurance',
-   crypt('demopassword', gen_salt('bf')), now(), now(), now(),
-   '{"provider": "email", "providers": ["email"]}'::jsonb,
-   '{"full_name": "Vijay Mehta"}'::jsonb)
-ON CONFLICT (id) DO NOTHING;
+truncate tmp_seed06_auth_expected;
 
--- Step 2b: Auth identities (required for Supabase email login)
-INSERT INTO auth.identities (
-  id, user_id, provider_id, provider, identity_data, last_sign_in_at, created_at, updated_at
-) VALUES
-  ('aaaa0000-0000-0000-0000-000000000001', 'aaaa0000-0000-0000-0000-000000000001', 'ravi.kumar@demo.devtrails.in',   'email', '{"sub": "aaaa0000-0000-0000-0000-000000000001", "email": "ravi.kumar@demo.devtrails.in"}'::jsonb,   now(), now(), now()),
-  ('aaaa0000-0000-0000-0000-000000000002', 'aaaa0000-0000-0000-0000-000000000002', 'priya.sharma@demo.devtrails.in', 'email', '{"sub": "aaaa0000-0000-0000-0000-000000000002", "email": "priya.sharma@demo.devtrails.in"}'::jsonb, now(), now(), now()),
-  ('aaaa0000-0000-0000-0000-000000000003', 'aaaa0000-0000-0000-0000-000000000003', 'arun.patel@demo.devtrails.in',   'email', '{"sub": "aaaa0000-0000-0000-0000-000000000003", "email": "arun.patel@demo.devtrails.in"}'::jsonb,   now(), now(), now()),
-  ('aaaa0000-0000-0000-0000-000000000004', 'aaaa0000-0000-0000-0000-000000000004', 'meena.devi@demo.devtrails.in',   'email', '{"sub": "aaaa0000-0000-0000-0000-000000000004", "email": "meena.devi@demo.devtrails.in"}'::jsonb,   now(), now(), now()),
-  ('aaaa0000-0000-0000-0000-000000000005', 'aaaa0000-0000-0000-0000-000000000005', 'suresh.yadav@demo.devtrails.in', 'email', '{"sub": "aaaa0000-0000-0000-0000-000000000005", "email": "suresh.yadav@demo.devtrails.in"}'::jsonb, now(), now(), now()),
-  ('aaaa0000-0000-0000-0000-000000000006', 'aaaa0000-0000-0000-0000-000000000006', 'fatima.khan@demo.devtrails.in',  'email', '{"sub": "aaaa0000-0000-0000-0000-000000000006", "email": "fatima.khan@demo.devtrails.in"}'::jsonb,  now(), now(), now()),
-  ('aaaa0000-0000-0000-0000-000000000201', 'aaaa0000-0000-0000-0000-000000000201', 'worker@demo.com',             'email', '{"sub": "aaaa0000-0000-0000-0000-000000000201", "email": "worker@demo.com"}'::jsonb,             now(), now(), now()),
-  ('aaaa0000-0000-0000-0000-000000000202', 'aaaa0000-0000-0000-0000-000000000202', 'admin@demo.com',              'email', '{"sub": "aaaa0000-0000-0000-0000-000000000202", "email": "admin@demo.com"}'::jsonb,              now(), now(), now()),
-  ('aaaa0000-0000-0000-0000-000000000101', 'aaaa0000-0000-0000-0000-000000000101', 'neha.sharma@devtrails.insurance','email', '{"sub": "aaaa0000-0000-0000-0000-000000000101", "email": "neha.sharma@devtrails.insurance"}'::jsonb,now(), now(), now()),
-  ('aaaa0000-0000-0000-0000-000000000102', 'aaaa0000-0000-0000-0000-000000000102', 'vijay.mehta@devtrails.insurance','email', '{"sub": "aaaa0000-0000-0000-0000-000000000102", "email": "vijay.mehta@devtrails.insurance"}'::jsonb,now(), now(), now())
-ON CONFLICT (id) DO NOTHING;
+insert into tmp_seed06_auth_expected (id, email, full_name, phone, role) values
+  ('aaaa0000-0000-0000-0000-000000000001', 'ravi.kumar@demo.devtrails.in',    'Ravi Kumar',   '+919876543210', 'worker'),
+  ('aaaa0000-0000-0000-0000-000000000002', 'priya.sharma@demo.devtrails.in',   'Priya Sharma', '+919876543211', 'worker'),
+  ('aaaa0000-0000-0000-0000-000000000003', 'arun.patel@demo.devtrails.in',     'Arun Patel',   '+919876543212', 'worker'),
+  ('aaaa0000-0000-0000-0000-000000000004', 'meena.devi@demo.devtrails.in',     'Meena Devi',   '+919876543213', 'worker'),
+  ('aaaa0000-0000-0000-0000-000000000005', 'suresh.yadav@demo.devtrails.in',   'Suresh Yadav', '+919876543214', 'worker'),
+  ('aaaa0000-0000-0000-0000-000000000006', 'fatima.khan@demo.devtrails.in',    'Fatima Khan',  '+919876543215', 'worker'),
+  ('aaaa0000-0000-0000-0000-000000000201', 'worker@demo.com',                   'Demo Worker',  '+919999900001', 'worker'),
+  ('aaaa0000-0000-0000-0000-000000000202', 'admin@demo.com',                    'Demo Admin',   '+919999900002', 'insurer_admin'),
+  ('aaaa0000-0000-0000-0000-000000000101', 'neha.sharma@devtrails.insurance',   'Neha Sharma',  '+919800000001', 'insurer_admin'),
+  ('aaaa0000-0000-0000-0000-000000000102', 'vijay.mehta@devtrails.insurance',   'Vijay Mehta',  '+919800000002', 'insurer_admin')
+on conflict (id) do update
+set email = excluded.email,
+    full_name = excluded.full_name,
+    phone = excluded.phone,
+    role = excluded.role;
 
--- Step 2c: Fix worker profiles with full names and phone numbers
--- (The trigger already created these rows with defaults)
+do $$
+declare
+  v_missing text;
+  v_mismatch text;
+begin
+  select string_agg(e.email, ', ' order by e.email)
+  into v_missing
+  from tmp_seed06_auth_expected e
+  left join auth.users u
+    on u.id = e.id
+   and lower(u.email) = lower(e.email)
+  where u.id is null;
+
+  if v_missing is not null then
+    raise exception
+      'Missing required seed auth users: %. Run scripts/create_seed06_auth_users.py --apply, then rerun backend/sql/06_synthetic_seed.sql.',
+      v_missing;
+  end if;
+
+  select string_agg(format('%s -> %s', lower(u.email), u.id::text), ', ' order by lower(u.email))
+  into v_mismatch
+  from auth.users u
+  join tmp_seed06_auth_expected e on lower(u.email) = lower(e.email)
+  where u.id <> e.id;
+
+  if v_mismatch is not null then
+    raise exception
+      'Seed auth user ID mismatch: %. Run scripts/create_seed06_auth_users.py --apply to recreate deterministic IDs.',
+      v_mismatch;
+  end if;
+end $$;
+
+-- Ensure base profile rows exist even if auth trigger execution drifted.
+insert into public.profiles (id, role, full_name, email, phone)
+select id, role, full_name, email, phone
+from tmp_seed06_auth_expected
+on conflict (id) do update
+set role = excluded.role,
+    full_name = excluded.full_name,
+    email = excluded.email,
+    phone = excluded.phone;
+
+-- Step 2c: Normalize profile names and phone numbers.
 UPDATE public.profiles SET full_name = 'Ravi Kumar',   phone = '+919876543210' WHERE id = 'aaaa0000-0000-0000-0000-000000000001';
 UPDATE public.profiles SET full_name = 'Priya Sharma',  phone = '+919876543211' WHERE id = 'aaaa0000-0000-0000-0000-000000000002';
 UPDATE public.profiles SET full_name = 'Arun Patel',    phone = '+919876543212' WHERE id = 'aaaa0000-0000-0000-0000-000000000003';
@@ -151,8 +141,7 @@ UPDATE public.profiles SET role = 'insurer_admin', full_name = 'Neha Sharma', ph
 UPDATE public.profiles SET role = 'insurer_admin', full_name = 'Vijay Mehta', phone = '+919800000002' WHERE id = 'aaaa0000-0000-0000-0000-000000000102';
 UPDATE public.profiles SET role = 'insurer_admin', full_name = 'Demo Admin',  phone = '+919999900002' WHERE id = 'aaaa0000-0000-0000-0000-000000000202';
 
--- Step 2f: Remove the auto-created worker_profiles for admin users
--- (trigger created placeholder worker_profiles for everyone)
+-- Step 2f: Remove worker_profiles for admin users (idempotent).
 DELETE FROM public.worker_profiles WHERE profile_id IN (
   'aaaa0000-0000-0000-0000-000000000101',
   'aaaa0000-0000-0000-0000-000000000102',
@@ -171,7 +160,15 @@ INSERT INTO public.worker_profiles (profile_id, platform_name, city, preferred_z
   ('aaaa0000-0000-0000-0000-000000000005', 'Zomato',  'Bangalore', 'b7a1c2d3-e4f5-5678-abcd-100000000005', 'Bike',    80.00, true,  0.85, true),
   ('aaaa0000-0000-0000-0000-000000000006', 'Swiggy',  'Hyderabad', 'b7a1c2d3-e4f5-5678-abcd-100000000007', 'Bike',    72.00, true,  0.79, false),
   ('aaaa0000-0000-0000-0000-000000000201', 'Swiggy',  'Mumbai',    'b7a1c2d3-e4f5-5678-abcd-100000000001', 'Bike',    90.00, true,  0.86, true)
-ON CONFLICT (profile_id) DO NOTHING;
+ON CONFLICT (profile_id) DO UPDATE
+SET platform_name = excluded.platform_name,
+    city = excluded.city,
+    preferred_zone_id = excluded.preferred_zone_id,
+    vehicle_type = excluded.vehicle_type,
+    avg_hourly_income_inr = excluded.avg_hourly_income_inr,
+    bank_verified = excluded.bank_verified,
+    trust_score = excluded.trust_score,
+    gps_consent = excluded.gps_consent;
 
 
 -- ────────────────────────────────────────────────────────────
@@ -181,7 +178,29 @@ INSERT INTO public.insurer_profiles (profile_id, company_name, job_title) VALUES
   ('aaaa0000-0000-0000-0000-000000000101', 'DEVTrails Insurance Ops',  'Claims Adjuster'),
   ('aaaa0000-0000-0000-0000-000000000102', 'DEVTrails Insurance Ops',  'Senior Underwriter'),
   ('aaaa0000-0000-0000-0000-000000000202', 'DEVTrails Insurance Ops',  'Demo Administrator')
-ON CONFLICT (profile_id) DO NOTHING;
+ON CONFLICT (profile_id) DO UPDATE
+SET company_name = excluded.company_name,
+    job_title = excluded.job_title;
+
+
+-- ────────────────────────────────────────────────────────────
+-- 4b. Rewards Ledger Seed (ensures non-zero balance for demo flows)
+-- ────────────────────────────────────────────────────────────
+INSERT INTO public.coins_ledger (
+  id,
+  profile_id,
+  activity,
+  coins,
+  description,
+  reference_id,
+  created_at
+) VALUES
+  ('66660000-0000-0000-0000-000000000001', 'aaaa0000-0000-0000-0000-000000000201', 'signup_bonus',    50, 'Welcome bonus for demo worker onboarding', 'seed06_signup_bonus',   '2026-03-01T09:00:00+05:30'),
+  ('66660000-0000-0000-0000-000000000002', 'aaaa0000-0000-0000-0000-000000000201', 'weekly_login',    10, 'Weekly login bonus',                             'seed06_weekly_login_1', '2026-03-08T09:00:00+05:30'),
+  ('66660000-0000-0000-0000-000000000003', 'aaaa0000-0000-0000-0000-000000000201', 'clean_claim',     25, 'Clean claim reward for auto-approved claim',      '11110000-0000-0000-0000-000000000008', '2026-03-10T16:00:00+05:30'),
+  ('66660000-0000-0000-0000-000000000004', 'aaaa0000-0000-0000-0000-000000000201', 'weekly_login',    10, 'Weekly login bonus',                             'seed06_weekly_login_2', '2026-03-15T09:00:00+05:30'),
+  ('66660000-0000-0000-0000-000000000005', 'aaaa0000-0000-0000-0000-000000000201', 'weekly_active',   10, 'Consistent active-week bonus',                    'seed06_weekly_active',  '2026-03-16T10:00:00+05:30')
+ON CONFLICT (id) DO NOTHING;
 
 
 -- ────────────────────────────────────────────────────────────
@@ -507,6 +526,40 @@ INSERT INTO public.audit_events (id, actor_profile_id, entity_type, entity_id, a
   ('55550000-0000-0000-0000-000000000012', 'aaaa0000-0000-0000-0000-000000000005', 'claim', '11110000-0000-0000-0000-000000000010', 'claim_submitted',  '{"claim_mode": "manual", "reason": "rain_flooding"}'::jsonb),
   ('55550000-0000-0000-0000-000000000013', 'aaaa0000-0000-0000-0000-000000000101', 'claim', '11110000-0000-0000-0000-000000000010', 'claim_reviewed',   '{"decision": "reject", "fraud_score": 0.92, "fraud_flags": ["gps_mismatch_1742km", "exif_timestamp_3h_early", "no_trigger_match"]}'::jsonb)
 ON CONFLICT (id) DO NOTHING;
+
+
+-- ────────────────────────────────────────────────────────────
+-- 14. Event Ops Cleanup (notification-provider dead-letter noise)
+-- ────────────────────────────────────────────────────────────
+DO $$
+BEGIN
+  IF to_regclass('public.event_consumer_ledger') IS NOT NULL THEN
+    UPDATE public.event_consumer_ledger
+    SET
+      status = 'succeeded',
+      processed_at = COALESCE(processed_at, now()),
+      dead_lettered_at = NULL,
+      last_error = 'acknowledged during seed: non-production notification provider limitation',
+      result_payload = COALESCE(result_payload, '{}'::jsonb) || jsonb_build_object(
+        'acknowledged', true,
+        'reason', 'notification_provider_limitation_non_production',
+        'source', 'seed06_cleanup',
+        'acknowledged_at', now()
+      )
+    WHERE consumer_name = 'auto_claim_notification_consumer'
+      AND status = 'dead_letter'
+      AND (
+        COALESCE(last_error, '') ILIKE '%HTTP 429%'
+        OR COALESCE(last_error, '') ILIKE '%status code: 429%'
+        OR COALESCE(last_error, '') ILIKE '%too many requests%'
+        OR COALESCE(last_error, '') ILIKE '%rate limit%'
+        OR COALESCE(last_error, '') ILIKE '%exceeded the 50%'
+        OR COALESCE(last_error, '') ILIKE '%21608%'
+        OR COALESCE(last_error, '') ILIKE '%trial account%'
+        OR COALESCE(last_error, '') ILIKE '%whatsapp sandbox%'
+      );
+  END IF;
+END $$;
 
 
 -- ============================================================

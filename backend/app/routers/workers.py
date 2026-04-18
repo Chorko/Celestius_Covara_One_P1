@@ -174,13 +174,40 @@ async def list_workers(
 ):
     """List worker profiles. Insurer/admin only."""
     sb = get_supabase_admin()
-    query = sb.table("worker_profiles").select("*, profiles(full_name, email)")
+    query = sb.table("worker_profiles").select(
+        "*, profiles(id, full_name, email, phone), zones(zone_name)"
+    )
 
     if city:
         query = query.eq("city", city)
 
     resp = query.range(offset, offset + limit - 1).execute()
-    return {"workers": resp.data, "count": len(resp.data)}
+    rows = resp.data or []
+    return {"workers": rows, "count": len(rows)}
+
+
+@router.get("/{worker_id}/claims", dependencies=[Depends(require_insurer_admin)])
+async def list_worker_recent_claims(
+    worker_id: str,
+    limit: int = Query(5, ge=1, le=50),
+):
+    """List recent claims for a worker (admin view)."""
+    sb = get_supabase_admin()
+
+    resp = (
+        sb.table("manual_claims")
+        .select("id, claim_status, claim_reason, claimed_at, trigger_events(trigger_code, trigger_family)")
+        .eq("worker_profile_id", worker_id)
+        .order("claimed_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    rows = resp.data or []
+    return {
+        "worker_profile_id": worker_id,
+        "claims": rows,
+        "count": len(rows),
+    }
 
 
 @router.get("/{worker_id}/trust-history", dependencies=[Depends(require_insurer_admin)])
@@ -211,7 +238,7 @@ async def get_worker_detail(worker_id: str):
     sb = get_supabase_admin()
     resp = (
         sb.table("worker_profiles")
-        .select("*, profiles(full_name, email, phone, created_at)")
+        .select("*, profiles(full_name, email, phone, created_at), zones(zone_name)")
         .eq("profile_id", worker_id)
         .maybe_single()
         .execute()

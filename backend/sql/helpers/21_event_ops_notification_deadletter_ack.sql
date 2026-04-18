@@ -22,10 +22,10 @@ set
   status = 'succeeded',
   processed_at = coalesce(processed_at, now()),
   dead_lettered_at = null,
-  last_error = 'acknowledged: provider rate-limited (twilio trial quota)',
+  last_error = 'acknowledged: non-production notification provider limitation',
   result_payload = coalesce(result_payload, '{}'::jsonb) || jsonb_build_object(
     'acknowledged', true,
-    'reason', 'provider_rate_limited',
+    'reason', 'notification_provider_limitation_non_production',
     'source', 'sql_event_ops_cleanup',
     'acknowledged_at', now()
   )
@@ -37,6 +37,9 @@ where consumer_name = 'auto_claim_notification_consumer'
     or coalesce(last_error, '') ilike '%too many requests%'
     or coalesce(last_error, '') ilike '%rate limit%'
     or coalesce(last_error, '') ilike '%exceeded the 50%'
+    or coalesce(last_error, '') ilike '%21608%'
+    or coalesce(last_error, '') ilike '%trial account%'
+    or coalesce(last_error, '') ilike '%whatsapp sandbox%'
   );
 
 commit;

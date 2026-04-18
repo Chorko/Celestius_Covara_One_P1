@@ -105,7 +105,7 @@ export default function Home() {
       } else if (isDemo9Email && (msg.toLowerCase().includes('schema') || error.status === 500)) {
         setError('DEMO9 auth is corrupted for this Supabase project. Run backend/sql/helpers/08c_fix_demo9_auth_users.sql (cleanup pass), recreate the 9 DEMO9 users (scripts/create_demo9_auth_users.py --apply), then run 08c again (sync pass).')
       } else if (msg.toLowerCase().includes('schema') || error.status === 500) {
-        setError('Auth service error (500) — this project needs auth schema recovery. Use backend/sql/helpers/08c_fix_demo9_auth_users.sql for DEMO9 users, or run the standard auth recovery helper SQL for default demo users.')
+        setError('Auth service error (500). For default demo users run scripts/recover_demo_auth_without_sql.py --mode full --apply. If auth errors persist, run supabase db query --file backend/sql/helpers/08_fix_demo_auth_users.sql --linked, then rerun the recovery script.')
       } else {
         setError(msg || 'Sign in failed')
       }

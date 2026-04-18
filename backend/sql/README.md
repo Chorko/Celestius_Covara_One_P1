@@ -23,7 +23,13 @@ This folder is split into active scripts and archive scripts.
   schemas that do not yet include migration 22 columns.
 
 1. `06_synthetic_seed.sql`
-  Demo baseline seed set.
+  Demo baseline seed set (public tables).
+  Requires deterministic auth users to already exist.
+
+1. Companion script: `scripts/create_seed06_auth_users.py`
+  Provisions deterministic auth users required by `06_synthetic_seed.sql`
+  via Supabase Admin API (safe, no direct SQL writes to auth tables).
+  Run with: `python scripts/create_seed06_auth_users.py --apply`
 
 1. `16_synthetic_seed_200.sql`
   Additional large synthetic data pack for trigger/claim/payout stress.
@@ -74,10 +80,10 @@ This folder is split into active scripts and archive scripts.
   trust changes tied to claim decisions.
 
 1. `backend/sql/helpers/08_fix_demo_auth_users.sql` (repair helper)
-  Use only if demo logins return Supabase Auth 500 errors.
-  Run cleanup SQL once, then run
-  `python scripts/seed_test_users.py` and
-  `python scripts/force_sync_users.py`.
+  Recovery helper for hard auth corruption.
+  First try script-first recovery:
+  `python scripts/recover_demo_auth_without_sql.py --mode full --apply`.
+  If Auth still returns 500, run this SQL helper and rerun the recovery script.
 
 1. `backend/sql/helpers/24_backfill_worker_profile_realism.sql` (data-quality helper)
   Backfills missing worker `phone`, `preferred_zone_id`, `vehicle_type`,
@@ -90,6 +96,7 @@ This folder is split into active scripts and archive scripts.
 ```text
 # Required
 backend/sql/00_unified_migration.sql
+python scripts/create_seed06_auth_users.py --apply
 backend/sql/01_enterprise_alignment_patch_2026_04_12.sql
 backend/sql/06_synthetic_seed.sql
 

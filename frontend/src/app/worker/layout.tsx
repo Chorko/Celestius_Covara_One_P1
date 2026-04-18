@@ -20,7 +20,7 @@ import {
 
 const NAV_ITEMS = [
   { href: '/worker/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/worker/dashboard#my-zone-intelligence', label: 'My Zone', icon: MapPin },
+  { href: '/worker/zone', label: 'My Zone', icon: MapPin },
   { href: '/worker/claims', label: 'My Claims', icon: FileText },
   { href: '/worker/rewards', label: 'Rewards', icon: Coins },
   { href: '/worker/pricing', label: 'Coverage', icon: CreditCard },
@@ -121,7 +121,7 @@ export default function WorkerLayout({ children }: { children: React.ReactNode }
         {/* Navigation */}
         <nav className="flex-1 px-3 py-4 space-y-1">
           {NAV_ITEMS.map((item) => {
-            const isActive = pathname === item.href.split('#')[0] && !item.href.includes('#')
+            const isActive = pathname === item.href
             return (
               <Link
                 key={item.href}
@@ -191,7 +191,7 @@ export default function WorkerLayout({ children }: { children: React.ReactNode }
         )}
         <nav className="space-y-1 mb-6">
           {NAV_ITEMS.map((item) => {
-            const isActive = pathname === item.href.split('#')[0] && !item.href.includes('#')
+            const isActive = pathname === item.href
             return (
               <Link
                 key={item.href}
@@ -214,7 +214,7 @@ export default function WorkerLayout({ children }: { children: React.ReactNode }
       {/* ═══ MOBILE BOTTOM NAV ═══ */}
       <nav className="bottom-nav mobile-bottom-nav hidden">
         {NAV_ITEMS.map((item) => {
-          const isActive = pathname === item.href.split('#')[0] && !item.href.includes('#')
+          const isActive = pathname === item.href
           return (
             <Link
               key={item.href}

@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Awaitable, Callable
 
+from backend.app.config import settings
 from backend.app.services.event_bus.consumer_idempotency import consume_idempotently
 from backend.app.services.event_bus.contracts import DomainEvent
 from backend.app.services.payout_workflow import initiate_payout_for_claim
@@ -48,6 +49,11 @@ def _is_notification_rate_limited(error_text: str) -> bool:
             "too many requests",
             "exceeded the 50",
             "rate limit",
+            "21608",
+            "trial account",
+            "whatsapp sandbox",
+            "unverified",
+            "join",
         ]
     )
 
@@ -97,6 +103,20 @@ async def _handle_auto_claim_notification(sb, event: DomainEvent) -> dict[str, A
             return {
                 "sent": False,
                 "reason": "provider_rate_limited",
+                "soft_failed": True,
+            }
+
+        app_env = (settings.app_env or "development").strip().lower()
+        if app_env not in {"production", "staging"}:
+            logger.warning(
+                "Notification consumer soft-skipped in non-production: claim_id=%s env=%s error=%s",
+                claim_id,
+                app_env,
+                error_text,
+            )
+            return {
+                "sent": False,
+                "reason": "provider_error_non_production",
                 "soft_failed": True,
             }
 
