@@ -5,7 +5,7 @@ Handles dynamic premium quotes and policy activation.
 Supports exactly two plans: Essential and Plus.
 """
 
-from functools import wraps
+from inspect import signature
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -42,7 +42,6 @@ async def _get_premium_quote_impl(
 
 
 @router.get("/quote")
-@wraps(_get_premium_quote_impl)
 async def get_premium_quote(
     plan: str = Query("essential", description="Plan: 'essential' or 'plus'"),
     user: dict = Depends(require_worker),
@@ -52,6 +51,12 @@ async def get_premium_quote(
     payout bands for the selected plan.
     """
     return await _get_premium_quote_impl(plan=plan, user=user)
+
+
+# Compatibility shim for tests that call the undecorated handler body.
+_GET_PREMIUM_QUOTE_SIGNATURE = signature(get_premium_quote)
+get_premium_quote.__wrapped__ = _get_premium_quote_impl
+get_premium_quote.__signature__ = _GET_PREMIUM_QUOTE_SIGNATURE
 
 
 @router.post("/activate")
