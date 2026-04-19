@@ -5,12 +5,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Use canonical backend names.
-url = os.getenv('SUPABASE_URL')
+url = os.getenv('SUPABASE_URL') or os.getenv('NEXT_PUBLIC_SUPABASE_URL')
 key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
-
 if not url or not key:
-    raise RuntimeError('Missing SUPABASE_URL and/or SUPABASE_SERVICE_ROLE_KEY')
+    raise RuntimeError('Missing SUPABASE_URL (or NEXT_PUBLIC_SUPABASE_URL) and/or SUPABASE_SERVICE_ROLE_KEY')
 
 claim_ids = [
     '4c9423dd-50ab-4d38-8358-c418888b2e88',

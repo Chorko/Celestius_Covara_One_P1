@@ -58,9 +58,9 @@ def load_env() -> tuple[str, str, str]:
     root_env = os.path.join(os.path.dirname(__file__), "..", ".env")
     load_dotenv(root_env)
 
-    supabase_url = os.getenv("SUPABASE_URL")
+    supabase_url = os.getenv("SUPABASE_URL") or os.getenv("NEXT_PUBLIC_SUPABASE_URL")
     service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-    anon_key = os.getenv("SUPABASE_ANON_KEY")
+    anon_key = os.getenv("SUPABASE_ANON_KEY") or os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY")
 
     if not supabase_url or not service_key or not anon_key:
         raise RuntimeError("Missing SUPABASE URL/SERVICE_ROLE_KEY/ANON_KEY in .env")
