@@ -1417,6 +1417,15 @@ cd frontend && npm install && npm run dev
 | 🛵 **Worker** | `worker@demo.com` | `demo1234` | Earnings chart, zone alerts, claim history, policy quotes |
 | 🏢 **Admin** | `admin@demo.com` | `demo1234` | KPI cards, BCR/Loss Ratio, review queue, trigger engine |
 
+### 📱 Mobile App Download (Hosted)
+
+- Download page: `https://covara-one.vercel.app/download`
+- Smart device redirect: `https://covara-one.vercel.app/download/go`
+- Android-directed redirect: `https://covara-one.vercel.app/download/go?platform=android`
+- Current direct Android APK: `https://expo.dev/artifacts/eas/uJHrzKSycbBxoTVhNotdM2.apk`
+
+The website home/login screen now includes a **Download Mobile App (Android APK)** button that routes through `/download/go?platform=android`.
+
 ### 🎯 Judge Demo Credentials (DEMO9 Synthetic Workers)
 
 For DEMO9 runbook validation, all 9 synthetic worker accounts share one password:

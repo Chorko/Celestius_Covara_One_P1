@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { useUserStore } from '@/store'
 import ThemeToggle from '@/components/ThemeToggle'
-import { Shield, ArrowRight, AlertCircle } from 'lucide-react'
+import { Shield, ArrowRight, AlertCircle, Download, Smartphone } from 'lucide-react'
 import Image from 'next/image'
 
 const DEMO9_EMAIL_PATTERN = /^demo\.(auto|review|fraud)\d{2}@synthetic\.covara\.dev$/i
@@ -305,6 +305,18 @@ export default function Home() {
             New worker?{' '}
             <Link href="/signup" style={{ color: 'var(--accent)' }} className="font-medium">
               Create an account
+            </Link>
+          </div>
+
+          <div className="mt-4 space-y-2">
+            <p className="text-xs text-center" style={{ color: 'var(--text-tertiary)' }}>
+              Want the mobile app instead?
+            </p>
+            <Link href="/download/go?platform=android" className="btn-primary w-full flex items-center justify-center gap-2 py-3">
+              <Download size={16} /> Download Mobile App (Android APK)
+            </Link>
+            <Link href="/download" className="btn-secondary w-full flex items-center justify-center gap-2 py-3">
+              <Smartphone size={16} /> View All Mobile Download Options
             </Link>
           </div>
         </div>
