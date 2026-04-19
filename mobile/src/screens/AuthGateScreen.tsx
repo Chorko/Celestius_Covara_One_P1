@@ -31,7 +31,7 @@ export function AuthGateScreen({
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container}>
         <Text style={styles.title}>Covara Mobile</Text>
-        <Text style={styles.subtitle}>Role-aware mobile flow inspired by Aegis architecture.</Text>
+        <Text style={styles.subtitle}>Role-aware mobile flow aligned with Covara architecture.</Text>
 
         <View style={styles.card}>
           <Text style={styles.heading}>Session Access</Text>
