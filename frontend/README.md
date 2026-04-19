@@ -54,6 +54,30 @@ Then open http://localhost:3000
 
 ---
 
+## Mobile App Download Linking
+
+You can publish a stable web page at `/download` and point your website CTA to it.
+
+The page is implemented in `frontend/src/app/download/page.tsx` and uses these env vars:
+
+- `NEXT_PUBLIC_MOBILE_DOWNLOAD_ANDROID_URL`
+- `NEXT_PUBLIC_MOBILE_DOWNLOAD_IOS_URL`
+- `NEXT_PUBLIC_MOBILE_DOWNLOAD_WEB_URL`
+- `NEXT_PUBLIC_MOBILE_DOWNLOAD_FALLBACK_URL`
+
+Smart redirect endpoint:
+
+- `GET /download/go`
+- Detects device user-agent and redirects to Android/iOS automatically.
+- You can force platform with query string (e.g. `/download/go?platform=android`).
+
+Recommended CTA placement:
+
+- Home/Login page button -> `/download`
+- Optional one-click redirect button -> `/download/go`
+
+---
+
 ## Page Inventory
 
 ### Worker Side

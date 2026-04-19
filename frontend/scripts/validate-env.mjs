@@ -22,4 +22,30 @@ if (apiUrl !== undefined && apiUrl.trim().length === 0) {
   process.exit(1);
 }
 
+const optionalUrlVars = [
+  "NEXT_PUBLIC_MOBILE_DOWNLOAD_ANDROID_URL",
+  "NEXT_PUBLIC_MOBILE_DOWNLOAD_IOS_URL",
+  "NEXT_PUBLIC_MOBILE_DOWNLOAD_WEB_URL",
+  "NEXT_PUBLIC_MOBILE_DOWNLOAD_FALLBACK_URL",
+];
+
+for (const name of optionalUrlVars) {
+  const raw = process.env[name];
+  if (!raw) {
+    continue;
+  }
+
+  const value = raw.trim();
+  if (!value) {
+    continue;
+  }
+
+  try {
+    new URL(value);
+  } catch {
+    console.error(`${name} must be a valid absolute URL when provided.`);
+    process.exit(1);
+  }
+}
+
 console.log("Frontend environment validation passed.");

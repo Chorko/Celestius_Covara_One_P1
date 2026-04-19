@@ -110,8 +110,13 @@ export async function backendPost<T>(
   supabase: SupabaseClient,
   path: string,
   body?: unknown,
+  init: RequestInit = {},
 ): Promise<T> {
+  const headers = new Headers(init.headers || {})
+
   return backendRequest<T>(supabase, path, {
+    ...init,
+    headers,
     method: 'POST',
     body: body === undefined ? undefined : JSON.stringify(body),
   })

@@ -55,8 +55,8 @@ def _load_env() -> tuple[str, str, str]:
     root_env = os.path.join(os.path.dirname(__file__), "..", ".env")
     load_dotenv(root_env)
 
-    supa_url = os.getenv("SUPABASE_URL") or os.getenv("NEXT_PUBLIC_SUPABASE_URL")
-    anon_key = os.getenv("SUPABASE_ANON_KEY") or os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY")
+    supa_url = os.getenv("SUPABASE_URL")
+    anon_key = os.getenv("SUPABASE_ANON_KEY")
     service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
     if not supa_url or not anon_key or not service_key:

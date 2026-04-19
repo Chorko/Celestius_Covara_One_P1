@@ -88,9 +88,8 @@ For initial setup, use `render.env` (local only, gitignored) via **"Add from .en
 |----------|----------|-------|
 | `APP_ENV` | Server | `production` |
 | `CORS_ORIGINS` | Server | `https://covara-one.vercel.app` |
-| `NEXT_PUBLIC_API_URL` | Server | `https://covara-backend.onrender.com` |
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase | Project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase | Anon key |
+| `SUPABASE_URL` | Supabase | Project URL |
+| `SUPABASE_ANON_KEY` | Supabase | Anon key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase | Service role (admin) |
 | `GEMINI_API_KEY` | External API | Google Gemini |
 | `OPENWEATHER_API_KEY` | External API | Weather data |
@@ -108,6 +107,8 @@ For initial setup, use `render.env` (local only, gitignored) via **"Add from .en
 | `STRIPE_PUBLISHABLE_KEY` | Stripe | `pk_test_...` (publishable) |
 | `PAYOUT_PROVIDER_WEBHOOK_SECRET` | Stripe | `whsec_...` (signing secret) |
 | `DEVICE_CONTEXT_HMAC_SECRET` | Security | 64-char hex HMAC key |
+
+Frontend-only `NEXT_PUBLIC_*` variables should be set in Vercel, not backend Render.
 
 ### Smoke Checks
 

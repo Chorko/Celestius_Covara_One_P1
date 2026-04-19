@@ -22,7 +22,11 @@ except ImportError:
     sys.exit(1)
 
 
-DEFAULT_BASE_URL = os.getenv("NEXT_PUBLIC_API_URL", "http://127.0.0.1:8000")
+DEFAULT_BASE_URL = (
+    os.getenv("BACKEND_BASE_URL")
+    or os.getenv("API_BASE_URL")
+    or "http://127.0.0.1:8000"
+)
 
 # -- Test definitions --
 # Each tuple: (method, path, expected_status, description)

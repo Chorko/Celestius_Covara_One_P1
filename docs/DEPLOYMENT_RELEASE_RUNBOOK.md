@@ -94,8 +94,6 @@ Application secrets/config:
    - `SUPABASE_URL`
    - `SUPABASE_ANON_KEY`
    - `SUPABASE_SERVICE_ROLE_KEY`
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `DEVICE_CONTEXT_HMAC_SECRET`
    - `PAYOUT_PROVIDER_WEBHOOK_SECRET` (must not be dev default)
 3. If `PAYOUT_PROVIDER=http_gateway`, also set:

@@ -89,7 +89,7 @@ def _det_uuid(name: str) -> str:
 
 
 def get_supabase_client() -> Client:
-    url = os.getenv("SUPABASE_URL") or os.getenv("NEXT_PUBLIC_SUPABASE_URL")
+    url = os.getenv("SUPABASE_URL")
     key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
     if not url or not key:
         raise RuntimeError("SUPABASE URL or SERVICE_ROLE_KEY missing in .env")
