@@ -58,6 +58,13 @@ Then open http://localhost:3000
 
 You can publish a stable web page at `/download` and point your website CTA to it.
 
+Current hosted links:
+
+- `https://covara-one.vercel.app/download`
+- `https://covara-one.vercel.app/download/go`
+- `https://covara-one.vercel.app/download/go?platform=android`
+- Direct APK target: `https://expo.dev/artifacts/eas/uJHrzKSycbBxoTVhNotdM2.apk`
+
 The page is implemented in `frontend/src/app/download/page.tsx` and uses these env vars:
 
 - `NEXT_PUBLIC_MOBILE_DOWNLOAD_ANDROID_URL`
