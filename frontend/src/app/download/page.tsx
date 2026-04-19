@@ -23,8 +23,18 @@ function hostLabel(url: string): string {
   }
 }
 
+function webLinkLooksMisconfigured(url: string): boolean {
+  try {
+    const host = new URL(url).host.toLowerCase();
+    return host.includes("covara-one.vercel.app") || host.includes("localhost");
+  } catch {
+    return true;
+  }
+}
+
 export default function DownloadPage() {
   const links = getMobileDownloadLinks();
+  const webLinkMisconfigured = links.webUrl ? webLinkLooksMisconfigured(links.webUrl) : false;
 
   return (
     <main
@@ -113,7 +123,7 @@ export default function DownloadPage() {
           </div>
 
           <div className="grid gap-3">
-            {links.webUrl ? (
+            {links.webUrl && !webLinkMisconfigured ? (
               <a
                 href={links.webUrl}
                 target="_blank"
@@ -135,6 +145,22 @@ export default function DownloadPage() {
                   Destination: {hostLabel(links.webUrl)}
                 </span>
               </a>
+            ) : links.webUrl ? (
+              <div
+                className={ctaClass(false)}
+                style={{
+                  background: "color-mix(in srgb, var(--warning) 14%, var(--bg-secondary))",
+                  color: "var(--text-primary)",
+                  border: "1px solid color-mix(in srgb, var(--warning) 45%, transparent)",
+                }}
+              >
+                <span className="flex items-center gap-2">
+                  <Smartphone size={16} /> Open Expo / Web Install Link (misconfigured)
+                </span>
+                <span className="mt-2 block text-xs" style={{ color: "var(--warning)" }}>
+                  Current value points to {hostLabel(links.webUrl)}. Set NEXT_PUBLIC_MOBILE_DOWNLOAD_WEB_URL to your Expo/TestFlight URL.
+                </span>
+              </div>
             ) : null}
 
             <Link

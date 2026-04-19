@@ -12,13 +12,10 @@ function normalizeTarget(target: string, requestUrl: string): string | null {
   try {
     const request = new URL(requestUrl);
     const resolved = new URL(trimmed, request);
-    const normalizedPath = resolved.pathname.replace(/\/+$/, "") || "/";
-    const requestPath = request.pathname.replace(/\/+$/, "") || "/";
     const sameOrigin = resolved.origin === request.origin;
-    const pointsToDownloadUi = normalizedPath === "/download" || normalizedPath === "/download/go";
-    const sameRequest = sameOrigin && normalizedPath === requestPath && resolved.search === request.search;
 
-    if ((sameOrigin && pointsToDownloadUi) || sameRequest) {
+    // Download targets should be external app-distribution destinations.
+    if (sameOrigin) {
       return null;
     }
 
