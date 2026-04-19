@@ -9,7 +9,6 @@ import ZonePulseMap from '@/components/ZonePulseMap'
 import Skeleton from '@/components/Skeleton'
 import {
   AlertTriangle,
-  CloudRain,
   MapPin,
   Navigation,
   Shield,

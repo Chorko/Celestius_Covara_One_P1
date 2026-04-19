@@ -91,6 +91,17 @@ htmlcov/
 .pyright/
 tmp/
 temp/
+.tmp_ci_venv/
+
+# Mobile generated local build/debug artifacts
+mobile/build_list.json
+mobile/build_list.txt
+mobile/build_logs.txt
+mobile/build_status.json
+mobile/build_view.json
+mobile/list_output.txt
+mobile/test_view.txt
+mobile/view_output.txt
 
 # ==========================
 # Generated / Large assets

@@ -145,8 +145,8 @@ def main() -> int:
     load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
     args = parse_args()
-    url = os.getenv("SUPABASE_URL") or os.getenv("NEXT_PUBLIC_SUPABASE_URL")
-    anon_key = os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY")
+    url = os.getenv("SUPABASE_URL")
+    anon_key = os.getenv("SUPABASE_ANON_KEY")
     service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
     if not url or not anon_key or not service_role_key:

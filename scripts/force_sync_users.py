@@ -7,8 +7,12 @@ load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 from supabase import create_client, Client
 
 def force_sync_users():
-    url = os.getenv("NEXT_PUBLIC_SUPABASE_URL")
+    url = os.getenv("SUPABASE_URL")
     key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+    if not url or not key:
+        print("Missing SUPABASE_URL and/or SUPABASE_SERVICE_ROLE_KEY")
+        sys.exit(1)
+
     sb: Client = create_client(url, key)
     
     # Get all users from auth.users via admin API

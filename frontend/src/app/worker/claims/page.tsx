@@ -54,6 +54,47 @@ function formatSubmitError(error: unknown): string {
   return error instanceof Error ? error.message : 'Failed to submit claim'
 }
 
+function detectBrowserAutomation(): boolean {
+  const nav = navigator as Navigator & { webdriver?: boolean }
+  const win = window as Window & {
+    __nightmare?: unknown
+    _phantom?: unknown
+    Cypress?: unknown
+    callPhantom?: unknown
+  }
+
+  if (Boolean(nav.webdriver)) {
+    return true
+  }
+
+  const ua = (nav.userAgent || '').toLowerCase()
+  if (ua.includes('headless')) {
+    return true
+  }
+
+  return Boolean(win.__nightmare || win._phantom || win.Cypress || win.callPhantom)
+}
+
+function buildWebDeviceContext(claimReason: string, zoneId: string): string {
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || ''
+
+  return JSON.stringify({
+    schema_version: 'v1',
+    context_source: 'web',
+    client_platform: 'web',
+    user_agent: navigator.userAgent || '',
+    language: navigator.language || '',
+    timezone,
+    platform: navigator.platform || '',
+    automation_detected: detectBrowserAutomation(),
+    screen_resolution: `${window.screen.width}x${window.screen.height}`,
+    viewport: `${window.innerWidth}x${window.innerHeight}`,
+    claim_reason_length: claimReason.trim().length,
+    zone_id: zoneId,
+    submitted_at: new Date().toISOString(),
+  })
+}
+
 export default function WorkerClaims() {
   const { user, profile } = useUserStore()
   const supabase = createClient()
@@ -196,6 +237,11 @@ export default function WorkerClaims() {
         stated_lng: lng || undefined,
         evidence_url: evidenceUrl || undefined,
         plan: 'essential',
+      }, {
+        headers: {
+          'X-Client-Platform': 'web',
+          'X-Device-Context': buildWebDeviceContext(reason, selectedZoneId),
+        },
       })
 
       setReason(''); setLat(null); setLng(null); setFile(null); await loadClaims()

@@ -221,6 +221,10 @@ async def submit_claim(
     device_context_signature = request.headers.get("X-Device-Context-Signature")
     device_context_timestamp = request.headers.get("X-Device-Context-Timestamp")
     device_context_key_id = request.headers.get("X-Device-Context-Key-Id")
+    client_platform_header = (
+        request.headers.get("X-Client-Platform") or ""
+    ).strip().lower()
+    allow_unsigned_web_context = client_platform_header in {"web", "browser", "webapp"}
 
     context_verification = verify_signed_device_context(
         raw_context=raw_device_context,
@@ -228,7 +232,32 @@ async def submit_claim(
         timestamp=device_context_timestamp,
         secret=settings.device_context_hmac_secret,
         key_id=device_context_key_id,
+        allow_unsigned_context=allow_unsigned_web_context,
     )
+
+    if context_verification.reason == "unsigned_context_accepted":
+        context_source = str(
+            context_verification.context.get("context_source")
+            or context_verification.context.get("client_platform")
+            or client_platform_header
+        ).strip().lower()
+        if context_source not in {"web", "browser", "webapp"}:
+            increment_counter(
+                "claim_submission_total",
+                labels={"outcome": "invalid_device_context"},
+            )
+            structured_log(
+                logger,
+                logging.WARNING,
+                "claim.submit.rejected.invalid_device_context",
+                request_id=request_id,
+                worker_profile_id=user.get("id"),
+                verification_reason="unsupported_unsigned_context_source",
+            )
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid signed device context: unsupported_unsigned_context_source",
+            )
 
     # Backward compatible: web clients without context continue to work.
     # But if a context blob is sent, it must be validly signed.
@@ -251,9 +280,21 @@ async def submit_claim(
         )
 
     context_present = bool(raw_device_context)
-    signature_verified = bool(context_present and context_verification.verified)
+    signature_verified = bool(
+        context_present
+        and context_verification.verified
+        and context_verification.signature_present
+    )
 
     device_context = dict(context_verification.context)
+    if client_platform_header and "client_platform" not in device_context:
+        device_context["client_platform"] = client_platform_header
+    if (
+        client_platform_header in {"web", "browser", "webapp"}
+        and "context_source" not in device_context
+    ):
+        device_context["context_source"] = "web"
+
     trust_summary = summarize_device_context_trust(
         context=device_context,
         context_present=context_present,
@@ -365,6 +406,7 @@ async def submit_claim(
 
     pipeline_result["device_context_security"] = {
         "context_present": context_present,
+        "signature_present": bool(context_verification.signature_present),
         "signature_verified": signature_verified,
         "verification_reason": context_verification.reason,
         "timestamp": context_verification.timestamp,

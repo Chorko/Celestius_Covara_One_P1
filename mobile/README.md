@@ -1,4 +1,4 @@
-﻿# Covara Worker Mobile (Implementation Start)
+# Covara Worker Mobile (Implementation Start)
 
 This package is the mobile implementation kickoff for signed claim submission.
 
@@ -27,18 +27,55 @@ npm install
 npm run start
 ```
 
+## Build and Share (Your Own Expo Account)
+
+Use your own Expo/EAS account and project for download links.
+
+```bash
+cd mobile
+npx expo login
+npx eas login
+npx eas-cli@latest whoami
+npx eas-cli@latest build --platform android --profile preview \
+  --non-interactive --no-wait
+npx eas-cli@latest build --platform android --profile production \
+  --non-interactive --no-wait
+npx eas-cli@latest build --platform ios --profile production
+```
+
+Build output URLs can then be mapped into website env vars for `/download` and `/download/go`.
+
+Current verified local config:
+
+- owner: `chorkos-organization`
+- slug: `covara-one`
+- projectId: `fdc7c955-29ee-4124-9ab2-3d4076983a8e`
+
+Check recent build states:
+
+```bash
+cd mobile
+npx eas-cli@latest build:list --limit 10 --json
+```
+
+If the shell prompt already ends in `.../mobile`, do not run `cd mobile` again.
+
 ## Security notes
 
-- Header/signature behavior follows [docs/MOBILE_DEVICE_CONTEXT_CONTRACT.md](../docs/MOBILE_DEVICE_CONTEXT_CONTRACT.md).
-- Backend verifier is [backend/app/services/device_context_security.py](../backend/app/services/device_context_security.py).
-- This kickoff uses client-side HMAC key from env to prove integration path; move toward short-lived key rotation and attestation in later phases.
+- Header/signature behavior follows
+  [docs/MOBILE_DEVICE_CONTEXT_CONTRACT.md](../docs/MOBILE_DEVICE_CONTEXT_CONTRACT.md).
+- Backend verifier is
+  [backend/app/services/device_context_security.py](../backend/app/services/device_context_security.py).
+- This kickoff uses client-side HMAC key from env to prove integration path;
+  move toward short-lived key rotation and attestation in later phases.
 
 ## Known limitations in kickoff
 
-- Root/jailbreak and advanced emulator checks are placeholders until native bridges are added.
+- Root/jailbreak and advanced emulator checks are placeholders until native
+  bridges are added.
 - Full auth screens and offline queueing are not complete yet.
-- UI is functional but intentionally minimal while core security path is being wired first.
-
+- UI is functional but intentionally minimal while core security path is being
+  wired first.
 
 ## April 2026 Repo Update Addendum
 
@@ -55,4 +92,3 @@ npm run start
 - Introduce short-lived signing key rotation patterns.
 - Build full auth UX and robust offline queueing for unstable networks.
 - Expand worker flows beyond kickoff claim submission.
-

@@ -41,12 +41,18 @@ if ([string]::IsNullOrWhiteSpace($supaUrl)) {
   $supaUrl = $env:NEXT_PUBLIC_SUPABASE_URL
 }
 if ([string]::IsNullOrWhiteSpace($supaUrl)) {
+  $supaUrl = Read-DotEnvValue -Key "SUPABASE_URL" -EnvPath $envPath
+}
+if ([string]::IsNullOrWhiteSpace($supaUrl)) {
   $supaUrl = Read-DotEnvValue -Key "NEXT_PUBLIC_SUPABASE_URL" -EnvPath $envPath
 }
 
 $anonKey = $env:SUPABASE_ANON_KEY
 if ([string]::IsNullOrWhiteSpace($anonKey)) {
   $anonKey = $env:NEXT_PUBLIC_SUPABASE_ANON_KEY
+}
+if ([string]::IsNullOrWhiteSpace($anonKey)) {
+  $anonKey = Read-DotEnvValue -Key "SUPABASE_ANON_KEY" -EnvPath $envPath
 }
 if ([string]::IsNullOrWhiteSpace($anonKey)) {
   $anonKey = Read-DotEnvValue -Key "NEXT_PUBLIC_SUPABASE_ANON_KEY" -EnvPath $envPath

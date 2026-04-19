@@ -1582,7 +1582,3 @@ Celestius_DEVTrails_P1/
 - Full webhook event catalog documented in [docs/STRIPE_WEBHOOK_EVENTS.md](docs/STRIPE_WEBHOOK_EVENTS.md).
 - Strict environment validation enforced in production (`STRICT_ENV_VALIDATION=auto`).
 - Civic-news ingestion path (`GET /triggers/civic-news`) requires `NEWS_API_KEY` in deployed runtime env files/imports.
-
-
-
-
