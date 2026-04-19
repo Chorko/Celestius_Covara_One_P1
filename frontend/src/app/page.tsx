@@ -312,7 +312,7 @@ export default function Home() {
             <p className="text-xs text-center" style={{ color: 'var(--text-tertiary)' }}>
               Want the mobile app instead?
             </p>
-            <Link href="/download/go?platform=android" className="btn-primary w-full flex items-center justify-center gap-2 py-3">
+            <Link href="/download" className="btn-primary w-full flex items-center justify-center gap-2 py-3">
               <Download size={16} /> Download Mobile App (Android APK)
             </Link>
             <Link href="/download" className="btn-secondary w-full flex items-center justify-center gap-2 py-3">
