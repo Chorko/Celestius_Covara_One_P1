@@ -61,8 +61,7 @@ You can publish a stable web page at `/download` and point your website CTA to i
 Current hosted links:
 
 - `https://covara-one.vercel.app/download`
-- `https://covara-one.vercel.app/download/go`
-- `https://covara-one.vercel.app/download/go?platform=android`
+- Open Expo target: `https://expo.dev/accounts/chorkos-organization/projects/covara-one/builds/e8b6a8e7-bb15-48f4-b962-35824fa79fbb`
 - Direct APK target: `https://expo.dev/artifacts/eas/uJHrzKSycbBxoTVhNotdM2.apk`
 
 The page is implemented in `frontend/src/app/download/page.tsx` and uses these env vars:
@@ -72,16 +71,9 @@ The page is implemented in `frontend/src/app/download/page.tsx` and uses these e
 - `NEXT_PUBLIC_MOBILE_DOWNLOAD_WEB_URL`
 - `NEXT_PUBLIC_MOBILE_DOWNLOAD_FALLBACK_URL`
 
-Smart redirect endpoint:
-
-- `GET /download/go`
-- Detects device user-agent and redirects to Android/iOS automatically.
-- You can force platform with query string (e.g. `/download/go?platform=android`).
-
 Recommended CTA placement:
 
 - Home/Login page button -> `/download`
-- Optional one-click redirect button -> `/download/go`
 
 ---
 

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Apple, ArrowUpRight, Download, Sparkles, Smartphone } from "lucide-react";
 import { getMobileDownloadLinks } from "@/lib/mobileDownload";
 
@@ -54,7 +53,7 @@ export default function DownloadPage() {
               Get the Covara Worker Mobile App
             </h1>
             <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>
-              Choose how you want to install. Smart redirect now auto-routes to a working destination and avoids landing-page loops.
+              Choose how you want to install. Android opens the direct APK, and Open Expo lands on your Expo build page.
             </p>
           </div>
 
@@ -163,25 +162,6 @@ export default function DownloadPage() {
               </div>
             ) : null}
 
-            <Link
-              href="/download/go"
-              className={ctaClass(true)}
-              style={{
-                background: "linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%)",
-                color: "white",
-                border: "1px solid rgba(56, 189, 248, 0.35)",
-              }}
-            >
-              <span className="flex items-center justify-between gap-3">
-                <span className="flex items-center gap-2">
-                  <Smartphone size={16} /> Smart Device Redirect
-                </span>
-                <ArrowUpRight size={16} />
-              </span>
-              <span className="mt-2 block text-xs opacity-90">
-                Auto-detects device; if a target loops back here, fallback routing kicks in.
-              </span>
-            </Link>
           </div>
         </div>
 
