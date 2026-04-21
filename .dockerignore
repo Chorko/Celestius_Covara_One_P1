@@ -15,6 +15,11 @@ TEMP_WILL_BE_DELETED
 frontend/node_modules
 frontend/.next
 
+mobile/node_modules
+mobile/android
+mobile/.expo
+mobile/dist
+
 *.log
 
 # Secrets / env files
