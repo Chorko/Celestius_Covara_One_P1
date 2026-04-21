@@ -95,6 +95,10 @@ export function AppNavigator() {
             accessToken: null,
           });
           setKyc(null);
+          setAuthError(
+            "No active Supabase session found on this device. " +
+            "Sign in via the web app first, or paste a bearer token below."
+          );
           return;
         }
 
