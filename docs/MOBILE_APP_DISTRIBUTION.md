@@ -78,10 +78,13 @@ Important:
 
 In Expo project environment variables, set these values at minimum:
 
-- `EXPO_PUBLIC_API_BASE_URL`
 - `EXPO_PUBLIC_SUPABASE_URL`
 - `EXPO_PUBLIC_SUPABASE_ANON_KEY`
 - `EXPO_PUBLIC_DEVICE_CONTEXT_HMAC_SECRET`
+
+Recommended (runtime has a Render fallback if omitted, but explicit is preferred):
+
+- `EXPO_PUBLIC_API_BASE_URL`
 
 Optional (if used by app logic):
 
@@ -103,6 +106,13 @@ Recommended values:
 - iOS: TestFlight/App Store URL
 - Web: project landing page URL
 - Fallback: generic product/download page URL
+
+Current values for this build (2026-04-20):
+
+- `NEXT_PUBLIC_MOBILE_DOWNLOAD_ANDROID_URL=https://expo.dev/artifacts/eas/uJHrzKSycbBxoTVhNotdM2.apk`
+- `NEXT_PUBLIC_MOBILE_DOWNLOAD_IOS_URL=` (leave empty until iOS/TestFlight URL is ready)
+- `NEXT_PUBLIC_MOBILE_DOWNLOAD_WEB_URL=https://expo.dev/accounts/chorkos-organization/projects/covara-one/builds/e8b6a8e7-bb15-48f4-b962-35824fa79fbb`
+- `NEXT_PUBLIC_MOBILE_DOWNLOAD_FALLBACK_URL=https://expo.dev/accounts/chorkos-organization/projects/covara-one/builds/e8b6a8e7-bb15-48f4-b962-35824fa79fbb`
 
 ## 7. Routes already wired
 

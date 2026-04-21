@@ -360,6 +360,37 @@ def check_emulator_signals(device_context: dict) -> dict:
     if isinstance(malicious_packages, list) and malicious_packages:
         flags.append("malicious_packages_detected")
 
+    if device_context.get("vpn_active"):
+        flags.append("vpn_tunnel_active")
+
+    location_scope = str(
+        device_context.get("location_permission_scope") or "unknown"
+    ).strip().lower()
+    if location_scope == "none":
+        flags.append("location_permission_none")
+    elif location_scope == "foreground":
+        advisory.append("location_background_permission_missing")
+
+    precise_location_enabled = device_context.get("precise_location_enabled")
+    if precise_location_enabled is False:
+        flags.append("coarse_location_only")
+
+    integrity_verdict = str(
+        device_context.get("integrity_verdict") or "unknown"
+    ).strip().lower()
+    if integrity_verdict == "high_risk":
+        flags.append("integrity_verdict_high_risk")
+    elif integrity_verdict == "weak":
+        advisory.append("integrity_verdict_weak")
+
+    collection_warnings = device_context.get("collection_warnings")
+    if isinstance(collection_warnings, list):
+        for warning in collection_warnings:
+            warning_text = str(warning).strip().lower()
+            if warning_text.startswith("integrity_collection_error"):
+                flags.append("integrity_collection_error")
+                break
+
     context_present = bool(device_context.get("context_present"))
     signature_verified = bool(device_context.get("signature_verified"))
     if context_present and not signature_verified:
@@ -378,6 +409,16 @@ def check_emulator_signals(device_context: dict) -> dict:
     ).strip().lower()
     if signal_confidence not in {"low", "medium", "high"}:
         signal_confidence = "unknown"
+
+    collection_method = str(
+        device_context.get("collection_method") or "unknown"
+    ).strip().lower()
+    if collection_method == "heuristic" and signal_confidence in {"low", "unknown"}:
+        advisory.append("heuristic_only_low_confidence")
+
+    attestation_token_present = bool(device_context.get("attestation_token_present"))
+    if attestation_verdict == "passed" and not attestation_token_present:
+        advisory.append("attestation_passed_without_token")
 
     trust_score = _coerce_unit_float(device_context.get("device_trust_score"))
     if trust_score is None:
@@ -406,6 +447,16 @@ def check_emulator_signals(device_context: dict) -> dict:
         risk_score += 0.18
     if "attestation_failed" in flags:
         risk_score += 0.18
+    if "location_permission_none" in flags:
+        risk_score += 0.12
+    if "coarse_location_only" in flags:
+        risk_score += 0.06
+    if "vpn_tunnel_active" in flags:
+        risk_score += 0.07
+    if "integrity_verdict_high_risk" in flags:
+        risk_score += 0.15
+    if "integrity_collection_error" in flags:
+        risk_score += 0.08
 
     risk_score += (1.0 - trust_score) * 0.45
 
@@ -439,6 +490,11 @@ def check_emulator_signals(device_context: dict) -> dict:
         "risk_level": risk_level,
         "context_present": context_present,
         "signature_verified": signature_verified,
+        "location_permission_scope": location_scope,
+        "precise_location_enabled": precise_location_enabled,
+        "integrity_verdict": integrity_verdict,
+        "collection_method": collection_method,
+        "attestation_token_present": attestation_token_present,
         "signal_confidence": signal_confidence,
         "attestation_verdict": attestation_verdict,
         "device_trust_score": round(trust_score, 4),
@@ -461,8 +517,10 @@ def verify_anti_spoofing(
     """
     claim_lat = claim_data.get("stated_lat") or claim_data.get("lat")
     claim_lng = claim_data.get("stated_lng") or claim_data.get("lng")
-    claim_ts = claim_data.get("created_at") or claim_data.get(
-        "claim_timestamp"
+    claim_ts = (
+        claim_data.get("created_at")
+        or claim_data.get("claim_timestamp")
+        or claim_data.get("claimed_at")
     )
     claim_ip = claim_data.get("client_ip")
     claim_device_id = claim_data.get("device_id")
@@ -564,6 +622,16 @@ def verify_anti_spoofing(
         flags_fired.append("attestation_failed")
     if emulator_check.get("device_trust_tier") == "high_risk":
         flags_fired.append("high_risk_device_trust")
+    if "location_permission_none" in emulator_check.get("flags", []):
+        flags_fired.append("location_permission_none")
+    if "coarse_location_only" in emulator_check.get("flags", []):
+        flags_fired.append("coarse_location_only")
+    if "vpn_tunnel_active" in emulator_check.get("flags", []):
+        flags_fired.append("vpn_tunnel_active")
+    if "integrity_verdict_high_risk" in emulator_check.get("flags", []):
+        flags_fired.append("integrity_verdict_high_risk")
+    if "integrity_collection_error" in emulator_check.get("flags", []):
+        flags_fired.append("integrity_collection_error")
 
     if composite >= 0.7:
         verdict = "pass"

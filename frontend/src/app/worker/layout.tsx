@@ -6,13 +6,13 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { useUserStore } from '@/store'
 import ThemeToggle from '@/components/ThemeToggle'
+import BrandMark from '@/components/BrandMark'
 import {
   LayoutDashboard,
   FileText,
   CreditCard,
   Coins,
   MapPin,
-  Shield,
   LogOut,
   Menu,
   X,
@@ -99,13 +99,13 @@ export default function WorkerLayout({ children }: { children: React.ReactNode }
       >
         {/* Branding */}
         <div className="px-5 py-5 flex items-center gap-3" style={{ borderBottom: '1px solid var(--border-primary)' }}>
-          <div
-            className="w-9 h-9 rounded-lg flex items-center justify-center"
-            style={{ background: 'var(--accent-muted)', border: '1px solid var(--border-secondary)' }}
-          >
-            <Shield style={{ color: 'var(--accent)' }} size={18} />
+          <BrandMark size={34} />
+          <div>
+            <span className="brand-wordmark font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>Covara One</span>
+            <p className="text-[11px] uppercase tracking-wider mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
+              Worker Console
+            </p>
           </div>
-          <span className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>Covara One</span>
         </div>
 
         {/* User info */}
@@ -154,13 +154,8 @@ export default function WorkerLayout({ children }: { children: React.ReactNode }
         style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-primary)' }}
       >
         <div className="flex items-center gap-2">
-          <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center"
-            style={{ background: 'var(--accent-muted)' }}
-          >
-            <Shield style={{ color: 'var(--accent)' }} size={16} />
-          </div>
-          <span className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>Covara One</span>
+          <BrandMark size={30} />
+          <span className="brand-wordmark font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>Covara One</span>
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggle />

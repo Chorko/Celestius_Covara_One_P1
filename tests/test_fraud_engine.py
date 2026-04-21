@@ -47,6 +47,9 @@ class TestSignalWeights:
         # network_context was replaced by route_plausibility
         assert "network_context" not in SIGNAL_WEIGHTS
 
+    def test_cluster_intelligence_weight_exists(self):
+        assert "cluster_intelligence" in SIGNAL_WEIGHTS
+
 
 class TestEventTruth:
     """Layer 1: Event Truth."""
@@ -160,6 +163,116 @@ class TestFeatureVector:
             assert key in fv, f"Missing feature vector key: {key}"
 
 
+class TestFraudCalibration:
+
+    def test_attestation_failure_adds_calibration_rule(self):
+        result = evaluate_fraud_risk(
+            worker_context=_base_worker(),
+            trigger_context=_base_trigger(),
+            device_context={
+                "context_present": True,
+                "signature_verified": True,
+                "attestation_verdict": "failed",
+                "signal_confidence": "high",
+            },
+        )
+
+        calibration = result.get("calibration", {})
+        applied = calibration.get("applied_rules", [])
+        assert any(rule.get("rule") == "attestation_failed" for rule in applied)
+        assert result.get("fraud_score", 0.0) >= result.get("base_fraud_score", 0.0)
+
+    def test_cluster_risk_is_counted_in_scoring(self):
+        result = evaluate_fraud_risk(
+            worker_context=_base_worker(),
+            trigger_context=_base_trigger(),
+            zone_claims_last_hour=60,
+            zone_avg_hourly=5.0,
+        )
+
+        assert result["layers"]["cluster_intelligence"]["cluster_risk"] >= 0.9
+        calibration = result.get("calibration", {})
+        applied = calibration.get("applied_rules", [])
+        assert any(rule.get("rule") == "cluster_risk_critical" for rule in applied)
+
+    def test_cluster_intelligence_accepts_claimed_at_batch_timestamps(self):
+        claim_ts = "2026-04-20T10:00:00Z"
+        recent_batch = [
+            {
+                "stated_lat": 12.97160,
+                "stated_lng": 77.59460,
+                "claimed_at": "2026-04-20T09:59:20Z",
+            },
+            {
+                "stated_lat": 12.97164,
+                "stated_lng": 77.59458,
+                "claimed_at": "2026-04-20T09:59:40Z",
+            },
+            {
+                "stated_lat": 12.97158,
+                "stated_lng": 77.59463,
+                "claimed_at": "2026-04-20T10:00:10Z",
+            },
+        ]
+
+        result = evaluate_fraud_risk(
+            worker_context=_base_worker(),
+            trigger_context=_base_trigger(),
+            claim_data={
+                "stated_lat": 12.97161,
+                "stated_lng": 77.59461,
+                "claimed_at": claim_ts,
+            },
+            recent_claims_batch=recent_batch,
+            zone_claims_last_hour=0,
+            zone_avg_hourly=5.0,
+        )
+
+        cluster_layer = result["layers"]["cluster_intelligence"]
+        assert cluster_layer["cluster_risk"] >= 0.5
+        assert any(
+            flag in result["flags"]
+            for flag in ("dbscan_fraud_cluster_match", "cluster_density_fallback_match")
+        )
+
+    def test_evidence_forensics_receives_runtime_image_bytes(self, monkeypatch):
+        captured: dict[str, bytes | None] = {"file_bytes": None}
+
+        def _integrity_stub(exif_metadata, file_bytes=None, worker_context=None):
+            captured["file_bytes"] = file_bytes
+            return {
+                "integrity_score": 0.91,
+                "flags": [],
+                "checks": {
+                    "ai_generation": {
+                        "ai_generated_probability": 0.02,
+                        "synthid_detected": False,
+                        "c2pa_metadata_found": False,
+                    }
+                },
+            }
+
+        monkeypatch.setattr(
+            "backend.app.services.fraud_engine.analyze_evidence_integrity",
+            _integrity_stub,
+        )
+
+        image_bytes = b"\x89PNGmock"
+        evaluate_fraud_risk(
+            worker_context=_base_worker(),
+            trigger_context=_base_trigger(),
+            evidence_records=[
+                {
+                    "evidence_type": "photo",
+                    "exif_timestamp": "2026:04:20 10:00:00",
+                    "_file_bytes": image_bytes,
+                }
+            ],
+        )
+
+        assert captured["file_bytes"] == image_bytes
+
+
 class TestDeviceTrustIngestion:
 
     def test_missing_device_context_is_uncertain_not_hard_fail(self):
@@ -206,3 +319,116 @@ class TestDeviceTrustIngestion:
         assert anti_spoof["attestation_verdict"] == "failed"
         assert "attestation_failed" in result["flags"]
         assert result["device_trust"]["attestation_verdict"] == "failed"
+
+
+class TestFraudExplainability:
+
+    def test_explainability_has_reason_codes_and_contributors(self):
+        result = evaluate_fraud_risk(
+            worker_context=_base_worker(),
+            trigger_context=_base_trigger(),
+            manual_claim=True,
+            zone_claims_last_hour=60,
+            zone_avg_hourly=5.0,
+        )
+
+        explainability = result.get("decision_explainability")
+        assert isinstance(explainability, dict)
+
+        reason_codes = explainability.get("decision_reason_codes", [])
+        assert isinstance(reason_codes, list)
+        assert len(reason_codes) > 0
+        assert any(
+            code in reason_codes
+            for code in (
+                "decision_needs_review",
+                "decision_hold_for_fraud",
+                "decision_batch_hold",
+                "decision_reject_spoof_risk",
+            )
+        )
+
+        contributors = explainability.get("top_signal_contributors", [])
+        assert isinstance(contributors, list)
+        assert len(contributors) > 0
+        first = contributors[0]
+        assert "signal" in first
+        assert "risk_impact" in first
+
+    def test_explainability_reflects_attestation_failure(self):
+        result = evaluate_fraud_risk(
+            worker_context=_base_worker(),
+            trigger_context=_base_trigger(),
+            device_context={
+                "context_present": True,
+                "signature_verified": True,
+                "attestation_verdict": "failed",
+                "signal_confidence": "high",
+                "is_rooted": True,
+            },
+            manual_claim=True,
+        )
+
+        reason_codes = (
+            result.get("decision_explainability", {}).get(
+                "decision_reason_codes", []
+            )
+        )
+        assert "attestation_failed" in reason_codes
+
+
+class TestFraudRiskActionPack:
+
+    def test_compromised_manual_without_trigger_rejects(self):
+        result = evaluate_fraud_risk(
+            worker_context=_base_worker(),
+            trigger_context={},
+            manual_claim=True,
+            device_context={
+                "context_present": True,
+                "signature_verified": True,
+                "attestation_verdict": "failed",
+                "signal_confidence": "high",
+                "is_rooted": True,
+            },
+        )
+
+        assert result["recommended_action"] == "reject_spoof_risk"
+        assert "emulator_detected" in result["flags"]
+
+    def test_risk_action_pack_has_priority_and_challenges(self):
+        result = evaluate_fraud_risk(
+            worker_context=_base_worker(),
+            trigger_context=_base_trigger(),
+            manual_claim=True,
+            zone_claims_last_hour=80,
+            zone_avg_hourly=5.0,
+            device_context={
+                "context_present": True,
+                "signature_verified": True,
+                "attestation_verdict": "failed",
+                "signal_confidence": "high",
+                "is_rooted": True,
+            },
+        )
+
+        pack = result.get("risk_action_pack", {})
+        assert isinstance(pack, dict)
+        assert pack.get("review_priority") in {"p0", "p1", "p2", "p3", "p4"}
+        assert isinstance(pack.get("review_sla_minutes"), int)
+        challenges = pack.get("required_challenges", [])
+        assert isinstance(challenges, list)
+        assert "device_attestation_rebind" in challenges
+
+    def test_missing_signed_context_reason_code_present(self):
+        result = evaluate_fraud_risk(
+            worker_context=_base_worker(),
+            trigger_context=_base_trigger(),
+            manual_claim=True,
+            device_context={},
+        )
+
+        reason_codes = result.get("decision_explainability", {}).get(
+            "decision_reason_codes", []
+        )
+        assert "missing_signed_device_context" in reason_codes

@@ -3,11 +3,12 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { AlertCircle, ArrowLeft, CheckCircle2, Shield, Smartphone } from 'lucide-react'
+import { AlertCircle, ArrowLeft, CheckCircle2, Smartphone } from 'lucide-react'
 
 import { createClient } from '@/lib/supabase'
 import { backendGet, backendPost, BackendApiError } from '@/lib/backendApi'
 import { useUserStore } from '@/store'
+import BrandMark from '@/components/BrandMark'
 
 interface ZoneOption {
   id: string
@@ -253,11 +254,9 @@ export default function SignupPage() {
 
         <div className="card-elevated p-6 md:p-8">
           <div className="flex items-center gap-3 mb-6">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: 'var(--accent-muted)' }}>
-              <Shield size={20} style={{ color: 'var(--accent)' }} />
-            </div>
+            <BrandMark size={44} />
             <div>
-              <h1 className="text-2xl font-semibold" style={{ color: 'var(--text-primary)' }}>Create Worker Account</h1>
+              <h1 className="brand-wordmark text-2xl font-semibold" style={{ color: 'var(--text-primary)' }}>Create Worker Account</h1>
               <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>
                 OTP onboarding + KYC-ready profile + parametric coverage access.
               </p>

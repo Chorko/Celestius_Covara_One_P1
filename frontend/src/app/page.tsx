@@ -6,7 +6,8 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { useUserStore } from '@/store'
 import ThemeToggle from '@/components/ThemeToggle'
-import { Shield, ArrowRight, AlertCircle, Download, Smartphone } from 'lucide-react'
+import BrandMark from '@/components/BrandMark'
+import { ArrowRight, AlertCircle, Download, Smartphone } from 'lucide-react'
 import Image from 'next/image'
 
 const DEMO9_EMAIL_PATTERN = /^demo\.(auto|review|fraud)\d{2}@synthetic\.covara\.dev$/i
@@ -131,12 +132,8 @@ export default function Home() {
   }
 
   return (
-    <main
-      className="min-h-screen relative flex items-center justify-center p-4"
-      style={{ background: 'var(--bg-primary)' }}
-    >
-      {/* Background image */}
-      <div className="absolute inset-0 opacity-30 pointer-events-none">
+    <main className="relative min-h-screen overflow-hidden px-4 py-6 md:px-8 md:py-8">
+      <div className="absolute inset-0 pointer-events-none opacity-35">
         <Image
           src="/images/hero-bg.png"
           alt=""
@@ -147,45 +144,89 @@ export default function Home() {
         <div
           className="absolute inset-0"
           style={{
-            background: `linear-gradient(to bottom, var(--bg-primary), transparent 30%, transparent 70%, var(--bg-primary))`,
+            background: 'linear-gradient(160deg, color-mix(in srgb, var(--bg-primary) 72%, transparent) 4%, var(--bg-primary) 46%, var(--bg-primary) 100%)',
           }}
         />
       </div>
 
-      {/* Theme toggle */}
       <div className="absolute top-4 right-4 z-20">
         <ThemeToggle />
       </div>
 
-      {/* Main card */}
-      <div className="relative z-10 w-full max-w-md animate-fade-in-up">
-        <div className="card-elevated p-8 md:p-10">
-          {/* Branding */}
-          <div className="flex flex-col items-center text-center mb-8">
-            <div
-              className="w-14 h-14 rounded-xl flex items-center justify-center mb-4"
+      <div className="relative z-10 mx-auto grid w-full max-w-6xl gap-5 lg:grid-cols-[1.08fr_0.92fr]">
+        <section className="card-elevated hidden p-8 md:p-10 lg:flex lg:flex-col lg:justify-between animate-fade-in-up">
+          <div>
+            <span
+              className="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold"
               style={{
                 background: 'var(--accent-muted)',
-                border: '1px solid var(--border-secondary)',
+                border: '1px solid color-mix(in srgb, var(--accent) 40%, transparent)',
+                color: 'var(--accent)',
               }}
             >
-              <Shield style={{ color: 'var(--accent)' }} size={28} />
+              AI Claims Integrity Platform
+            </span>
+
+            <div className="mt-6 flex items-center gap-4">
+              <BrandMark size={62} />
+              <div>
+                <h1 className="brand-wordmark text-4xl font-semibold leading-none" style={{ color: 'var(--text-primary)' }}>
+                  Covara One
+                </h1>
+                <p className="mt-2 text-sm" style={{ color: 'var(--text-tertiary)' }}>
+                  Parametric income protection for frontline workers.
+                </p>
+              </div>
             </div>
-            <h1
-              className="text-2xl font-semibold tracking-tight mb-1"
-              style={{ color: 'var(--text-primary)' }}
-            >
-              Covara One
-            </h1>
-            <p className="text-sm leading-relaxed max-w-xs" style={{ color: 'var(--text-tertiary)' }}>
-              AI-Powered Parametric Income Protection for Gig Workers
+
+            <p className="mt-8 max-w-lg text-base leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+              Risk sensing, payout routing, and fraud-aware review workflows from one operational surface,
+              tuned for high-volume field operations.
             </p>
+
+            <div className="mt-8 grid gap-3 sm:grid-cols-2">
+              <div className="card p-4">
+                <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Response Layer</p>
+                <p className="mt-1 text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Adaptive fraud routing</p>
+              </div>
+              <div className="card p-4">
+                <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Worker Experience</p>
+                <p className="mt-1 text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Fast-lane claim submissions</p>
+              </div>
+            </div>
           </div>
 
-          {/* Error display */}
+          <div className="space-y-3">
+            <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+              Install Mobile Build
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Link href="/download" className="btn-primary w-full flex items-center justify-center gap-2 py-3">
+                <Download size={16} /> Android APK
+              </Link>
+              <Link href="/download" className="btn-secondary w-full flex items-center justify-center gap-2 py-3">
+                <Smartphone size={16} /> All Download Options
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        <section className="card-elevated p-7 md:p-9 animate-fade-in-up delay-100">
+          <div className="mb-7 flex items-center gap-3">
+            <BrandMark size={48} />
+            <div>
+              <h2 className="brand-wordmark text-2xl font-semibold leading-tight" style={{ color: 'var(--text-primary)' }}>
+                Sign In
+              </h2>
+              <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>
+                Access worker and insurer control consoles.
+              </p>
+            </div>
+          </div>
+
           {error && (
             <div
-              className="mb-6 p-3 rounded-lg text-sm flex items-start gap-2"
+              className="mb-6 rounded-xl p-3 text-sm flex items-start gap-2"
               style={{
                 background: 'var(--danger-muted)',
                 border: '1px solid var(--danger)',
@@ -197,33 +238,31 @@ export default function Home() {
             </div>
           )}
 
-          {/* Quick-switch buttons */}
-          <div className="flex gap-2 mb-5">
+          <div className="mb-5 grid grid-cols-2 gap-2">
             <button
               type="button"
               onClick={() => { setEmail('worker@demo.com'); setPassword('demo1234') }}
-              className="flex-1 py-2.5 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer"
+              className="py-2.5 px-3 rounded-xl text-xs font-semibold transition-all cursor-pointer"
               style={email === 'worker@demo.com'
                 ? { background: 'var(--accent-muted)', border: '1px solid var(--accent)', color: 'var(--accent)' }
                 : { background: 'var(--bg-tertiary)', border: '1px solid var(--border-primary)', color: 'var(--text-tertiary)' }
               }
             >
-              Login as Worker
+              Worker Access
             </button>
             <button
               type="button"
               onClick={() => { setEmail('admin@demo.com'); setPassword('demo1234') }}
-              className="flex-1 py-2.5 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer"
+              className="py-2.5 px-3 rounded-xl text-xs font-semibold transition-all cursor-pointer"
               style={email === 'admin@demo.com'
                 ? { background: 'var(--info-muted)', border: '1px solid var(--info)', color: 'var(--info)' }
                 : { background: 'var(--bg-tertiary)', border: '1px solid var(--border-primary)', color: 'var(--text-tertiary)' }
               }
             >
-              Login as Admin
+              Admin Access
             </button>
           </div>
 
-          {/* Login form */}
           <form onSubmit={handleEmailLogin} className="space-y-4 mb-6">
             <div>
               <label
@@ -266,12 +305,11 @@ export default function Home() {
                   Authenticating...
                 </span>
               ) : (
-                <>Sign In <ArrowRight size={16} /></>
+                <>Continue <ArrowRight size={16} /></>
               )}
             </button>
           </form>
 
-          {/* Divider */}
           <div className="relative mb-6">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full" style={{ borderTop: '1px solid var(--border-primary)' }} />
@@ -286,7 +324,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Google OAuth */}
           <button
             onClick={handleGoogleLogin}
             type="button"
@@ -308,7 +345,7 @@ export default function Home() {
             </Link>
           </div>
 
-          <div className="mt-4 space-y-2">
+          <div className="mt-4 space-y-2 lg:hidden">
             <p className="text-xs text-center" style={{ color: 'var(--text-tertiary)' }}>
               Want the mobile app instead?
             </p>
@@ -319,13 +356,12 @@ export default function Home() {
               <Smartphone size={16} /> View All Mobile Download Options
             </Link>
           </div>
-        </div>
-
-        {/* Footer */}
-        <p className="text-center text-xs mt-6" style={{ color: 'var(--text-tertiary)' }}>
-          Secured by Supabase Auth &middot; Powered by AI
-        </p>
+        </section>
       </div>
+
+      <p className="relative z-10 text-center text-xs mt-6" style={{ color: 'var(--text-tertiary)' }}>
+        Secured by Supabase Auth and fraud-aware review controls.
+      </p>
     </main>
   )
 }

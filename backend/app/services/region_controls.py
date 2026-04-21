@@ -6,7 +6,7 @@ to detect fraud that bypasses location spoofing by targeting identity,
 behavior, and regional anomalies.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 # ── Historical Zone Affinity ─────────────────────────────────────────────
 
@@ -146,8 +146,12 @@ def check_pre_trigger_presence(
                 ),
             }
 
-    # No trigger start time — just check recency of activity
-    hours_since = (datetime.now(timezone.utc) - activity_dt).total_seconds() / 3600
+    # No trigger start time — just check recency of activity.
+    # Keep timezone awareness aligned with parsed activity timestamp.
+    now_ref = datetime.now(timezone.utc)
+    if getattr(activity_dt, "tzinfo", None) is None:
+        now_ref = now_ref.replace(tzinfo=None)
+    hours_since = (now_ref - activity_dt).total_seconds() / 3600
     return {
         "pre_trigger_present": hours_since <= 4,
         "hours_since_activity": round(hours_since, 2),
@@ -184,9 +188,16 @@ def calculate_trust_penalty(
         "exif_gps_mismatch": 0.05,
         "stale_evidence": 0.03,
         "vpn_datacenter_ip": 0.04,
+        "vpn_tunnel_active": 0.03,
         "new_device_requires_liveness": 0.02,
         "impossible_travel": 0.10,
         "emulator_detected": 0.12,
+        "high_risk_device_trust": 0.10,
+        "attestation_failed": 0.08,
+        "integrity_verdict_high_risk": 0.08,
+        "integrity_collection_error": 0.04,
+        "location_permission_none": 0.03,
+        "coarse_location_only": 0.02,
         "editor_detected": 0.04,
         "timestamp_chain_broken": 0.05,
         "gps_precision_suspicious": 0.03,
@@ -261,6 +272,51 @@ def check_zone_claim_volume(
         }
 
 
+def _build_throttle_strategy(zone_volume: dict) -> dict:
+    """
+    Build actionable throttling guidance for downstream reviewers and clients.
+    """
+    action = str(zone_volume.get("action") or "normal")
+    ratio = float(zone_volume.get("ratio") or 0.0)
+
+    if action == "mass_claim_throttling":
+        cooldown_seconds = min(
+            7200,
+            max(900, int(max(ratio - 1.0, 1.0) * 300)),
+        )
+        return {
+            "enabled": True,
+            "level": "critical",
+            "mode": "zone_circuit_breaker",
+            "cooldown_seconds": cooldown_seconds,
+            "review_batch_size": 10,
+            "reason_code": "zone_mass_claim_spike",
+        }
+
+    if action == "elevated_review":
+        cooldown_seconds = min(
+            1800,
+            max(300, int(max(ratio, 1.0) * 90)),
+        )
+        return {
+            "enabled": True,
+            "level": "elevated",
+            "mode": "priority_review_queue",
+            "cooldown_seconds": cooldown_seconds,
+            "review_batch_size": 25,
+            "reason_code": "zone_claim_velocity_elevated",
+        }
+
+    return {
+        "enabled": False,
+        "level": "normal",
+        "mode": "normal_flow",
+        "cooldown_seconds": 0,
+        "review_batch_size": 0,
+        "reason_code": "zone_claim_velocity_normal",
+    }
+
+
 # ── Composite Region Controls Evaluation ─────────────────────────────────
 
 
@@ -285,6 +341,7 @@ def evaluate_region_controls(
     zone_volume = check_zone_claim_volume(
         zone_claims_last_hour, zone_avg_hourly
     )
+    throttle_strategy = _build_throttle_strategy(zone_volume)
 
     # Collect risk signals
     risk_signals = []
@@ -335,4 +392,5 @@ def evaluate_region_controls(
         },
         "requires_throttling": zone_volume.get("action")
         == "mass_claim_throttling",
+        "throttle_strategy": throttle_strategy,
     }

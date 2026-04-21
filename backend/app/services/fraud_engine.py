@@ -32,15 +32,277 @@ logger = logging.getLogger("covara.fraud_engine")
 # Higher rank = more trusted signal (see root README Section 1c)
 SIGNAL_WEIGHTS = {
     "trigger_event": 0.20,  # Rank 1 — Highest trust
-    "historical_pattern": 0.15,  # Rank 2
-    "shift_continuity": 0.15,  # Rank 3
+    "historical_pattern": 0.14,  # Rank 2
+    "shift_continuity": 0.14,  # Rank 3
     "pre_trigger": 0.10,  # Rank 4
     "device_continuity": 0.10,  # Rank 5
-    "evidence_integrity": 0.10,  # Rank 6
+    "evidence_integrity": 0.09,  # Rank 6
     "anti_spoof": 0.10,  # Ranks 7-8
-    "route_plausibility": 0.05,  # Rank 9 — TomTom Route API
-    "region_controls": 0.05,
+    "route_plausibility": 0.04,  # Rank 9 — TomTom Route API
+    "region_controls": 0.04,
+    "cluster_intelligence": 0.05,
 }
+
+
+def _run_route_plausibility_sync(
+    last_lat: float,
+    last_lng: float,
+    claim_lat: float,
+    claim_lng: float,
+) -> dict | None:
+    """
+    Run async route plausibility safely from both sync and async contexts.
+    """
+    from backend.app.services.traffic_ingest import check_route_plausibility
+    import asyncio
+    import concurrent.futures
+
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(
+            check_route_plausibility(last_lat, last_lng, claim_lat, claim_lng)
+        )
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(
+            lambda: asyncio.run(
+                check_route_plausibility(last_lat, last_lng, claim_lat, claim_lng)
+            )
+        )
+        return future.result(timeout=3.0)
+
+
+def _append_calibration_rule(
+    rules: list[dict],
+    rule: str,
+    delta: float,
+    category: str,
+    reason: str,
+) -> None:
+    rules.append(
+        {
+            "rule": rule,
+            "delta": round(delta, 4),
+            "category": category,
+            "reason": reason,
+        }
+    )
+
+
+def _compute_fraud_confidence(
+    has_trigger: bool,
+    evidence_count: int,
+    context_present: bool,
+    route_result: dict | None,
+    signal_confidence: str | None,
+) -> float:
+    confidence = 0.35
+    if has_trigger:
+        confidence += 0.20
+    if evidence_count > 0:
+        confidence += 0.15
+    if context_present:
+        confidence += 0.12
+    if route_result and route_result.get("score") is not None:
+        confidence += 0.08
+
+    if signal_confidence == "high":
+        confidence += 0.10
+    elif signal_confidence == "medium":
+        confidence += 0.06
+
+    return round(max(0.0, min(1.0, confidence)), 4)
+
+
+def _top_signal_contributors(
+    composite_components: list[tuple[str, float, float]],
+    max_items: int = 4,
+) -> list[dict]:
+    contributors = []
+    for name, score, weight in composite_components:
+        risk_impact = max(0.0, (1.0 - score) * weight)
+        contributors.append(
+            {
+                "signal": name,
+                "score": round(score, 4),
+                "weight": round(weight, 4),
+                "risk_impact": round(risk_impact, 4),
+            }
+        )
+
+    return sorted(
+        contributors,
+        key=lambda item: item["risk_impact"],
+        reverse=True,
+    )[:max_items]
+
+
+def _decision_reason_codes(
+    decision: str,
+    *,
+    has_trigger: bool,
+    manual_claim: bool,
+    anti_spoof_verdict: str,
+    context_present: bool,
+    fraud_score: float,
+    cluster_risk: float,
+    flags: list[str],
+) -> list[str]:
+    codes: list[str] = []
+
+    if not has_trigger:
+        codes.append("trigger_unverified")
+    if manual_claim:
+        codes.append("manual_claim_strict_mode")
+    if anti_spoof_verdict == "fail":
+        codes.append("anti_spoof_failed")
+    elif anti_spoof_verdict == "review":
+        codes.append("anti_spoof_uncertain")
+    if manual_claim and not context_present:
+        codes.append("missing_signed_device_context")
+    if "attestation_failed" in flags:
+        codes.append("attestation_failed")
+    if "emulator_detected" in flags:
+        codes.append("emulator_detected")
+    if "new_device_requires_liveness" in flags:
+        codes.append("liveness_stepup_required")
+    if (
+        "high_risk_device_trust" in flags
+        or "integrity_verdict_high_risk" in flags
+    ):
+        codes.append("device_high_risk")
+    if "mass_claim_zone_spike" in flags or "zone_claim_spike" in flags:
+        codes.append("zone_claim_velocity_spike")
+
+    if cluster_risk >= 0.90:
+        codes.append("cluster_risk_critical")
+    elif cluster_risk >= 0.50:
+        codes.append("cluster_risk_elevated")
+
+    if fraud_score >= 0.55:
+        codes.append("fraud_score_critical")
+    elif fraud_score >= 0.30:
+        codes.append("fraud_score_moderate")
+
+    if decision == "batch_hold":
+        codes.append("decision_batch_hold")
+    elif decision == "hold_for_fraud":
+        codes.append("decision_hold_for_fraud")
+    elif decision == "reject_spoof_risk":
+        codes.append("decision_reject_spoof_risk")
+    elif decision == "needs_review":
+        codes.append("decision_needs_review")
+    else:
+        codes.append("decision_auto_approve")
+
+    deduped = []
+    for code in codes:
+        if code not in deduped:
+            deduped.append(code)
+    return deduped
+
+
+def _risk_tier(decision: str, fraud_score: float, cluster_risk: float) -> str:
+    if (
+        decision in {"reject_spoof_risk", "batch_hold"}
+        or fraud_score >= 0.85
+        or cluster_risk >= 0.90
+    ):
+        return "critical"
+    if decision == "hold_for_fraud" or fraud_score >= 0.60:
+        return "high"
+    if decision == "needs_review" or fraud_score >= 0.35:
+        return "elevated"
+    if fraud_score >= 0.20:
+        return "guarded"
+    return "low"
+
+
+def _build_risk_action_pack(
+    *,
+    decision: str,
+    fraud_score: float,
+    cluster_risk: float,
+    has_trigger: bool,
+    manual_claim: bool,
+    anti_spoof_verdict: str,
+    flags: list[str],
+    requires_liveness_check: bool,
+    throttle_strategy: dict,
+) -> dict:
+    risk_tier = _risk_tier(decision, fraud_score, cluster_risk)
+    priority_map = {
+        "critical": ("p0", 15),
+        "high": ("p1", 60),
+        "elevated": ("p2", 240),
+        "guarded": ("p3", 720),
+        "low": ("p4", 1440),
+    }
+    review_priority, review_sla_minutes = priority_map[risk_tier]
+
+    challenges: list[str] = []
+    if requires_liveness_check or "new_device_requires_liveness" in flags:
+        challenges.append("selfie_liveness_stepup")
+    if anti_spoof_verdict == "fail" or "attestation_failed" in flags:
+        challenges.append("device_attestation_rebind")
+    if (
+        "emulator_detected" in flags
+        or "high_risk_device_trust" in flags
+        or "integrity_verdict_high_risk" in flags
+    ):
+        challenges.append("device_integrity_manual_review")
+    if manual_claim and not has_trigger:
+        challenges.append("trigger_source_verification")
+    if manual_claim and "location_permission_none" in flags:
+        challenges.append("location_permission_recheck")
+    if bool(throttle_strategy.get("enabled")):
+        challenges.append("zone_throttle_cooldown")
+
+    deduped_challenges: list[str] = []
+    for challenge in challenges:
+        if challenge not in deduped_challenges:
+            deduped_challenges.append(challenge)
+
+    controls = [
+        {
+            "control": "manual_reviewer_assignment",
+            "reason": "Prioritize deterministic reviewer ownership and SLA tracking.",
+        }
+    ]
+    if anti_spoof_verdict == "fail":
+        controls.append(
+            {
+                "control": "device_reverification_gate",
+                "reason": "Block auto-routing until device trust controls pass.",
+            }
+        )
+    if manual_claim and not has_trigger:
+        controls.append(
+            {
+                "control": "external_trigger_recheck",
+                "reason": "No verified trigger found for manual claim declaration.",
+            }
+        )
+    if bool(throttle_strategy.get("enabled")):
+        controls.append(
+            {
+                "control": "zone_velocity_guardrail",
+                "reason": str(
+                    throttle_strategy.get("reason_code")
+                    or "zone_claim_velocity_elevated"
+                ),
+            }
+        )
+
+    return {
+        "risk_tier": risk_tier,
+        "review_priority": review_priority,
+        "review_sla_minutes": review_sla_minutes,
+        "required_challenges": deduped_challenges,
+        "recommended_controls": controls,
+        "throttle_strategy": throttle_strategy,
+    }
 
 
 def evaluate_fraud_risk(
@@ -116,30 +378,12 @@ def evaluate_fraud_risk(
 
     if all([last_lat, last_lng, claim_lat, claim_lng]):
         try:
-            from backend.app.services.traffic_ingest import check_route_plausibility
-            import asyncio
-            # check_route_plausibility is async; run it synchronously if we're
-            # not already in an event loop (pipeline is sync). If already in a
-            # loop (called from an async route), schedule it on the running loop.
-            try:
-                loop = asyncio.get_running_loop()
-                # Already in an async context — create a task and use a future
-                import concurrent.futures
-                with concurrent.futures.ThreadPoolExecutor() as pool:
-                    route_result = loop.run_in_executor(
-                        pool,
-                        lambda: asyncio.run(
-                            check_route_plausibility(last_lat, last_lng, claim_lat, claim_lng)
-                        ),
-                    )
-                    # This is a coroutine — we can't await it here in sync context,
-                    # so fall back to the score of 0.5 and fill result async later.
-                    route_result = None
-            except RuntimeError:
-                # No running loop — safe to use asyncio.run
-                route_result = asyncio.run(
-                    check_route_plausibility(last_lat, last_lng, claim_lat, claim_lng)
-                )
+            route_result = _run_route_plausibility_sync(
+                last_lat,
+                last_lng,
+                claim_lat,
+                claim_lng,
+            )
 
             if route_result and route_result.get("score") is not None:
                 route_plausibility_score = route_result["score"]
@@ -189,16 +433,32 @@ def evaluate_fraud_risk(
 
     # ── Evidence integrity (image forensics) ──
     evidence_integrity_scores = []
+    ai_probabilities: list[float] = []
+    synthid_detection_count = 0
+    c2pa_detection_count = 0
     for ev in evidence_records:
         if (
             ev.get("exif_timestamp") is not None
             or ev.get("camera_model") is not None
         ):
             integrity = analyze_evidence_integrity(
-                exif_metadata=ev, worker_context=worker_context
+                exif_metadata=ev,
+                file_bytes=ev.get("_file_bytes"),
+                worker_context=worker_context,
             )
             evidence_integrity_scores.append(integrity["integrity_score"])
             flags.extend(integrity.get("flags", []))
+
+            ai_check = (integrity.get("checks") or {}).get("ai_generation") or {}
+            try:
+                ai_probabilities.append(float(ai_check.get("ai_generated_probability") or 0.0))
+            except (TypeError, ValueError):
+                ai_probabilities.append(0.0)
+
+            if ai_check.get("synthid_detected"):
+                synthid_detection_count += 1
+            if ai_check.get("c2pa_metadata_found"):
+                c2pa_detection_count += 1
 
     avg_integrity = (
         sum(evidence_integrity_scores) / len(evidence_integrity_scores)
@@ -209,6 +469,11 @@ def evaluate_fraud_risk(
     layer_results["evidence_integrity"] = {
         "score": round(avg_integrity, 4),
         "evidence_count": len(evidence_integrity_scores),
+        "max_ai_generated_probability": round(max(ai_probabilities), 4)
+        if ai_probabilities
+        else 0.0,
+        "synthid_detection_count": synthid_detection_count,
+        "c2pa_detection_count": c2pa_detection_count,
     }
 
     # ════════════════════════════════════════════════════════════════════
@@ -221,57 +486,105 @@ def evaluate_fraud_risk(
     batch_timing_similarity = None
 
     if recent_claims_batch and len(recent_claims_batch) >= 3:
-        try:
-            import numpy as np
-            from sklearn.cluster import DBSCAN
-            from datetime import datetime
-            
-            data = []
-            for c in recent_claims_batch:
-                lat = c.get('stated_lat') or c.get('lat')
-                lng = c.get('stated_lng') or c.get('lng')
-                ts = c.get('created_at') or c.get('timestamp')
-                if lat is not None and lng is not None and ts is not None:
-                    try:
-                        dt = datetime.fromisoformat(str(ts).replace('Z', '+00:00'))
-                        mins = dt.timestamp() / 60.0
-                        data.append([float(lat), float(lng), mins])
-                    except Exception:
-                        pass
-                        
-            if len(data) >= 3:
-                X = np.array(data)
+        from datetime import datetime, timezone
+        import math
+        import statistics
+
+        data: list[tuple[float, float, float]] = []
+        for c in recent_claims_batch:
+            lat = c.get("stated_lat") or c.get("lat")
+            lng = c.get("stated_lng") or c.get("lng")
+            ts = c.get("created_at") or c.get("timestamp") or c.get("claimed_at")
+            if lat is None or lng is None or ts is None:
+                continue
+
+            try:
+                dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+                mins = dt.timestamp() / 60.0
                 # Normalize minutes to lat/lng scale (1 min ~ 0.001 deg)
-                X[:, 2] = X[:, 2] * 0.001
-                
+                data.append((float(lat), float(lng), mins * 0.001))
+            except Exception:
+                continue
+
+        claim_lat = (claim_data or {}).get("stated_lat") or (claim_data or {}).get("lat")
+        claim_lng = (claim_data or {}).get("stated_lng") or (claim_data or {}).get("lng")
+        claim_ts = (
+            (claim_data or {}).get("created_at")
+            or (claim_data or {}).get("timestamp")
+            or (claim_data or {}).get("claimed_at")
+        )
+
+        claim_point: tuple[float, float, float] | None = None
+        if claim_lat is not None and claim_lng is not None:
+            try:
+                if claim_ts:
+                    claim_dt = datetime.fromisoformat(str(claim_ts).replace("Z", "+00:00"))
+                else:
+                    claim_dt = datetime.now(timezone.utc)
+                claim_mins = claim_dt.timestamp() / 60.0
+                claim_point = (float(claim_lat), float(claim_lng), claim_mins * 0.001)
+            except Exception:
+                claim_point = None
+
+        if len(data) >= 3 and claim_point is not None:
+            try:
+                import numpy as np
+                from sklearn.cluster import DBSCAN
+                from sklearn.metrics import pairwise_distances
+
+                X = np.array(data)
                 db = DBSCAN(eps=0.005, min_samples=3).fit(X)
                 labels = db.labels_
-                
-                claim_lat = (claim_data or {}).get("stated_lat") or (claim_data or {}).get("lat")
-                claim_lng = (claim_data or {}).get("stated_lng") or (claim_data or {}).get("lng")
-                claim_ts = (claim_data or {}).get("created_at") or (claim_data or {}).get("timestamp")
-                
-                if claim_lat and claim_lng and claim_ts:
-                    cdt = datetime.fromisoformat(str(claim_ts).replace('Z', '+00:00'))
-                    cmins = cdt.timestamp() / 60.0
-                    c_pt = np.array([[float(claim_lat), float(claim_lng), cmins * 0.001]])
-                    
-                    from sklearn.metrics import pairwise_distances
-                    if np.any(labels != -1):
-                        dists = pairwise_distances(c_pt, X[labels != -1])
-                        if dists.min() < 0.005:
-                            cluster_risk = 0.95
-                            flags.append("dbscan_fraud_cluster_match")
-                            flags.append("mass_claim_zone_spike")
-                            
-                            # Get std dev of timestamps in that cluster
-                            nearest_idx = np.argmin(pairwise_distances(c_pt, X))
-                            cluster_id = labels[nearest_idx]
-                            if cluster_id != -1:
-                                cluster_times = X[labels == cluster_id][:, 2] / 0.001
-                                batch_timing_similarity = float(np.std(cluster_times))
-        except ImportError:
-            pass
+
+                if np.any(labels != -1):
+                    claim_arr = np.array([list(claim_point)])
+                    dists = pairwise_distances(claim_arr, X[labels != -1])
+                    if float(dists.min()) < 0.005:
+                        cluster_risk = 0.95
+                        flags.append("dbscan_fraud_cluster_match")
+                        flags.append("mass_claim_zone_spike")
+
+                        nearest_idx = int(np.argmin(pairwise_distances(claim_arr, X)))
+                        cluster_id = labels[nearest_idx]
+                        if cluster_id != -1:
+                            cluster_times = X[labels == cluster_id][:, 2] / 0.001
+                            batch_timing_similarity = float(np.std(cluster_times))
+            except ImportError:
+                eps = 0.005
+                min_samples = 3
+
+                def _distance(a: tuple[float, float, float], b: tuple[float, float, float]) -> float:
+                    return math.sqrt(
+                        ((a[0] - b[0]) ** 2)
+                        + ((a[1] - b[1]) ** 2)
+                        + ((a[2] - b[2]) ** 2)
+                    )
+
+                matched_cluster_indices: list[int] = []
+                for idx, point in enumerate(data):
+                    neighbors = [
+                        j
+                        for j, other in enumerate(data)
+                        if _distance(point, other) <= eps
+                    ]
+                    if len(neighbors) >= min_samples and _distance(claim_point, point) <= eps:
+                        matched_cluster_indices = neighbors
+                        break
+
+                if matched_cluster_indices:
+                    cluster_risk = 0.90
+                    flags.append("cluster_density_fallback_match")
+                    flags.append("mass_claim_zone_spike")
+
+                    cluster_times = [
+                        data[idx][2] / 0.001 for idx in matched_cluster_indices
+                    ]
+                    if len(cluster_times) >= 2:
+                        batch_timing_similarity = float(
+                            statistics.pstdev(cluster_times)
+                        )
+            except Exception as e:
+                logger.warning(f"Cluster intelligence check failed: {e}")
 
     # Fallback to volume proxy if DBSCAN didn't flag
     if cluster_risk == 0.0:
@@ -328,6 +641,9 @@ def evaluate_fraud_risk(
         "risk_signals": region_result.get("risk_signals", []),
     }
 
+    unique_flags = sorted(set(flags))
+    flag_count = len(unique_flags)
+
     # ════════════════════════════════════════════════════════════════════
     # COMPOSITE FRAUD SCORE (Signal Confidence Hierarchy)
     # ════════════════════════════════════════════════════════════════════
@@ -361,6 +677,11 @@ def evaluate_fraud_risk(
             behavioral_score,
             SIGNAL_WEIGHTS["region_controls"],
         ),
+        (
+            "cluster_intelligence",
+            cluster_score,
+            SIGNAL_WEIGHTS["cluster_intelligence"],
+        ),
     ]
 
     # Higher composite = safer (more genuine)
@@ -370,24 +691,200 @@ def evaluate_fraud_risk(
     composite_safety = max(0.0, min(1.0, composite_safety))
 
     # Fraud score = inverse of safety (higher = more fraud risk)
-    fraud_score = 1.0 - composite_safety
+    base_fraud_score = 1.0 - composite_safety
 
     # Stricter bounds for manual claims
     if manual_claim:
-        fraud_score = min(fraud_score * 1.25, 1.0)
+        base_fraud_score = min(base_fraud_score * 1.25, 1.0)
+
+    calibration_rules: list[dict] = []
+    device_trust_tier = anti_spoof_result.get("device_trust_tier")
+    attestation_verdict = anti_spoof_result.get("attestation_verdict")
+    signal_confidence = anti_spoof_result.get("signal_confidence")
+
+    emu_checks = anti_spoof_result.get("checks", {}).get("emulator_detection", {})
+    context_present = bool(emu_checks.get("context_present"))
+
+    if manual_claim and len(evidence_records) == 0:
+        _append_calibration_rule(
+            calibration_rules,
+            "manual_claim_missing_evidence",
+            0.06,
+            "evidence",
+            "Manual claim submitted without supporting evidence.",
+        )
+
+    if manual_claim and not context_present:
+        _append_calibration_rule(
+            calibration_rules,
+            "manual_claim_missing_signed_context",
+            0.05,
+            "device",
+            "Manual claim submitted without signed device context.",
+        )
+
+    if anti_spoof_result.get("anti_spoof_verdict") == "fail":
+        _append_calibration_rule(
+            calibration_rules,
+            "anti_spoof_verdict_fail",
+            0.12,
+            "anti_spoof",
+            "Anti-spoofing checks indicate likely manipulation.",
+        )
+
+    if device_trust_tier == "high_risk":
+        _append_calibration_rule(
+            calibration_rules,
+            "device_trust_high_risk",
+            0.14,
+            "device",
+            "Device trust posture is high risk.",
+        )
+    elif device_trust_tier == "low" and context_present:
+        _append_calibration_rule(
+            calibration_rules,
+            "device_trust_low_signed_context",
+            0.05,
+            "device",
+            "Signed device context reports low trust score.",
+        )
+
+    if attestation_verdict in {"failed", "invalid", "device_not_trusted"}:
+        _append_calibration_rule(
+            calibration_rules,
+            "attestation_failed",
+            0.10,
+            "device",
+            "Device attestation failed or indicates untrusted device.",
+        )
+
+    if (
+        manual_claim
+        and anti_spoof_result.get("anti_spoof_verdict") == "review"
+        and signal_confidence in {None, "low", "missing", "unknown"}
+    ):
+        _append_calibration_rule(
+            calibration_rules,
+            "manual_claim_low_signal_confidence",
+            0.04,
+            "confidence",
+            "Manual claim has uncertain anti-spoof outcome and low signal confidence.",
+        )
+
+    if manual_claim and has_trigger and route_plausibility_score < 0.25:
+        _append_calibration_rule(
+            calibration_rules,
+            "manual_claim_route_implausible",
+            0.06,
+            "movement",
+            "Route plausibility score is critically low for the submitted claim context.",
+        )
+
+    if (
+        ("low_zone_affinity" in unique_flags)
+        and ("no_pre_trigger_presence" in unique_flags)
+        and manual_claim
+    ):
+        _append_calibration_rule(
+            calibration_rules,
+            "identity_context_mismatch",
+            0.08,
+            "behavior",
+            "Worker lacks historical zone affinity and pre-trigger presence.",
+        )
+
+    if (not has_trigger) and (
+        ("impossible_travel" in unique_flags)
+        or ("route_implausible" in unique_flags)
+    ):
+        _append_calibration_rule(
+            calibration_rules,
+            "unverified_event_with_implausible_route",
+            0.10,
+            "event",
+            "No verified trigger combined with implausible movement signal.",
+        )
+
+    if cluster_risk >= 0.90:
+        _append_calibration_rule(
+            calibration_rules,
+            "cluster_risk_critical",
+            0.12,
+            "cluster",
+            "Claim appears inside a high-risk temporal/spatial claim cluster.",
+        )
+    elif cluster_risk >= 0.50:
+        _append_calibration_rule(
+            calibration_rules,
+            "cluster_risk_elevated",
+            0.05,
+            "cluster",
+            "Zone exhibits elevated coordinated-claim behavior.",
+        )
+
+    if prior_claim_rate >= 0.70:
+        _append_calibration_rule(
+            calibration_rules,
+            "high_prior_claim_rate",
+            0.08,
+            "behavior",
+            "Historical claim frequency is significantly elevated.",
+        )
+    elif prior_claim_rate >= 0.45:
+        _append_calibration_rule(
+            calibration_rules,
+            "moderate_prior_claim_rate",
+            0.04,
+            "behavior",
+            "Historical claim frequency is moderately elevated.",
+        )
+
+    if (
+        has_trigger
+        and not manual_claim
+        and flag_count == 0
+        and signal_confidence == "high"
+        and attestation_verdict == "passed"
+    ):
+        _append_calibration_rule(
+            calibration_rules,
+            "trusted_auto_signal_stack",
+            -0.05,
+            "confidence",
+            "High-confidence trigger and trusted device context reduce risk.",
+        )
+
+    adjustment_total = sum(rule["delta"] for rule in calibration_rules)
+    fraud_score = max(0.0, min(1.0, base_fraud_score + adjustment_total))
 
     fraud_score = round(fraud_score, 4)
+    fraud_confidence = _compute_fraud_confidence(
+        has_trigger=has_trigger,
+        evidence_count=len(evidence_records),
+        context_present=context_present,
+        route_result=route_result,
+        signal_confidence=signal_confidence,
+    )
 
     # ════════════════════════════════════════════════════════════════════
     # DECISION BAND DETERMINATION
     # ════════════════════════════════════════════════════════════════════
-    unique_flags = list(set(flags))
-    flag_count = len(unique_flags)
-
     # Mass cluster override → batch_hold
     if zone_claims_last_hour > 50 and flag_count >= 2:
         band = "cluster"
         decision = "batch_hold"
+    # Device-compromised unverified manual claims are high-confidence spoof risk.
+    elif (
+        not has_trigger
+        and anti_spoof_result["anti_spoof_verdict"] == "fail"
+        and (
+            "emulator_detected" in unique_flags
+            or "attestation_failed" in unique_flags
+            or "integrity_verdict_high_risk" in unique_flags
+        )
+    ):
+        band = "ring_match"
+        decision = "reject_spoof_risk"
     # No valid trigger + high spoof + ring pattern → reject
     elif not has_trigger and fraud_score > 0.70 and flag_count >= 3:
         band = "ring_match"
@@ -410,6 +907,18 @@ def evaluate_fraud_risk(
     else:
         band = "low"
         decision = "auto_approve"
+
+    if (
+        decision == "needs_review"
+        and fraud_score >= 0.48
+        and (
+            anti_spoof_result["anti_spoof_verdict"] == "fail"
+            or "attestation_failed" in unique_flags
+            or "high_risk_device_trust" in unique_flags
+        )
+    ):
+        band = "suspicious"
+        decision = "hold_for_fraud"
 
     # ── Claim-mode-aware override for zero-touch auto-claims ──────────
     # Auto-triggered parametric claims have NO evidence photos and NO
@@ -442,6 +951,40 @@ def evaluate_fraud_risk(
         "reject_spoof_risk": fraud_score * 1.0,
     }
     fraud_penalty = round(penalty_map.get(decision, fraud_score * 0.5), 4)
+
+    risk_action_pack = _build_risk_action_pack(
+        decision=decision,
+        fraud_score=fraud_score,
+        cluster_risk=cluster_risk,
+        has_trigger=has_trigger,
+        manual_claim=manual_claim,
+        anti_spoof_verdict=anti_spoof_result["anti_spoof_verdict"],
+        flags=unique_flags,
+        requires_liveness_check=anti_spoof_result.get(
+            "requires_liveness_check", False
+        ),
+        throttle_strategy=region_result.get("throttle_strategy", {}),
+    )
+
+    decision_explainability = {
+        "decision_reason_codes": _decision_reason_codes(
+            decision,
+            has_trigger=has_trigger,
+            manual_claim=manual_claim,
+            anti_spoof_verdict=anti_spoof_result["anti_spoof_verdict"],
+            context_present=context_present,
+            fraud_score=fraud_score,
+            cluster_risk=cluster_risk,
+            flags=unique_flags,
+        ),
+        "top_signal_contributors": _top_signal_contributors(composite_components),
+        "top_calibration_impacts": sorted(
+            calibration_rules,
+            key=lambda rule: abs(rule.get("delta", 0.0)),
+            reverse=True,
+        )[:3],
+        "risk_action_pack": risk_action_pack,
+    }
 
     # ── Trust score update ──
     trust_update = calculate_trust_penalty(
@@ -518,11 +1061,23 @@ def evaluate_fraud_risk(
 
     return {
         "fraud_score": fraud_score,
+        "base_fraud_score": round(base_fraud_score, 4),
+        "fraud_confidence": fraud_confidence,
         "fraud_penalty": fraud_penalty,
         "fraud_band": band,
         "recommended_action": decision,
         "flags": unique_flags,
         "flag_count": flag_count,
+        "risk_action_pack": risk_action_pack,
+        "decision_explainability": decision_explainability,
+        "calibration": {
+            "adjustment_total": round(adjustment_total, 4),
+            "applied_rules": sorted(
+                calibration_rules,
+                key=lambda rule: abs(rule.get("delta", 0.0)),
+                reverse=True,
+            ),
+        },
         "requires_liveness_check": anti_spoof_result.get(
             "requires_liveness_check", False
         ),

@@ -25,7 +25,7 @@ from slowapi.errors import RateLimitExceeded
 
 from backend.app.config import settings
 from backend.app.dependencies import require_insurer_admin
-from backend.app.rate_limit import limiter
+from backend.app.rate_limit import build_adaptive_rate_limit_headers, limiter
 from backend.app.routers import (
     analytics,
     auth,
@@ -305,6 +305,15 @@ async def add_request_id_and_metrics(request: Request, call_next):
         status_code = response.status_code
         response.headers["X-Request-ID"] = request_id
         response.headers["X-Correlation-ID"] = request_id
+
+        current_limit = getattr(request.state, "view_rate_limit", None)
+        adaptive_headers = build_adaptive_rate_limit_headers(
+            request.app.state.limiter,
+            current_limit,
+        )
+        for header_name, header_value in adaptive_headers.items():
+            if not response.headers.get(header_name):
+                response.headers[header_name] = header_value
 
         if status_code >= 500:
             increment_counter(

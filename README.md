@@ -28,29 +28,6 @@
 
 ---
 
-## Engineering Snapshot (2026-04-18)
-
-- Database reliability migrations added and applied in sequence: `backend/sql/10_rewards_schema.sql`, `backend/sql/11_event_outbox.sql`, `backend/sql/12_event_reliability.sql`, `backend/sql/13_consumer_dead_letter.sql`.
-- Event reliability is now production-hardened with transactional outbox writes, relay retry/backoff, dead-letter handling, and consumer idempotency with max-attempt dead-letter escalation.
-- Async consumer flow is active for `claim.auto_processed` side effects (notification + rewards), with Kafka consumer runner parity for broker mode.
-- Operational admin endpoints are available under `/events/outbox/*` and `/events/consumers/*` for relay, status, dead-letter triage, and requeue.
-- Security hardening includes signed mobile device-context verification, explicit CORS/header allowlist, `slowapi` rate limits, and OWASP response headers.
-- Post-migration reliability validation is green, including focused consumer/outbox/Kafka tests and API-level tests for the new events consumer endpoints.
-- Worker premium consistency is hardened: dashboard and coverage pages both read backend quote APIs, with fixed IRDAI fallback values preserved.
-- Worker dashboard now includes **My Zone Intelligence** with active triggers plus **last-20 trigger history** timeline for the assigned zone.
-- Weekly policy lifecycle now includes **auto-expiry normalization** during quote/activation flows so stale active rows are marked expired.
-- Admin reviews queue UX now distinguishes fetch failure from true empty queue and shows a retry path for transient API outages.
-- Stripe checkout finalize path remains idempotent and keeps policy activation + reward-crediting replay-safe.
-- Demo reset SQL helpers added for repeatable judge runs:
-    - `backend/sql/helpers/22_reset_main_demo_worker_subscription.sql`
-    - `backend/sql/helpers/23_reset_demo9_runtime_state.sql`
-- OTP onboarding now auto-falls back to mock mode in non-production when Twilio trial blocks unverified numbers (error `21608`), returning demo OTP `123456` so signup flow remains usable.
-- Payout settlement webhook now includes backward-compatible schema handling for mixed Supabase migrations (legacy/new columns across `payout_requests`, `payout_settlement_events`, and `payout_status_transitions`) and maps legacy payout statuses (`submitted`/`paid`) to canonical workflow semantics during processing.
-- Civic-news trigger ingestion is exposed through `GET /triggers/civic-news` and expects `NEWS_API_KEY` in deployment environment configuration.
-- Secret hygiene is tightened in ignore rules for future files (`.env.*`, key material, and Docker build-context exclusions).
-
----
-
 ## 📑 Table of Contents
 
 <details open>
@@ -768,7 +745,7 @@ flowchart TD
         IF1(["🔍 EXIF integrity"]):::checks2
         IF2(["🤖 Gemini SynthID"]):::checks2
         IF3(["📸 Camera match"]):::checks2
-        IF4(["🖼️ ELA Analysis"]):::checks2
+        IF4(["🧾 C2PA markers"]):::checks2
     end
 
     subgraph L5G ["LAYER 5 — Cluster Intelligence"]
@@ -830,7 +807,7 @@ Covara One does **not** trust raw GPS coordinates alone. The platform differenti
 | **Network / IP / ASN pattern** | Do multiple claimants share the same network fingerprint? | Coordinated rings operating from one location share IP/ASN patterns |
 | **AI-generated image detection** | Was the evidence photo created by an AI model rather than a real camera? | AI-generated "proof" photos bypass traditional photo checks — SynthID and forensic analysis catch them |
 | **EXIF integrity & modification detection** | Has the evidence photo been edited, re-saved, or had metadata tampered with? | Fraudsters edit photos to change GPS coordinates, timestamps, or splice scenes — integrity checks detect this |
-| **Image forensics (ELA / noise)** | Does the pixel-level structure match a genuine camera capture? | AI-generated and manipulated images show anomalous compression artifacts and noise patterns |
+| **AI provenance marker checks (C2PA)** | Does the evidence contain machine-readable content-credentials markers? | Synthetic or provenance-tagged AI assets are surfaced even when GPS looks plausible |
 
 A **genuinely stranded worker** will show: pre-disruption delivery activity → trigger event confirmed by external source → GPS trail consistent with operating zone → evidence freshness verified → natural movement pattern → evidence photo taken by real camera with intact metadata. The system scores this as high-confidence and routes to `auto_approve`.
 
@@ -863,19 +840,17 @@ Google embeds **SynthID** — an invisible, robust digital watermark — into im
 | **EXIF completeness** | Verify presence of core EXIF fields: DateTimeOriginal, DateTimeDigitized, Make, Model, GPSLatitude, GPSLongitude, Software | Stripped or missing EXIF suggests tampering or screenshot reuse |
 | **Software field check** | Flag if EXIF `Software` field contains image editors (Photoshop, GIMP, Snapseed, PicsArt) | Photos edited to change location or content are flagged |
 | **Timestamp chain-of-custody** | Compare `DateTimeOriginal` (when shutter fired) vs `DateTimeDigitized` (when sensor captured) vs `ModifyDate` (last save) | Genuine: all three within seconds. Tampered: ModifyDate is hours/days later |
-| **EXIF thumbnail vs. full image** | Compare the embedded EXIF thumbnail against the full-resolution image | If the photo was cropped or edited, the thumbnail may still show the original unedited version |
 | **GPS precision analysis** | Check GPS coordinate decimal precision — real GPS sensors produce 6+ decimal places with slight variance | Manually entered or copied GPS coordinates often have suspiciously round numbers or identical precision across submissions |
 | **Camera-device consistency** | Cross-check EXIF Make/Model against the worker's registered device | If a worker registered a Samsung phone but evidence EXIF shows an iPhone camera, the evidence is flagged |
 
-#### Additional Image Forensic Methods
+#### Additional Implemented Forensic Methods
 
 | Method | How it works | What it catches |
 |---|---|---|
-| **Error Level Analysis (ELA)** | Re-compress the image at a known quality level and compare the error difference across regions — uniform images show uniform error; spliced/edited regions show anomalous error levels | Photoshopped regions, pasted elements, cloned areas where disruption evidence was fabricated |
-| **Noise pattern consistency** | Analyze sensor noise distribution across the image — real cameras produce consistent noise patterns; composites show noise discontinuities | Composite images where a fake weather scene was placed over a real location |
-| **JPEG quantization table analysis** | Examine the JPEG compression tables — images re-saved through editing software have different quantization signatures than camera-original images | Evidence that was downloaded, edited, and re-uploaded rather than captured fresh |
-| **Perceptual hash cross-matching** | Generate perceptual hashes of all evidence photos across the claim batch and compare for similarity | Identical or near-identical photos submitted by different claimants in a fraud ring |
-| **Reverse image search signal** | Hash submitted evidence against a database of previously submitted images | Recycled evidence from previous claims or stock photos used as fake proof |
+| **C2PA content-credentials scan** | Byte-level scan for Content Credentials markers (`c2pa`, `assertionStore`, `urn:c2pa`) in image payloads | AI-provenance-tagged images and synthetic evidence packages |
+| **Camera-sensor metadata heuristic** | Verify presence of real-camera fields (`Make`, `Model`, `FocalLength`, `ExposureTime`) | Images without camera-sensor fingerprints that look like generated assets |
+| **Editor signature detection** | Check EXIF `Software` field against known editing tools and AI-generator signatures | Re-edited evidence, AI-generated exports, and post-processed photos |
+| **Timestamp integrity scoring** | Chain-of-custody check across EXIF capture/digitize/modify timestamps | Re-used old images or metadata-tampered uploads |
 
 #### Image verdict integration
 
@@ -964,7 +939,7 @@ Beyond individual spoof detection, Covara One analyzes **cross-claimant patterns
 | **Repeated identical / near-identical coordinates** | Spoofers using shared GPS-spoofing coordinates | Coordinate density analysis — flag when N+ claims share coordinates within a 50m radius |
 | **Shared payout destinations** | Multiple worker accounts routing payouts to the same bank/UPI endpoint | Graph analysis on payout destination overlap |
 | **Shared device fingerprints** | One physical device used across multiple accounts | Device ID and browser fingerprint cross-matching |
-| **Evidence similarity scoring** | Identical or near-identical photos/videos across claimants | Perceptual hash comparison across batch submissions |
+| **Evidence integrity overlap** | Multiple claimants showing the same high-risk evidence flags (AI markers, EXIF anomalies) | Cross-claim overlap on evidence-integrity signals; perceptual-hash matching is planned as a future enhancement |
 | **Network / IP / ASN overlap** | Coordinated claims from the same physical network suggest co-location | ASN and IP subnet clustering across claim batch |
 | **Low evidence variety** | Fraud rings often submit templated or minimal evidence | Evidence type diversity scoring per claimant |
 | **Weak or absent route continuity** | No verifiable delivery activity before the disruption | Historical order completion cross-check |

@@ -17,11 +17,12 @@ export default function ThemeToggle({ className = '' }: { className?: string }) 
   return (
     <button
       onClick={mounted ? toggleTheme : undefined}
-      className={`p-2 rounded-lg transition-all ${className}`}
+      className={`px-2.5 py-2.5 rounded-xl transition-all ${className}`}
       style={{
-        background: 'var(--bg-tertiary)',
+        background: 'color-mix(in srgb, var(--bg-tertiary) 74%, transparent)',
         border: '1px solid var(--border-primary)',
         color: 'var(--text-secondary)',
+        boxShadow: 'var(--shadow-sm)',
       }}
       aria-label={mounted ? `Switch to ${nextTheme} mode` : 'Toggle theme'}
       title={mounted ? `Switch to ${nextTheme} mode` : 'Toggle theme'}

@@ -92,6 +92,7 @@ htmlcov/
 tmp/
 temp/
 .tmp_ci_venv/
+/$null
 
 # Mobile generated local build/debug artifacts
 mobile/build_list.json
@@ -102,6 +103,14 @@ mobile/build_view.json
 mobile/list_output.txt
 mobile/test_view.txt
 mobile/view_output.txt
+
+# Broader mobile local command/build artifacts
+mobile/build_*.json
+mobile/build_*.txt
+mobile/*_output.txt
+mobile/android/.gradle/
+mobile/android/app/build/
+mobile/ios/build/
 
 # ==========================
 # Generated / Large assets

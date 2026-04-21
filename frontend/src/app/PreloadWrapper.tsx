@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import { Shield } from 'lucide-react'
+import BrandMark from '@/components/BrandMark'
 
 export function PreloadWrapper({ children }: { children: React.ReactNode }) {
   const [loaded, setLoaded] = useState(false)
@@ -18,9 +18,9 @@ export function PreloadWrapper({ children }: { children: React.ReactNode }) {
       {!hide && (
         <div className={`preload-screen ${loaded ? 'hide' : ''}`}>
           <div className="preload-logo">
-            <Shield style={{ color: 'var(--accent)' }} size={28} />
+            <BrandMark size={46} />
           </div>
-          <span className="preload-title">Covara One</span>
+          <span className="preload-title brand-wordmark">Covara One</span>
           <span className="preload-subtitle">Parametric Income Protection</span>
           <div className="preload-bar-track">
             <div className="preload-bar-fill" />

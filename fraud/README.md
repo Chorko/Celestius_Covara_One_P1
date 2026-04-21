@@ -4,14 +4,6 @@
 
 ---
 
-## Engineering Snapshot (2026-04-05)
-
-- Mobile device-context signatures are now verified server-side before fraud evaluation when telemetry headers are provided.
-- Anti-spoofing layer consumes normalized device-context aliases and replay-protected metadata for stronger spoof resistance.
-- Auto-claim path now emits durable events and shifts non-critical side effects to async consumers, while fraud outcomes remain part of the claim decision trace.
-
----
-
 ## Implementation Status
 
 | Component | Status |
@@ -138,8 +130,8 @@ flowchart TD
 | Movement plausibility over time | GPS trail shows realistic movement across multiple time points | Spoofers show teleportation or perfect stillness — real workers show natural drift |
 | Geofence match | TomTom Geofencing API confirms device within operating zone boundary | Out-of-geofence claims are immediately flagged |
 | **AI-generated image detection** | Gemini SynthID watermark scan + AI-generation probability scoring | AI-generated "proof" photos are flagged; catches both Google (SynthID) and non-Google AI models |
-| **EXIF integrity & modification** | Check EXIF completeness, Software field for editors, timestamp chain-of-custody (DateTimeOriginal vs DateTimeDigitized vs ModifyDate), thumbnail vs full image comparison, GPS precision analysis, camera-device consistency | Edited, re-saved, or metadata-tampered photos are flagged |
-| **Image forensics (ELA / noise)** | Error Level Analysis for splice detection, noise pattern consistency, JPEG quantization table analysis, perceptual hash cross-matching | Photoshopped scenes, composite images, re-saved evidence, and recycled photos from previous claims |
+| **EXIF integrity & modification** | Check EXIF completeness, editor software signatures, timestamp chain-of-custody (DateTimeOriginal vs DateTimeDigitized vs ModifyDate), GPS precision analysis, and camera-device consistency | Edited, re-saved, or metadata-tampered photos are flagged |
+| **AI provenance markers (C2PA)** | Scan image bytes for Content Credentials markers and combine with Gemini artifact scoring | AI-generated or provenance-tagged synthetic evidence is surfaced as high-risk |
 
 > [!NOTE]
 > Workers who submit evidence via WhatsApp or Telegram may have EXIF stripped automatically. This is **not treated as fraud** — it reduces the evidence integrity score to Medium and routes the claim to `needs_review`. The system never auto-rejects based on EXIF absence alone. For full details on the evidence integrity scoring model, see the [root README](../README.md#1a-evidence-integrity-ai-image-detection).
@@ -154,9 +146,12 @@ flowchart TD
 | Coordinate density | Flag when N+ claims share GPS coordinates within a 50m radius |
 | Shared payment paths | Graph analysis on payout destination (bank/UPI) overlap across claimants |
 | Device sharing | Same device ID or browser fingerprint appearing across multiple worker accounts |
-| Evidence similarity | Perceptual hash comparison detects identical/near-identical photos across batch |
+| Evidence similarity *(planned enhancement)* | Perceptual hash cross-matching for near-identical evidence across a batch |
 | Network clustering | ASN and IP subnet clustering identifies co-located claimants |
 | Evidence variety | Low evidence type diversity scoring per claimant suggests templated submissions |
+
+> [!NOTE]
+> The current production gate uses DBSCAN timestamp+coordinate clustering plus zone-volume spike controls. Perceptual-hash similarity scoring is documented as a next-stage enhancement.
 
 ### Layer 5 — Behavioral Anomaly & Identity Verification
 **Question:** Does the worker's historical behavior and identity context look suspicious?
@@ -300,7 +295,7 @@ The effective confidence score `C` and fraud holdback `FH` feed into the interna
 | **Time** | Claim time vs event time, shift overlap percentage, EXIF timestamp freshness, submission synchronization |
 | **Platform activity** | Orders accepted, completed orders before/after claim window, online/offline inconsistencies, activity continuity |
 | **Identity & device** | Device continuity, device-to-account ratio, payout destination overlap, network/IP/ASN clustering |
-| **Evidence** | Evidence completeness, evidence type variety, perceptual hash similarity across batch, photo freshness |
+| **Evidence** | Evidence integrity score, evidence type variety, AI markers (SynthID/C2PA), EXIF freshness |
 | **Claim history** | Repeated use of same trigger, abnormal claim frequency, outlier payout ratio vs peers, prior suspicious rate |
 
 ---

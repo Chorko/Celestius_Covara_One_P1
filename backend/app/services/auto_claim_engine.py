@@ -493,7 +493,7 @@ async def _process_worker_claim(
             one_hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
             recent_resp = (
                 sb.table("manual_claims")
-                .select("id, worker_profile_id, claimed_at")
+                .select("id, worker_profile_id, stated_lat, stated_lng, claimed_at")
                 .eq("trigger_event_id", trigger_id)
                 .gte("claimed_at", one_hour_ago)
                 .execute()
@@ -516,8 +516,10 @@ async def _process_worker_claim(
                 "zone_id": claim_zone_id,
                 "city": city,
                 "claim_mode": "trigger_auto",
+                "claimed_at": datetime.now(timezone.utc).isoformat(),
             },
             zone_claims_last_hour=zone_claims_count,
+            recent_claims_batch=recent_claims_batch,
             plan=plan,
         )
 

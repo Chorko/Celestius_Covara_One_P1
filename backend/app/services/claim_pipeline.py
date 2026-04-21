@@ -134,6 +134,7 @@ def run_claim_pipeline(
     device_context: dict | None = None,
     zone_claims_last_hour: int = 0,
     zone_avg_hourly: float = 5.0,
+    recent_claims_batch: list[dict] | None = None,
     plan: str = "essential",
     validated_incidents: list[dict] | None = None,
 ) -> dict:
@@ -265,6 +266,7 @@ def run_claim_pipeline(
         device_context=device_context or {},
         zone_claims_last_hour=zone_claims_last_hour,
         zone_avg_hourly=zone_avg_hourly,
+        recent_claims_batch=recent_claims_batch or [],
         claim_mode=claim_mode,
     )
 
@@ -291,11 +293,44 @@ def run_claim_pipeline(
 
     # --- 7. Claim Decision (5-Tier Matrix) ---
     decision_status = fraud_res["recommended_action"]
+    fast_lane_override_applied = False
 
     # Manual hold overrides if fraud engine didn't already escalate
     if manual_held and decision_status == "auto_approve":
         decision_status = "needs_review"
         hold_reasons.append("Manual claim requires human-assisted review")
+
+    anti_spoof_score = (
+        fraud_res.get("layers", {})
+        .get("anti_spoofing", {})
+        .get("score")
+    )
+    trigger_reliability = float(
+        (trigger_context or {}).get("source_reliability") or 0.0
+    )
+
+    # Strict fast-lane override: only for validated incidents with very clean risk stack.
+    if (
+        claim_mode == "manual"
+        and fast_lane_eligible
+        and not manual_held
+        and decision_status == "needs_review"
+        and trigger_context is not None
+        and trigger_reliability >= 0.85
+        and fraud_res.get("fraud_score", 1.0) <= 0.20
+        and isinstance(anti_spoof_score, (int, float))
+        and float(anti_spoof_score) >= 0.75
+        and int(fraud_res.get("flag_count", 0)) == 0
+        and evidence_completeness >= 0.80
+        and geo_confidence >= 0.80
+    ):
+        decision_status = "auto_approve"
+        fast_lane_override_applied = True
+        add_trace(
+            7,
+            "fast_lane_decision_override",
+            "Regional validation + clean anti-spoof stack qualified for auto-approve.",
+        )
 
     # Map to final status
     STATUS_MAP = {
@@ -312,6 +347,52 @@ def run_claim_pipeline(
     )
     add_trace(
         8, "audit_recorded", "full trace logged with anti-spoofing details"
+    )
+
+    decision_reason_codes = (
+        fraud_res.get("decision_explainability", {}).get(
+            "decision_reason_codes", []
+        )
+        if isinstance(fraud_res.get("decision_explainability"), dict)
+        else []
+    )
+    if fast_lane_override_applied:
+        decision_reason_codes = [
+            code for code in decision_reason_codes if code != "decision_needs_review"
+        ]
+        if "fast_lane_override_auto_approve" not in decision_reason_codes:
+            decision_reason_codes.append("fast_lane_override_auto_approve")
+
+    risk_action_pack = (
+        fraud_res.get("risk_action_pack", {})
+        if isinstance(fraud_res.get("risk_action_pack"), dict)
+        else {}
+    )
+    if fast_lane_override_applied:
+        risk_action_pack = {
+            **risk_action_pack,
+            "review_priority": "p4",
+            "review_sla_minutes": 1440,
+            "required_challenges": [],
+            "throttle_strategy": {
+                "enabled": False,
+                "mode": "normal_flow",
+                "reason_code": "fast_lane_override_clean_stack",
+            },
+        }
+
+    required_challenges = risk_action_pack.get("required_challenges", [])
+    if not isinstance(required_challenges, list):
+        required_challenges = []
+
+    review_reason = (
+        " | ".join(hold_reasons)
+        if hold_reasons
+        else ", ".join(decision_reason_codes[:3])
+        if decision_reason_codes
+        else ", ".join(str(challenge) for challenge in required_challenges[:2])
+        if required_challenges
+        else None
     )
 
     return {
@@ -343,10 +424,15 @@ def run_claim_pipeline(
         },
         "fraud_analysis": {
             "fraud_score": fraud_res["fraud_score"],
+            "base_fraud_score": fraud_res.get("base_fraud_score"),
+            "fraud_confidence": fraud_res.get("fraud_confidence"),
             "fraud_band": fraud_res["fraud_band"],
             "flags": fraud_res.get("flags", []),
             "flag_count": fraud_res.get("flag_count", 0),
+            "decision_explainability": fraud_res.get("decision_explainability"),
+            "calibration": fraud_res.get("calibration"),
             "device_trust": fraud_res.get("device_trust"),
+            "risk_action_pack": risk_action_pack,
             "requires_liveness_check": fraud_res.get(
                 "requires_liveness_check", False
             ),
@@ -357,12 +443,16 @@ def run_claim_pipeline(
         },
         "review": {
             "fraud_score": fraud_res["fraud_score"],
+            "fraud_confidence": fraud_res.get("fraud_confidence"),
             "geo_confidence_score": geo_confidence,
             "evidence_completeness_score": evidence_completeness,
             "decision": final_status,
             "decision_action": decision_status,
-            "decision_reason": (
-                " | ".join(hold_reasons) if hold_reasons else None
-            ),
+            "decision_reason": review_reason,
+            "decision_reason_codes": decision_reason_codes,
+            "review_priority": risk_action_pack.get("review_priority"),
+            "review_sla_minutes": risk_action_pack.get("review_sla_minutes"),
+            "required_challenges": required_challenges,
+            "throttle_strategy": risk_action_pack.get("throttle_strategy"),
         },
     }

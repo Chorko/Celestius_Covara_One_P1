@@ -52,6 +52,7 @@ export async function submitSignedClaim(
   const headers: Record<string, string> = {
     Authorization: `Bearer ${input.accessToken}`,
     "Content-Type": "application/json",
+    "X-Client-Platform": "mobile",
     "X-Device-Context": signedContext.rawContext,
     "X-Device-Context-Signature": signedContext.signature,
     "X-Device-Context-Timestamp": signedContext.timestamp,

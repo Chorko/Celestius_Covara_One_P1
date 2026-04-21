@@ -1,43 +1,50 @@
 {
-  "name": "covara-mobile-worker",
-  "version": "0.1.0",
-  "private": true,
-  "main": "expo/AppEntry",
-  "expo": {
-    "doctor": {
-      "reactNativeDirectoryCheck": {
-        "exclude": [
-          "crypto-js"
-        ]
-      }
+    "name": "covara-mobile-worker",
+    "version": "0.1.0",
+    "private": true,
+    "main": "expo/AppEntry",
+    "expo": {
+        "doctor": {
+            "reactNativeDirectoryCheck": {
+                "exclude": [
+                    "crypto-js"
+                ]
+            }
+        }
+    },
+    "scripts": {
+        "start": "expo start",
+        "android": "expo run:android",
+        "ios": "expo run:ios",
+        "validate:env": "node ./scripts/validate-env.mjs",
+        "typecheck": "tsc --noEmit",
+        "postinstall": "patch-package"
+    },
+    "dependencies": {
+        "@react-native-async-storage/async-storage": "2.2.0",
+        "@supabase/supabase-js": "^2.49.8",
+        "crypto-js": "^4.2.0",
+        "expo": "^55.0.15",
+        "expo-application": "55.0.14",
+        "expo-asset": "55.0.15",
+        "expo-build-properties": "55.0.13",
+        "expo-device": "55.0.15",
+        "expo-image-picker": "55.0.18",
+        "expo-location": "55.1.8",
+        "expo-network": "55.0.13",
+        "expo-secure-store": "55.0.13",
+        "react": "19.2.0",
+        "react-native": "0.83.4",
+        "zustand": "^5.0.0"
+    },
+    "devDependencies": {
+        "@types/crypto-js": "^4.2.2",
+        "@types/react": "19.2.14",
+        "babel-preset-expo": "^55.0.17",
+        "patch-package": "^8.0.1",
+        "typescript": "5.9.3"
+    },
+    "overrides": {
+        "@xmldom/xmldom": "0.8.13"
     }
-  },
-  "scripts": {
-    "start": "expo start",
-    "android": "expo run:android",
-    "ios": "expo run:ios",
-    "validate:env": "node ./scripts/validate-env.mjs",
-    "typecheck": "tsc --noEmit"
-  },
-  "dependencies": {
-    "@react-native-async-storage/async-storage": "1.23.1",
-    "@supabase/supabase-js": "^2.49.8",
-    "crypto-js": "^4.2.0",
-    "expo": "~52.0.0",
-    "expo-application": "~6.0.0",
-    "expo-asset": "~11.0.5",
-    "expo-build-properties": "~0.13.3",
-    "expo-device": "~7.0.0",
-    "expo-location": "~18.0.0",
-    "expo-network": "~7.0.0",
-    "expo-secure-store": "~14.0.0",
-    "react": "18.3.1",
-    "react-native": "0.76.9",
-    "zustand": "^5.0.0"
-  },
-  "devDependencies": {
-    "@types/crypto-js": "^4.2.2",
-    "@types/react": "~18.3.12",
-    "typescript": "~5.7.2"
-  }
 }

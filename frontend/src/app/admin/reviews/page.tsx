@@ -11,6 +11,43 @@ import {
 
 type QueueFilter = 'all' | 'mine' | 'unassigned' | 'overdue'
 
+interface PipelineDecisionExplainability {
+  decision_reason_codes?: string[]
+  risk_tier?: string
+}
+
+interface PipelineRiskActionPack {
+  review_priority?: string
+  review_sla_minutes?: number
+  required_challenges?: string[]
+  throttle_strategy?: string
+  risk_tier?: string
+}
+
+interface PipelineFraudAnalysis {
+  requires_liveness_check?: boolean
+  requires_throttling?: boolean
+  decision_explainability?: PipelineDecisionExplainability
+  risk_action_pack?: PipelineRiskActionPack
+}
+
+interface PipelineReviewSummary {
+  decision?: string
+  decision_action?: string
+  decision_reason?: string
+  decision_reason_codes?: string[]
+  review_priority?: string
+  review_sla_minutes?: number
+  required_challenges?: string[]
+  throttle_strategy?: string
+}
+
+interface PipelineExplanation {
+  ai_summary?: string
+  review?: PipelineReviewSummary
+  fraud_analysis?: PipelineFraudAnalysis
+}
+
 interface ReviewMeta {
   assignment_state?: 'unassigned' | 'assigned' | 'in_review' | 'escalated' | 'resolved'
   assigned_reviewer_profile_id?: string
@@ -38,7 +75,7 @@ interface PayoutRecommendation {
   recommended_payout?: number; expected_payout?: number; payout_cap?: number; fraud_holdback_fh?: number
   confidence_score_c?: number; covered_weekly_income_b?: number; claim_probability_p?: number
   severity_score_s?: number; exposure_score_e?: number; outlier_uplift_u?: number; gross_premium?: number
-  explanation_json?: { ai_summary?: string }
+  explanation_json?: PipelineExplanation
 }
 interface EvidenceItem { storage_path?: string; evidence_type?: string; exif_lat?: number; exif_lng?: number; exif_timestamp?: string }
 interface DetailData { claim: ClaimRecord; payout_recommendation: PayoutRecommendation | null; evidence: EvidenceItem[] }
@@ -86,6 +123,31 @@ function formatApiError(error: unknown): string {
 function resolveClaimId(claim: Partial<ClaimRecord> | null | undefined): string | null {
   const id = String(claim?.id || claim?.claim_id || '').trim()
   return id.length > 0 ? id : null
+}
+
+function formatSnakeLabel(value: string | null | undefined): string {
+  const normalized = String(value || '').trim()
+  if (!normalized) return 'N/A'
+
+  return normalized
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase())
+}
+
+function formatReviewSla(minutes: number | null | undefined): string {
+  if (typeof minutes !== 'number' || !Number.isFinite(minutes) || minutes <= 0) {
+    return 'N/A'
+  }
+
+  if (minutes < 60) {
+    return `${minutes} min`
+  }
+
+  if (minutes % 60 === 0) {
+    return `${minutes / 60} hr`
+  }
+
+  return `${(minutes / 60).toFixed(1)} hr`
 }
 
 export default function AdminReviews() {
@@ -305,6 +367,44 @@ export default function AdminReviews() {
   const claimId = resolveClaimId(claim)
   const evidence = detailData?.evidence || []
   const explJson = pr?.explanation_json
+  const reviewSummary = explJson?.review
+  const fraudAnalysis = explJson?.fraud_analysis
+  const riskActionPack = fraudAnalysis?.risk_action_pack
+  const decisionExplainability = fraudAnalysis?.decision_explainability
+  const decisionReasonCodes = Array.from(new Set(
+    [
+      ...(Array.isArray(reviewSummary?.decision_reason_codes) ? reviewSummary?.decision_reason_codes : []),
+      ...(Array.isArray(decisionExplainability?.decision_reason_codes) ? decisionExplainability?.decision_reason_codes : []),
+    ]
+      .map((code) => String(code || '').trim())
+      .filter((code) => code.length > 0)
+  ))
+  const requiredChallenges = Array.from(new Set(
+    [
+      ...(Array.isArray(reviewSummary?.required_challenges) ? reviewSummary?.required_challenges : []),
+      ...(Array.isArray(riskActionPack?.required_challenges) ? riskActionPack?.required_challenges : []),
+    ]
+      .map((challenge) => String(challenge || '').trim())
+      .filter((challenge) => challenge.length > 0)
+  ))
+  const throttleStrategy =
+    reviewSummary?.throttle_strategy ||
+    riskActionPack?.throttle_strategy ||
+    'none'
+  const reviewPriority = reviewSummary?.review_priority || riskActionPack?.review_priority || null
+  const reviewSlaMinutes = reviewSummary?.review_sla_minutes ?? riskActionPack?.review_sla_minutes
+  const riskTier =
+    riskActionPack?.risk_tier ||
+    decisionExplainability?.risk_tier ||
+    null
+  const requiresLivenessCheck = Boolean(
+    fraudAnalysis?.requires_liveness_check ||
+    requiredChallenges.includes('selfie_liveness')
+  )
+  const requiresThrottling = Boolean(
+    fraudAnalysis?.requires_throttling ||
+    (throttleStrategy && throttleStrategy !== 'none')
+  )
   const isFraud = (pr?.fraud_holdback_fh ?? 0) > 0.30
   const reviewMeta = claim?.review_meta
   const canReviewDecision = ['submitted', 'soft_hold_verification', 'fraud_escalated_review', 'held'].includes(claim?.claim_status || '')
@@ -477,6 +577,85 @@ export default function AdminReviews() {
                   <div className="text-3xl font-bold" style={{ color: 'var(--accent)' }}>{((pr.confidence_score_c ?? 0) * 100).toFixed(0)}%</div>
                   <div className="progress-bar mt-2"><div className="progress-bar-fill" style={{ width: `${(pr.confidence_score_c ?? 0) * 100}%`, background: 'var(--accent)' }} /></div>
                 </div>
+              </div>
+            )}
+
+            {(reviewSummary || riskActionPack || decisionExplainability) && (
+              <div className="card p-5" style={{ borderLeft: '3px solid var(--warning)' }}>
+                <h3 className="text-xs font-semibold uppercase tracking-wider mb-3 flex items-center gap-2" style={{ color: 'var(--warning)' }}>
+                  <Shield size={14} /> Fraud Routing Controls
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                  <div>
+                    <p style={{ color: 'var(--text-tertiary)' }}>Decision Action</p>
+                    <p className="font-semibold mt-1" style={{ color: 'var(--text-primary)' }}>
+                      {formatSnakeLabel(reviewSummary?.decision_action || reviewSummary?.decision)}
+                    </p>
+                  </div>
+                  <div>
+                    <p style={{ color: 'var(--text-tertiary)' }}>Review Priority</p>
+                    <p className="font-semibold mt-1" style={{ color: 'var(--text-primary)' }}>
+                      {formatSnakeLabel(reviewPriority)}
+                    </p>
+                  </div>
+                  <div>
+                    <p style={{ color: 'var(--text-tertiary)' }}>Review SLA</p>
+                    <p className="font-semibold mt-1" style={{ color: 'var(--text-primary)' }}>
+                      {formatReviewSla(reviewSlaMinutes)}
+                    </p>
+                  </div>
+                  <div>
+                    <p style={{ color: 'var(--text-tertiary)' }}>Risk Tier</p>
+                    <p className="font-semibold mt-1" style={{ color: 'var(--text-primary)' }}>
+                      {formatSnakeLabel(riskTier)}
+                    </p>
+                  </div>
+                  <div>
+                    <p style={{ color: 'var(--text-tertiary)' }}>Liveness Check</p>
+                    <p className="font-semibold mt-1" style={{ color: requiresLivenessCheck ? 'var(--warning)' : 'var(--text-primary)' }}>
+                      {requiresLivenessCheck ? 'Required' : 'Not required'}
+                    </p>
+                  </div>
+                  <div>
+                    <p style={{ color: 'var(--text-tertiary)' }}>Throttling</p>
+                    <p className="font-semibold mt-1" style={{ color: requiresThrottling ? 'var(--warning)' : 'var(--text-primary)' }}>
+                      {requiresThrottling ? formatSnakeLabel(throttleStrategy) : 'None'}
+                    </p>
+                  </div>
+                </div>
+                {reviewSummary?.decision_reason && (
+                  <div className="mt-3 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Decision reason:</span> {reviewSummary.decision_reason}
+                  </div>
+                )}
+                {decisionReasonCodes.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-[10px] uppercase tracking-wider mb-2" style={{ color: 'var(--text-tertiary)' }}>
+                      Decision reason codes
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {decisionReasonCodes.map((code) => (
+                        <span key={code} className="badge-info" title={code}>
+                          {code}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {requiredChallenges.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-[10px] uppercase tracking-wider mb-2" style={{ color: 'var(--text-tertiary)' }}>
+                      Required verification challenges
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {requiredChallenges.map((challenge) => (
+                        <span key={challenge} className="badge-warning" title={challenge}>
+                          {formatSnakeLabel(challenge)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

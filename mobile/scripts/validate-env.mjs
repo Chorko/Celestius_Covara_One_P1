@@ -44,11 +44,12 @@ function loadLocalEnvFile() {
 loadLocalEnvFile();
 
 const required = [
-  "EXPO_PUBLIC_API_BASE_URL",
   "EXPO_PUBLIC_SUPABASE_URL",
   "EXPO_PUBLIC_SUPABASE_ANON_KEY",
   "EXPO_PUBLIC_DEVICE_CONTEXT_HMAC_SECRET",
 ];
+
+const recommended = ["EXPO_PUBLIC_API_BASE_URL"];
 
 const missing = required.filter((name) => {
   const value = process.env[name];
@@ -61,6 +62,20 @@ if (missing.length > 0) {
     console.error(`- ${name}`);
   }
   process.exit(1);
+}
+
+const missingRecommended = recommended.filter((name) => {
+  const value = process.env[name];
+  return !value || value.trim().length === 0;
+});
+
+if (missingRecommended.length > 0) {
+  console.warn(
+    "Warning: EXPO_PUBLIC_API_BASE_URL is not set. Falling back to the default Render backend URL.",
+  );
+  for (const name of missingRecommended) {
+    console.warn(`- ${name}`);
+  }
 }
 
 console.log("Mobile environment validation passed.");

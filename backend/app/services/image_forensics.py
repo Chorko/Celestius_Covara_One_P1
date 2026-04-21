@@ -42,6 +42,14 @@ EDITOR_SOFTWARE = [
     "paint.net",
 ]
 
+C2PA_BYTE_MARKERS = [
+    b"c2pa",
+    b"contentcredentials",
+    b"content credentials",
+    b"urn:c2pa",
+    b"assertionstore",
+]
+
 
 def check_exif_completeness(exif_metadata: dict) -> dict:
     """
@@ -271,6 +279,35 @@ def check_camera_device_consistency(
 # ── AI-Generated Image Detection (SynthID + Multi-Model) ────────────────
 
 
+def check_c2pa_content_credentials(file_bytes: bytes | None) -> dict:
+    """
+    Best-effort check for embedded C2PA Content Credentials markers.
+    Many AI image pipelines (for example, DALL-E/OpenAI) embed provenance
+    metadata that can survive re-encoding.
+    """
+    if not file_bytes:
+        return {
+            "c2pa_metadata_found": False,
+            "marker": None,
+            "risk_level": "uncertain",
+        }
+
+    blob = file_bytes.lower()
+    for marker in C2PA_BYTE_MARKERS:
+        if marker in blob:
+            return {
+                "c2pa_metadata_found": True,
+                "marker": marker.decode("ascii", errors="ignore"),
+                "risk_level": "high",
+            }
+
+    return {
+        "c2pa_metadata_found": False,
+        "marker": None,
+        "risk_level": "low",
+    }
+
+
 def check_ai_generation(exif_metadata: dict, file_bytes: bytes = None) -> dict:
     """
     Detect AI-generated images using multiple signals:
@@ -345,7 +382,16 @@ def check_ai_generation(exif_metadata: dict, file_bytes: bytes = None) -> dict:
             result["risk_level"] = "high"
             return result
 
-    # ── Signal 3: Gemini Vision analysis (if file_bytes available) ──
+    # ── Signal 3: C2PA Content Credentials (if bytes available) ──
+    c2pa_result = check_c2pa_content_credentials(file_bytes)
+    if c2pa_result["c2pa_metadata_found"]:
+        result["c2pa_metadata_found"] = True
+        result["ai_generated_probability"] = max(
+            result["ai_generated_probability"], 0.9
+        )
+        result["ai_artifacts_found"].append("c2pa_content_credentials")
+
+    # ── Signal 4: Gemini Vision analysis (if file_bytes available) ──
     gemini_key = os.getenv("GEMINI_API_KEY", "")
     if file_bytes and gemini_key:
         try:
@@ -410,6 +456,7 @@ def check_ai_generation(exif_metadata: dict, file_bytes: bytes = None) -> dict:
             gemini_result = json_mod.loads(text)
 
             ai_prob = float(gemini_result.get("ai_probability", 0.0))
+            ai_prob = max(0.0, min(1.0, ai_prob))
             result["ai_generated_probability"] = max(
                 result["ai_generated_probability"], ai_prob
             )
@@ -419,8 +466,10 @@ def check_ai_generation(exif_metadata: dict, file_bytes: bytes = None) -> dict:
             result["detection_model"] = "gemini-2.0-flash"
 
             artifacts = gemini_result.get("artifacts", [])
-            if artifacts:
-                result["ai_artifacts_found"].extend(artifacts)
+            if isinstance(artifacts, list):
+                result["ai_artifacts_found"].extend(
+                    [str(item) for item in artifacts if item]
+                )
 
             # If SynthID is detected, it's definitively AI-generated
             if result["synthid_detected"]:
@@ -539,6 +588,16 @@ def analyze_evidence_integrity(
         flags.append("gps_precision_suspicious")
     if camera_device.get("consistent") is False:
         flags.append("camera_device_mismatch")
+    if ai_result.get("synthid_detected"):
+        flags.append("synthid_detected")
+    if ai_result.get("c2pa_metadata_found"):
+        flags.append("c2pa_content_credentials_detected")
+
+    ai_prob = float(ai_result.get("ai_generated_probability", 0.0) or 0.0)
+    if ai_prob >= 0.8:
+        flags.append("ai_generated_image_high_confidence")
+    elif ai_prob >= 0.5:
+        flags.append("ai_generated_image_medium_confidence")
 
     return {
         "integrity_score": composite,
@@ -551,6 +610,7 @@ def analyze_evidence_integrity(
             "timestamp_chain": timestamp_chain,
             "gps_precision": gps_precision,
             "camera_device": camera_device,
+            "ai_generation": ai_result,
         },
         "score_breakdown": {
             name: round(score, 4) for name, score, _ in score_parts

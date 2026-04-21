@@ -9,7 +9,7 @@ Handles:
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -50,6 +50,9 @@ logger = logging.getLogger("covara.claims")
 
 class ManualClaimRequest(BaseModel):
     claim_reason: str
+    place: str | None = None
+    pincode: str | None = None
+    city: str | None = None
     stated_lat: float | None = None
     stated_lng: float | None = None
     trigger_event_id: str | None = None
@@ -195,6 +198,179 @@ def _normalize_trust_adjustment_payload(raw_payload: dict | None) -> dict[str, A
         }
     except (KeyError, TypeError, ValueError):
         return None
+
+
+def _resolve_worker_zone_id(worker_context: dict) -> str | None:
+    zone_id = worker_context.get("zone_id") or worker_context.get(
+        "preferred_zone_id"
+    )
+    if zone_id:
+        return str(zone_id)
+
+    zones_obj = worker_context.get("zones")
+    if isinstance(zones_obj, dict):
+        nested_zone_id = zones_obj.get("id") or zones_obj.get("zone_id")
+        if nested_zone_id:
+            return str(nested_zone_id)
+
+    return None
+
+
+def _build_validated_incidents(
+    trigger_context: dict | None,
+    zone_id: str | None,
+) -> list[dict]:
+    if not trigger_context or not zone_id:
+        return []
+
+    trigger_family = trigger_context.get("trigger_family")
+    if not trigger_family:
+        return []
+
+    incident_start = trigger_context.get("started_at") or _now_iso()
+    incident_end = trigger_context.get("ended_at") or trigger_context.get(
+        "resolved_at"
+    )
+
+    return [
+        {
+            "zone_id": zone_id,
+            "trigger_family": trigger_family,
+            "incident_start": incident_start,
+            "incident_end": incident_end,
+            "validation_source": trigger_context.get("source_type")
+            or "trigger_event",
+            "cluster_spike_detected": False,
+        }
+    ]
+
+
+def _load_zone_claim_batch_context(
+    sb,
+    zone_id: str | None,
+) -> tuple[int, list[dict]]:
+    if not zone_id:
+        return 0, []
+
+    one_hour_ago = (
+        datetime.now(timezone.utc) - timedelta(hours=1)
+    ).isoformat()
+
+    try:
+        recent_claims = (
+            sb.table("manual_claims")
+            .select("worker_profile_id, stated_lat, stated_lng, claimed_at")
+            .gte("claimed_at", one_hour_ago)
+            .execute()
+            .data
+            or []
+        )
+    except Exception as exc:
+        logger.warning(
+            "Unable to load recent claim batch context for zone %s: %s",
+            zone_id,
+            exc,
+        )
+        return 0, []
+
+    worker_ids = sorted(
+        {
+            row.get("worker_profile_id")
+            for row in recent_claims
+            if row.get("worker_profile_id")
+        }
+    )
+    if not worker_ids:
+        return 0, []
+
+    try:
+        worker_rows = (
+            sb.table("worker_profiles")
+            .select("profile_id, zone_id, preferred_zone_id")
+            .in_("profile_id", worker_ids)
+            .execute()
+            .data
+            or []
+        )
+    except Exception as exc:
+        logger.warning(
+            "Unable to resolve worker zones for claim batch context: %s",
+            exc,
+        )
+        return 0, []
+
+    zone_worker_ids = {
+        row.get("profile_id")
+        for row in worker_rows
+        if str(row.get("zone_id") or row.get("preferred_zone_id") or "")
+        == str(zone_id)
+    }
+
+    zone_rows = [
+        row
+        for row in recent_claims
+        if row.get("worker_profile_id") in zone_worker_ids
+    ]
+
+    recent_claims_batch = [
+        {
+            "stated_lat": row.get("stated_lat"),
+            "stated_lng": row.get("stated_lng"),
+            "claimed_at": row.get("claimed_at"),
+        }
+        for row in zone_rows
+        if row.get("stated_lat") is not None
+        and row.get("stated_lng") is not None
+        and row.get("claimed_at")
+    ]
+
+    return len(zone_rows), recent_claims_batch
+
+
+def _load_worker_zone_activity_context(
+    sb,
+    worker_profile_id: str,
+) -> tuple[dict[str, int], str | None, str | None]:
+    thirty_days_ago = (
+        datetime.now(timezone.utc) - timedelta(days=30)
+    ).isoformat()
+
+    try:
+        shift_rows = (
+            sb.table("worker_shifts")
+            .select("zone_id, shift_start")
+            .eq("worker_profile_id", worker_profile_id)
+            .gte("shift_start", thirty_days_ago)
+            .order("shift_start", desc=True)
+            .execute()
+            .data
+            or []
+        )
+    except Exception as exc:
+        logger.warning(
+            "Unable to load worker zone activity context for %s: %s",
+            worker_profile_id,
+            exc,
+        )
+        return {}, None, None
+
+    zone_counts: dict[str, int] = {}
+    last_zone_activity_ts: str | None = None
+    last_zone_activity_zone_id: str | None = None
+
+    for row in shift_rows:
+        zone_value = row.get("zone_id")
+        if zone_value is None:
+            continue
+
+        zone_id = str(zone_value)
+        zone_counts[zone_id] = zone_counts.get(zone_id, 0) + 1
+
+        if last_zone_activity_ts is None:
+            last_zone_activity_ts = row.get("shift_start")
+            last_zone_activity_zone_id = zone_id
+
+    return zone_counts, last_zone_activity_ts, last_zone_activity_zone_id
 
 
 @router.post("")
@@ -353,6 +529,34 @@ async def submit_claim(
         )
         trigger_context = tg_resp.data  # type: ignore
 
+    worker_zone_id = _resolve_worker_zone_id(worker_context)
+    if not worker_zone_id and trigger_context:
+        trigger_zone_id = trigger_context.get("zone_id")
+        if trigger_zone_id:
+            worker_zone_id = str(trigger_zone_id)
+    if worker_zone_id and not worker_context.get("zone_id"):
+        worker_context["zone_id"] = worker_zone_id
+
+    zone_counts, last_zone_ts, last_zone_id = _load_worker_zone_activity_context(
+        sb,
+        str(user["id"]),
+    )
+    if zone_counts:
+        worker_context["zone_delivery_counts"] = zone_counts
+    if last_zone_ts:
+        worker_context["last_zone_activity_timestamp"] = last_zone_ts
+    if last_zone_id:
+        worker_context["last_zone_activity_zone_id"] = last_zone_id
+
+    zone_claims_last_hour, recent_claims_batch = _load_zone_claim_batch_context(
+        sb,
+        worker_zone_id,
+    )
+    validated_incidents = _build_validated_incidents(
+        trigger_context,
+        worker_zone_id,
+    )
+
     # Process Real Evidence if provided
     evidence_records = []
     if body.evidence_url:
@@ -370,6 +574,18 @@ async def submit_claim(
                     "exif_lat": exif_data.get("exif_lat"),
                     "exif_lng": exif_data.get("exif_lng"),
                     "exif_timestamp": exif_data.get("exif_timestamp"),
+                    "datetime_digitized": exif_data.get("datetime_digitized"),
+                    "modify_date": exif_data.get("modify_date"),
+                    "camera_model": exif_data.get("camera_model"),
+                    "camera_make": exif_data.get("camera_make"),
+                    "software": exif_data.get("software"),
+                    "focal_length": exif_data.get("focal_length"),
+                    "exposure_time": exif_data.get("exposure_time"),
+                    "iso": exif_data.get("iso"),
+                    "has_thumbnail": exif_data.get("has_thumbnail"),
+                    "gps_decimal_places": exif_data.get("gps_decimal_places"),
+                    "exif_field_count": exif_data.get("exif_field_count"),
+                    "_file_bytes": img_res.content,
                 }
             )
         except Exception as e:
@@ -394,10 +610,18 @@ async def submit_claim(
         claim_mode="manual",
         evidence_records=evidence_records,
         device_context=device_context,
+        zone_claims_last_hour=zone_claims_last_hour,
+        recent_claims_batch=recent_claims_batch,
+        validated_incidents=validated_incidents,
         claim_record={
             "stated_lat": body.stated_lat,
             "stated_lng": body.stated_lng,
             "claim_reason": body.claim_reason,
+            "place": body.place,
+            "pincode": body.pincode,
+            "zone_id": worker_zone_id,
+            "city": body.city or worker_context.get("city"),
+            "claimed_at": _now_iso(),
             "device_id": device_context.get("hardware_id"),
             "client_ip": request.client.host if request.client else None,
         },
@@ -519,8 +743,15 @@ async def submit_claim(
 
     # Store claim evidence in DB (outside transaction; can be retried independently).
     for ev in evidence_records:
-        ev["claim_id"] = claim_id
-        sb.table("claim_evidence").insert(ev).execute()
+        insert_payload = {
+            "claim_id": claim_id,
+            "evidence_type": ev.get("evidence_type"),
+            "storage_path": ev.get("storage_path"),
+            "exif_lat": ev.get("exif_lat"),
+            "exif_lng": ev.get("exif_lng"),
+            "exif_timestamp": ev.get("exif_timestamp"),
+        }
+        sb.table("claim_evidence").insert(insert_payload).execute()
 
     claim_resp = (
         sb.table("manual_claims")
