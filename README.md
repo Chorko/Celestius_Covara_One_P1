@@ -1424,8 +1424,8 @@ cd frontend && npm install && npm run dev
 ### 📱 Mobile App Download (Hosted)
 
 - Download page: `https://covara-one.vercel.app/download`
-- Open Expo build page: `https://expo.dev/accounts/chorkos-organization/projects/covara-one/builds/3d7aabe1-fd0c-4be6-924f-290ad177d897`
-- Current direct Android APK: `https://expo.dev/artifacts/eas/8Ajw6ft945LYhX1Dgia6PD.apk`
+- Open Expo build page: `https://expo.dev/accounts/chorkos-organization/projects/covara-one/builds/7537fae6-59ae-44a6-a4f7-cbc2c86aaeb7`
+- Current direct Android APK: `https://expo.dev/artifacts/eas/ftwL8v1NRSeKn99eR1B2xV.apk`
 
 The website home/login screen includes a **Download Mobile App (Android APK)** button that routes users to `/download`.
 
