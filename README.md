@@ -13,6 +13,9 @@
 
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)
 ![Next.js](https://img.shields.io/badge/Next.js_16-000000?style=flat-square&logo=nextdotjs&logoColor=white)
+![React Native](https://img.shields.io/badge/React_Native-61DAFB?style=flat-square&logo=react&logoColor=black)
+![Expo](https://img.shields.io/badge/Expo_SDK_55-000020?style=flat-square&logo=expo&logoColor=white)
+![Gradle](https://img.shields.io/badge/Gradle-02303A?style=flat-square&logo=gradle&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=flat-square&logo=supabase&logoColor=black)
 ![Redis](https://img.shields.io/badge/Redis-Cache-DC382D?style=flat-square&logo=redis&logoColor=white)
 ![scikit-learn](https://img.shields.io/badge/scikit--learn-DBSCAN-F7931E?style=flat-square&logo=scikitlearn&logoColor=white)
@@ -475,11 +478,12 @@ flowchart TD
 | Layer | Technology | Status |
 |:-----:|:----------:|:------:|
 | **Frontend** | Next.js 16, Tailwind CSS v4, Recharts, Zustand | ✅ Live |
+| **Mobile** | React Native (Expo SDK 55), TypeScript, EAS Build (Gradle) | ✅ APK Live |
 | **Backend** | FastAPI, Python 3.12, fastapi-cache2 + Redis | ✅ Live |
 | **Auth** | Supabase Auth (Google OAuth + email), Edge SSR Middleware | ✅ Live |
 | **Database** | Supabase Postgres, 14 tables, Row-Level Security | ✅ Live |
 | **ML** | scikit-learn Random Forest (live predict_proba), DBSCAN | ✅ Live |
-| **Infrastructure** | Docker multi-stage, GitHub Actions CI/CD, K8s manifests, Render | ✅ Deployed |
+| **Infrastructure** | Docker multi-stage, GitHub Actions CI/CD, K8s manifests, Render + Vercel | ✅ Deployed |
 | **Payments** | Stripe Test Mode (61 webhook events), provider-agnostic adapter | ✅ Test Mode |
 
 </div>
@@ -1420,8 +1424,8 @@ cd frontend && npm install && npm run dev
 ### 📱 Mobile App Download (Hosted)
 
 - Download page: `https://covara-one.vercel.app/download`
-- Open Expo build page: `https://expo.dev/accounts/chorkos-organization/projects/covara-one/builds/e8b6a8e7-bb15-48f4-b962-35824fa79fbb`
-- Current direct Android APK: `https://expo.dev/artifacts/eas/uJHrzKSycbBxoTVhNotdM2.apk`
+- Open Expo build page: `https://expo.dev/accounts/chorkos-organization/projects/covara-one/builds/3d7aabe1-fd0c-4be6-924f-290ad177d897`
+- Current direct Android APK: `https://expo.dev/artifacts/eas/8Ajw6ft945LYhX1Dgia6PD.apk`
 
 The website home/login screen includes a **Download Mobile App (Android APK)** button that routes users to `/download`.
 
@@ -1502,9 +1506,19 @@ Celestius_DEVTrails_P1/
 ├── frontend/
 │   ├── src/app/
 │   │   ├── worker/                  ← Dashboard, Claims, Pricing pages
-│   │   └── admin/                   ← Dashboard, Reviews, Triggers, Users pages
+│   │   ├── admin/                   ← Dashboard, Reviews, Triggers, Users pages
+│   │   └── download/               ← Mobile app download + redirect routes
 │   ├── middleware.ts                 ← Edge SSR auth guard
 │   └── Dockerfile                   ← Multi-stage Node 22 build
+├── mobile/
+│   ├── App.tsx                      ← Expo entry point
+│   ├── src/
+│   │   ├── screens/                 ← Claim submission, Admin overview, Auth gate
+│   │   ├── services/                ← Signed device-context + claim service
+│   │   └── store/                   ← Zustand session state
+│   ├── app.json                     ← Expo config (SDK 55, com.covara.worker)
+│   ├── eas.json                     ← EAS Build profiles (preview APK / production AAB)
+│   └── android/                     ← Generated Gradle project (expo prebuild)
 ├── ml/
 │   ├── rf_model.joblib              ← Trained Random Forest (live inference)
 │   ├── stress_test_simulator.py     ← 3-day monsoon simulation (10,000 workers)

@@ -8,18 +8,7 @@
 - Documentation deck: [Google Slides Documentation](https://docs.google.com/presentation/d/1GX8-mwHaDpO9MCyFvRNqrhixL99dmMnbM9KoQcwiBs0/edit?usp=sharing)
 
 ---
-
-## Engineering Snapshot (2026-04-09)
-
-- Added event reliability runbook docs at `docs/EVENT_BUS_KAFKA_ROADMAP.md`.
-- Added signed mobile telemetry contract at `docs/MOBILE_DEVICE_CONTEXT_CONTRACT.md`.
-- Reliability hardening now includes outbox dead-letter + consumer dead-letter operational workflows with admin endpoints.
-- Added release/deployment hardening runbook at `docs/DEPLOYMENT_RELEASE_RUNBOOK.md`.
-- Added payout/event dead-letter recovery runbook at `docs/PAYOUT_EVENT_REQUEUE_RUNBOOK.md`.
-- Added one-pass release verification checklist at `docs/RELEASE_VERIFICATION_CHECKLIST.md`.
-- Trust lifecycle auditability is now live: trust-score history persistence and worker/admin history API visibility.
-
-### New Docs Added
+## Core Ops Docs
 
 - `docs/EVENT_BUS_KAFKA_ROADMAP.md` - event bus evolution, Kafka rollout stages, operational defaults, and safety notes.
 - `docs/MOBILE_DEVICE_CONTEXT_CONTRACT.md` - signed header contract, replay controls, key rotation, and compatibility requirements.
@@ -35,7 +24,7 @@
 |-------|--------|-------|
 | Folder structure & README index | ✅ Current | You are reading it |
 | Architecture diagrams (Mermaid) | ✅ Present | Inline in READMEs + standalone `.mmd` files in `docs/diagrams/` |
-| Architecture diagram PNGs | ✅ Present | 5 PNGs in `docs/assets/architecture/` |
+| Architecture diagram PNGs | ❌ Removed | PNG snapshots were removed; Mermaid remains the canonical source |
 | Data-science chart PNGs | ✅ Present | 2 PNGs in `docs/assets/insurance/` |
 
 ---
@@ -60,11 +49,10 @@ docs/
 │   ├── trigger-to-claim-flow.mmd
 │   └── fraud-detection-pipeline.mmd
 ├── assets/
-│   ├── architecture/             ← 5 architecture diagram PNGs
 │   └── insurance/                ← 2 formula/EDA chart PNGs
 ```
 
-> All diagram and asset directories are populated. Mermaid diagrams are also embedded inline in the module READMEs.
+> Mermaid diagrams are embedded inline in module READMEs, with source `.mmd` files under `docs/diagrams/`.
 
 ---
 

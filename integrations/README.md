@@ -4,14 +4,6 @@
 
 ---
 
-## Engineering Snapshot (2026-04-05)
-
-- Added broker-agnostic event bus runtime with optional Kafka backend (`EVENT_BUS_BACKEND=kafka`) and durable outbox relay.
-- Introduced async consumer pipeline for claim-side effects, with consumer-ledger idempotency and dead-letter recovery operations.
-- Added admin ops endpoints for event outbox and consumer dead-letter triage/requeue to improve operational visibility.
-
----
-
 ## Implementation Status
 
 | Component | Status |
@@ -21,7 +13,7 @@
 | OpenWeather API (primary weather) | ✅ Live (real API key) |
 | CPCB AQI API (data.gov.in) | ✅ Live (real API key, 511 stations) |
 | TomTom Traffic Flow + Routing | ✅ Live (real API key, route plausibility wired into fraud engine) |
-| KYC — Sandbox.co.in | ✅ Implemented (Aadhaar OTP, PAN, Bank verify) |
+| KYC provider adapter | ✅ Implemented (Postman Mock active in current deployment; Sandbox-compatible service retained) |
 | Twilio WhatsApp + OTP | ✅ Implemented (7 templates, sandboxed) |
 | Gemini API integration | ✅ Implemented |
 | Payment gateway mock service | ✅ Implemented (`services/payment_mock.py` — async UPI simulation, RazorpayX-format transaction IDs) |
@@ -36,7 +28,7 @@
 | 2 | **CPCB AQI API** | Air Quality | data.gov.in (OGD) | **Live** | 511 stations; T5–T6 AQI triggers |
 | 3 | **TomTom Traffic Flow** | Traffic | TomTom | **Live** | Real-time speed + delay; T12 traffic trigger *(Planned: Google Maps Distance Matrix API)* |
 | 4 | **TomTom Routing API** | Anti-Spoofing | TomTom | **Live** | Route plausibility check in Layer 2 of fraud engine *(Planned: Google Maps Roads API)* |
-| 5 | **Sandbox.co.in KYC** | Identity | Sandbox.co.in | **Implemented** | Aadhaar OTP, PAN verification, bank account verification |
+| 5 | **KYC Provider Adapter** | Identity | Postman Mock (active) / Sandbox-compatible | **Implemented** | PAN and bank verification on active deployment, with Sandbox-compatible service path retained |
 | 6 | **Twilio Verify** | OTP | Twilio | **Implemented** | Phone number OTP for auth + KYC confirmation |
 | 7 | **Twilio WhatsApp** | Notifications | Twilio | **Implemented** | 7 templates: trigger alerts, claim updates, payout confirmation |
 | 8 | **Gemini AI** | Risk scoring | Google Gemini | **Implemented** | AI-assisted claim narrative generation |
@@ -65,7 +57,7 @@ Platform-specific APIs (delivery order volume, outage heartbeats, GPS traces) ar
 ### How mocks are built
 - Grounded in **realistic parameters** — e.g., traffic delay percentages based on typical urban congestion ranges
 - Bounded by **public threshold values** — rain mocks stay within IMD bands, AQI mocks within CPCB categories
-- Generated through the **synthetic data endpoint** — `GET /mock-data/generate` produces consistent worker + trigger datasets
+- Generated through the **synthetic data endpoint** — `POST /simulate/mock-data/generate` produces consistent worker + trigger datasets
 - **Documented with assumptions** — every mock value has a documented range and rationale
 
 ### What is NOT mocked
@@ -151,6 +143,10 @@ Platform-specific APIs (delivery order volume, outage heartbeats, GPS traces) ar
 - **Output:** RazorpayX-format response: `transaction_id`, `status` (`processed`/`failed`), `amount`, `currency`, `processed_at`, `gateway`.
 - **Failure simulation:** If `upi_id` contains `"fail"`, returns `status = "failed"` — enabling negative-path testing without a live gateway.
 - **Consumer:** Claim pipeline post-approval stage, worker dashboard payout confirmation.
+
+### KYC Provider Adapter (Postman Mock active; Sandbox-compatible)
+- **Current deployment:** Postman Mock server for stable dev/test behavior.
+- **Code path:** Service layer remains compatible with Sandbox-style payloads and can be switched through env configuration.
 
 ### Bank Verification (Mock)
 - **Purpose:** Simulate bank account verification

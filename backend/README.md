@@ -4,17 +4,6 @@
 
 ---
 
-## Engineering Snapshot (2026-04-05)
-
-- Added reliability schema path with migrations `10` to `13` (rewards ledger, durable outbox, transactional claim+outbox persistence RPC, and consumer dead-letter status support).
-- Introduced broker-agnostic event bus package (`backend/app/services/event_bus/`) with in-memory + Kafka adapters, outbox relay service, and consumer idempotency helpers.
-- Added admin operations router `backend/app/routers/events.py` with outbox and consumer status/dead-letter/requeue endpoints.
-- Enabled background outbox relay loop and optional Kafka consumer loop in app lifespan, configured through `EVENT_*` environment flags.
-- Hardened request layer with signed mobile device-context verification, rate limits (`slowapi`), and explicit OWASP security headers.
-- Added focused reliability tests for consumers, outbox ops, Kafka consumer runner, and events-router consumer endpoints.
-
----
-
 ## Implementation Status
 
 | Component | Status |
@@ -54,7 +43,7 @@
 | ApiProviderPool (round-robin + LRU cache) | ✅ Implemented |
 | Docker multi-stage build | ✅ Implemented |
 | GitHub Actions CI/CD (3-job pipeline) | ✅ Implemented |
-| Automated test suite (65 smoke validations, 100% pass) | ✅ Implemented |
+| Automated test suite (smoke + unit/integration coverage) | ✅ Implemented |
 | Redis caching layer (`fastapi-cache2`) | ✅ Implemented (TTL decorators on `/triggers/live`, `/analytics/summary`, `/zones/`, `/policies/quote`) |
 | ML live inference | ✅ Implemented (`get_claim_probability()` — lazy-loads `severity_rf.joblib`, falls back to p=0.15 if model missing) |
 | DBSCAN cluster intelligence (Layer 4) | ✅ Implemented (`sklearn.cluster.DBSCAN` on lat/lng/timestamp batch) |

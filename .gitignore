@@ -104,6 +104,27 @@ mobile/test_view.txt
 mobile/view_output.txt
 
 # ==========================
+# Mobile / Android / Gradle
+# ==========================
+# Generated native project (recreated via `npx expo prebuild`)
+mobile/android/.gradle/
+mobile/android/.kotlin/
+mobile/android/build/
+mobile/android/app/build/
+mobile/android/app/.cxx/
+mobile/android/local.properties
+mobile/.idea/
+
+# Android build outputs
+*.apk
+*.aab
+
+# ==========================
+# PowerShell artifacts
+# ==========================
+$null
+
+# ==========================
 # Generated / Large assets
 # ==========================
 *.csv
