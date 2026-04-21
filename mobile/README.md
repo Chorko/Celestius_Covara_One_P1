@@ -1,13 +1,17 @@
-# Covara Worker Mobile (Implementation Start)
+# Covara Worker Mobile
 
-This package is the mobile implementation kickoff for signed claim submission.
+This package contains the mobile app implementation for signed claim submission and role-aware session gating.
 
 ## Current scope in this commit
 
 - React Native Expo app scaffold.
+- Supabase-backed session bootstrap with role normalization (`worker` / `insurer_admin`).
+- Auth gate, onboarding-required, and KYC-pending screens wired in navigator.
 - Signed device-context pipeline compatible with backend contract.
 - Claim submission service that sends signed telemetry headers to `POST /claims`.
-- Minimal worker-facing screen to submit a signed claim.
+- Worker claim screen with live location capture plus evidence-photo attach/upload to `claim-evidence`.
+- Uploaded `evidence_url` now flows through backend EXIF + Gemini/SynthID + C2PA fraud checks.
+- Admin overview screen for insurer-admin session visibility.
 
 ## Prerequisites
 
@@ -60,6 +64,29 @@ npx eas-cli@latest build:list --limit 10 --json
 
 If the shell prompt already ends in `.../mobile`, do not run `cd mobile` again.
 
+## Install Android APK (Android Studio)
+
+Use the built APK directly with Android Studio or `adb`.
+
+1. Get the latest finished Android build metadata:
+
+```bash
+cd mobile
+npx eas-cli@latest build:list --platform android --status finished --limit 1 --json
+```
+
+2. Copy `artifacts.buildUrl` from the JSON output and download the APK locally.
+3. Start your emulator from Android Studio Device Manager.
+4. Install the APK by dragging it onto the emulator window.
+
+Optional package verification:
+
+```powershell
+adb shell pm list packages | findstr com.covara.worker
+```
+
+If you need ad-hoc helper scripts, keep them under `../TEMP_WILL_BE_DELETED/` instead of `mobile/scripts/`.
+
 ## Security notes
 
 - Header/signature behavior follows
@@ -73,9 +100,10 @@ If the shell prompt already ends in `.../mobile`, do not run `cd mobile` again.
 
 - Root/jailbreak and advanced emulator checks are placeholders until native
   bridges are added.
-- Full auth screens and offline queueing are not complete yet.
-- UI is functional but intentionally minimal while core security path is being
-  wired first.
+- Full mobile parity with web worker pages (`/worker/rewards`, `/worker/pricing`,
+  richer dashboard analytics) is not complete yet.
+- Offline queueing is not complete yet.
+- UI is functional and security-first; broader navigation depth is still planned.
 
 ## April 2026 Repo Update Addendum
 
