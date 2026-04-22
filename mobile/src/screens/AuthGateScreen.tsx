@@ -11,21 +11,25 @@ import {
 import { theme } from "../theme/tokens";
 
 interface AuthGateScreenProps {
-  manualToken: string;
+  email: string;
+  password: string;
   errorMessage: string | null;
   loading: boolean;
-  onChangeManualToken: (value: string) => void;
+  onChangeEmail: (value: string) => void;
+  onChangePassword: (value: string) => void;
+  onSignIn: () => void;
   onTrySupabaseSession: () => void;
-  onUseManualToken: () => void;
 }
 
 export function AuthGateScreen({
-  manualToken,
+  email,
+  password,
   errorMessage,
   loading,
-  onChangeManualToken,
+  onChangeEmail,
+  onChangePassword,
+  onSignIn,
   onTrySupabaseSession,
-  onUseManualToken,
 }: AuthGateScreenProps) {
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -34,40 +38,53 @@ export function AuthGateScreen({
         <Text style={styles.subtitle}>Role-aware mobile flow aligned with Covara architecture.</Text>
 
         <View style={styles.card}>
-          <Text style={styles.heading}>Session Access</Text>
+          <Text style={styles.heading}>Sign In</Text>
           <Text style={styles.copy}>
-            Continue with your active Supabase session, or paste a bearer token for test flows.
+            Use any valid demo account email and password to continue.
           </Text>
 
           {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
 
-          <TouchableOpacity
-            style={[styles.primaryButton, loading ? styles.buttonDisabled : undefined]}
-            disabled={loading}
-            onPress={onTrySupabaseSession}
-          >
-            <Text style={styles.primaryButtonText}>
-              {loading ? "Checking session..." : "Use active Supabase session"}
-            </Text>
-          </TouchableOpacity>
-
-          <Text style={styles.label}>Manual token override</Text>
+          <Text style={styles.label}>Email</Text>
           <TextInput
             style={styles.input}
-            placeholder="Paste access token"
+            placeholder="you@example.com"
             placeholderTextColor="#8EA79B"
-            value={manualToken}
-            onChangeText={onChangeManualToken}
+            value={email}
+            onChangeText={onChangeEmail}
+            keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
           />
 
+          <Text style={styles.label}>Password</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Enter password"
+            placeholderTextColor="#8EA79B"
+            value={password}
+            onChangeText={onChangePassword}
+            autoCapitalize="none"
+            autoCorrect={false}
+            secureTextEntry
+          />
+
+          <TouchableOpacity
+            style={[styles.primaryButton, loading ? styles.buttonDisabled : undefined]}
+            disabled={loading}
+            onPress={onSignIn}
+          >
+            <Text style={styles.primaryButtonText}>
+              {loading ? "Signing in..." : "Continue"}
+            </Text>
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={[styles.secondaryButton, loading ? styles.buttonDisabled : undefined]}
             disabled={loading}
-            onPress={onUseManualToken}
+            onPress={onTrySupabaseSession}
           >
-            <Text style={styles.secondaryButtonText}>Continue with token</Text>
+            <Text style={styles.secondaryButtonText}>Use active session</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

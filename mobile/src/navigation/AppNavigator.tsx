@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { StatusBar } from "react-native";
 import { fetchAuthMe, fetchWorkerProfile, type MobileRole } from "../services/api/session";
 import { HttpRequestError } from "../services/api/http";
+import { getMobileEnv } from "../config/env";
 import { getActiveAccessToken, getSupabaseClient } from "../services/supabase/client";
 import {
   useUserStore,
@@ -73,7 +74,8 @@ export function AppNavigator() {
     logout,
   } = useUserStore();
 
-  const [manualToken, setManualToken] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [isResolvingSession, setIsResolvingSession] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -84,7 +86,42 @@ export function AppNavigator() {
       setAuthError(null);
 
       try {
-        const token = tokenOverride?.trim() || (await getActiveAccessToken());
+        const env = getMobileEnv();
+        let token = tokenOverride?.trim() || (await getActiveAccessToken());
+        let tokenHint = "Sign in with your email and password.";
+
+        if (!token && env.autoLoginEnabled) {
+          if (env.defaultBearerToken) {
+            token = env.defaultBearerToken;
+          } else {
+            const profileEmail =
+              env.autoLoginProfile === "admin"
+                ? env.autoLoginAdminEmail
+                : env.autoLoginWorkerEmail;
+            const profilePassword =
+              env.autoLoginProfile === "admin"
+                ? env.autoLoginAdminPassword
+                : env.autoLoginWorkerPassword;
+            const resolvedEmail = profileEmail || env.autoLoginEmail;
+            const resolvedPassword = profilePassword || env.autoLoginPassword;
+
+            if (!resolvedEmail || !resolvedPassword) {
+              tokenHint =
+                "Auto login is enabled but credentials are missing. Sign in with your email and password.";
+            } else {
+            const { data, error } = await getSupabaseClient().auth.signInWithPassword({
+                email: resolvedEmail,
+                password: resolvedPassword,
+            });
+
+            if (error) {
+              tokenHint = `Auto login failed: ${error.message}. Sign in with your email and password.`;
+            } else {
+              token = data.session?.access_token ?? null;
+            }
+            }
+          }
+        }
 
         if (!token) {
           setSessionSnapshot({
@@ -95,6 +132,10 @@ export function AppNavigator() {
             accessToken: null,
           });
           setKyc(null);
+          setAuthError(
+            "No active Supabase session found on this device. " +
+            tokenHint
+          );
           return;
         }
 
@@ -160,17 +201,46 @@ export function AppNavigator() {
     } finally {
       logout();
       setAuthError(null);
-      setManualToken("");
     }
   }
 
-  function retryWithManualToken(): void {
-    if (!manualToken.trim()) {
-      setAuthError("Paste a bearer token before continuing.");
+  async function signInWithEmailPassword(): Promise<void> {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail || !password) {
+      setAuthError("Enter both email and password.");
       return;
     }
 
-    void hydrateSession(manualToken);
+    setIsResolvingSession(true);
+    setAuthError(null);
+
+    try {
+      const { data, error } = await getSupabaseClient().auth.signInWithPassword({
+        email: normalizedEmail,
+        password,
+      });
+
+      if (error) {
+        setAuthError(`Sign-in failed: ${error.message}`);
+        return;
+      }
+
+      const signedInToken = data.session?.access_token;
+      if (!signedInToken) {
+        setAuthError("Sign-in succeeded but no session token was returned.");
+        return;
+      }
+
+      await hydrateSession(signedInToken);
+    } catch (error) {
+      if (error instanceof Error) {
+        setAuthError(error.message);
+      } else {
+        setAuthError("Sign-in failed.");
+      }
+    } finally {
+      setIsResolvingSession(false);
+    }
   }
 
   if (isBootstrapping) {
@@ -187,14 +257,18 @@ export function AppNavigator() {
       <>
         <StatusBar barStyle="light-content" />
         <AuthGateScreen
-          manualToken={manualToken}
+          email={email}
+          password={password}
           errorMessage={authError}
           loading={isResolvingSession}
-          onChangeManualToken={setManualToken}
+          onChangeEmail={setEmail}
+          onChangePassword={setPassword}
+          onSignIn={() => {
+            void signInWithEmailPassword();
+          }}
           onTrySupabaseSession={() => {
             void hydrateSession();
           }}
-          onUseManualToken={retryWithManualToken}
         />
       </>
     );

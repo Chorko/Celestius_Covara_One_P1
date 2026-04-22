@@ -61,8 +61,8 @@ You can publish a stable web page at `/download` and point your website CTA to i
 Current hosted links:
 
 - `https://covara-one.vercel.app/download`
-- Open Expo target: `https://expo.dev/accounts/chorkos-organization/projects/covara-one/builds/e8b6a8e7-bb15-48f4-b962-35824fa79fbb`
-- Direct APK target: `https://expo.dev/artifacts/eas/uJHrzKSycbBxoTVhNotdM2.apk`
+- Open Expo target: `https://expo.dev/accounts/chorkos-organization/projects/covara-one/builds/e2485b2f-1c6b-4774-a578-571a85ed7772`
+- Direct APK target: `https://expo.dev/artifacts/eas/tWE3Sfkp25Dt88WzwEeE45.apk`
 
 The page is implemented in `frontend/src/app/download/page.tsx` and uses these env vars:
 
