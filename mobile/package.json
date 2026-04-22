@@ -14,10 +14,15 @@
   },
   "scripts": {
     "start": "expo start",
+    "start:dev-client": "expo start --dev-client --clear",
     "android": "expo run:android",
+    "android:device": "expo run:android --device",
     "ios": "expo run:ios",
     "validate:env": "node ./scripts/validate-env.mjs",
     "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=20 <23"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "1.23.1",

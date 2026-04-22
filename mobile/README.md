@@ -1,6 +1,7 @@
 # Covara Worker Mobile
 
-This package contains the mobile app implementation for signed claim submission and role-aware session gating.
+This package contains the mobile app implementation for signed claim
+submission and role-aware session gating.
 
 ## Current scope in this commit
 
@@ -9,8 +10,10 @@ This package contains the mobile app implementation for signed claim submission 
 - Auth gate, onboarding-required, and KYC-pending screens wired in navigator.
 - Signed device-context pipeline compatible with backend contract.
 - Claim submission service that sends signed telemetry headers to `POST /claims`.
-- Worker claim screen with live location capture plus evidence-photo attach/upload to `claim-evidence`.
-- Uploaded `evidence_url` now flows through backend EXIF + Gemini/SynthID + C2PA fraud checks.
+- Worker claim screen with live location capture plus evidence-photo
+  attach/upload to `claim-evidence`.
+- Uploaded `evidence_url` now flows through backend EXIF +
+  Gemini/SynthID + C2PA fraud checks.
 - Admin overview screen for insurer-admin session visibility.
 
 ## Prerequisites
@@ -30,6 +33,27 @@ cd mobile
 npm install
 npm run start
 ```
+
+### No-hassle direct launch (demo mode)
+
+To open directly without pasting a token every time, enable auto-login in `.env`:
+
+```env
+EXPO_PUBLIC_AUTO_LOGIN_ENABLED=true
+EXPO_PUBLIC_AUTO_LOGIN_PROFILE=worker
+EXPO_PUBLIC_AUTO_LOGIN_WORKER_EMAIL=worker@demo.com
+EXPO_PUBLIC_AUTO_LOGIN_WORKER_PASSWORD=demo1234
+EXPO_PUBLIC_AUTO_LOGIN_ADMIN_EMAIL=admin@demo.com
+EXPO_PUBLIC_AUTO_LOGIN_ADMIN_PASSWORD=demo1234
+EXPO_PUBLIC_DEFAULT_BEARER_TOKEN=
+```
+
+- If `EXPO_PUBLIC_DEFAULT_BEARER_TOKEN` is set, the app uses that token first.
+- Otherwise it signs in with profile credentials selected by
+  `EXPO_PUBLIC_AUTO_LOGIN_PROFILE` (`worker` or `admin`).
+- `EXPO_PUBLIC_AUTO_LOGIN_EMAIL` and `EXPO_PUBLIC_AUTO_LOGIN_PASSWORD`
+  remain as a legacy fallback if profile-specific values are not set.
+- Restart Metro after changing these values so Expo picks up updated env vars.
 
 ## Build and Share (Your Own Expo Account)
 
@@ -75,9 +99,10 @@ cd mobile
 npx eas-cli@latest build:list --platform android --status finished --limit 1 --json
 ```
 
-2. Copy `artifacts.buildUrl` from the JSON output and download the APK locally.
-3. Start your emulator from Android Studio Device Manager.
-4. Install the APK by dragging it onto the emulator window.
+1. Copy `artifacts.buildUrl` from the JSON output and download the APK
+  locally.
+2. Start your emulator from Android Studio Device Manager.
+3. Install the APK by dragging it onto the emulator window.
 
 Optional package verification:
 
@@ -85,7 +110,8 @@ Optional package verification:
 adb shell pm list packages | findstr com.covara.worker
 ```
 
-If you need ad-hoc helper scripts, keep them under `../TEMP_WILL_BE_DELETED/` instead of `mobile/scripts/`.
+If you need ad-hoc helper scripts, keep them under
+`../TEMP_WILL_BE_DELETED/` instead of `mobile/scripts/`.
 
 ## Security notes
 

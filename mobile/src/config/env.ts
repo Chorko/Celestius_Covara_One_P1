@@ -5,6 +5,15 @@ export interface MobileEnv {
   deviceContextHmacSecret: string;
   deviceContextKeyId?: string;
   deviceContextSchemaVersion: string;
+  autoLoginEnabled: boolean;
+  autoLoginProfile: "worker" | "admin";
+  defaultBearerToken?: string;
+  autoLoginEmail?: string;
+  autoLoginPassword?: string;
+  autoLoginWorkerEmail?: string;
+  autoLoginWorkerPassword?: string;
+  autoLoginAdminEmail?: string;
+  autoLoginAdminPassword?: string;
 }
 
 /**
@@ -23,6 +32,20 @@ export function getMobileEnv(): MobileEnv {
   const deviceContextHmacSecret = process.env.EXPO_PUBLIC_DEVICE_CONTEXT_HMAC_SECRET ?? "";
   const deviceContextKeyId = process.env.EXPO_PUBLIC_DEVICE_CONTEXT_KEY_ID ?? undefined;
   const deviceContextSchemaVersion = process.env.EXPO_PUBLIC_DEVICE_CONTEXT_SCHEMA_VERSION ?? "2.0";
+  const autoLoginEnabledRaw = process.env.EXPO_PUBLIC_AUTO_LOGIN_ENABLED ?? "false";
+  const autoLoginProfileRaw = process.env.EXPO_PUBLIC_AUTO_LOGIN_PROFILE ?? "worker";
+  const defaultBearerToken = process.env.EXPO_PUBLIC_DEFAULT_BEARER_TOKEN ?? undefined;
+  const autoLoginEmail = process.env.EXPO_PUBLIC_AUTO_LOGIN_EMAIL ?? undefined;
+  const autoLoginPassword = process.env.EXPO_PUBLIC_AUTO_LOGIN_PASSWORD ?? undefined;
+  const autoLoginWorkerEmail = process.env.EXPO_PUBLIC_AUTO_LOGIN_WORKER_EMAIL ?? undefined;
+  const autoLoginWorkerPassword = process.env.EXPO_PUBLIC_AUTO_LOGIN_WORKER_PASSWORD ?? undefined;
+  const autoLoginAdminEmail = process.env.EXPO_PUBLIC_AUTO_LOGIN_ADMIN_EMAIL ?? undefined;
+  const autoLoginAdminPassword = process.env.EXPO_PUBLIC_AUTO_LOGIN_ADMIN_PASSWORD ?? undefined;
+
+  const normalizedDefaultBearer = (defaultBearerToken ?? "").trim();
+  const bearerDisabled = ["", "none", "null", "disabled", "off"].includes(
+    normalizedDefaultBearer.toLowerCase(),
+  );
 
   const missing: string[] = [];
   if (!apiBaseUrl.trim()) missing.push("EXPO_PUBLIC_API_BASE_URL");
@@ -38,6 +61,12 @@ export function getMobileEnv(): MobileEnv {
     );
   }
 
+  const autoLoginEnabled = ["1", "true", "yes", "on"].includes(
+    autoLoginEnabledRaw.trim().toLowerCase(),
+  );
+  const autoLoginProfile =
+    autoLoginProfileRaw.trim().toLowerCase() === "admin" ? "admin" : "worker";
+
   return {
     apiBaseUrl: apiBaseUrl.trim(),
     supabaseUrl: supabaseUrl.trim(),
@@ -45,6 +74,15 @@ export function getMobileEnv(): MobileEnv {
     deviceContextHmacSecret: deviceContextHmacSecret.trim(),
     deviceContextKeyId: deviceContextKeyId?.trim() || undefined,
     deviceContextSchemaVersion: deviceContextSchemaVersion.trim(),
+    autoLoginEnabled,
+    autoLoginProfile,
+    defaultBearerToken: bearerDisabled ? undefined : normalizedDefaultBearer,
+    autoLoginEmail: autoLoginEmail?.trim() || undefined,
+    autoLoginPassword: autoLoginPassword?.trim() || undefined,
+    autoLoginWorkerEmail: autoLoginWorkerEmail?.trim() || undefined,
+    autoLoginWorkerPassword: autoLoginWorkerPassword?.trim() || undefined,
+    autoLoginAdminEmail: autoLoginAdminEmail?.trim() || undefined,
+    autoLoginAdminPassword: autoLoginAdminPassword?.trim() || undefined,
   };
 }
 
